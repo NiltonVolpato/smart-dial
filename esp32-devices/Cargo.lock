@@ -96,9 +96,9 @@ dependencies = [
  "app-shell",
  "baker",
  "image",
+ "jpegdec",
  "slint",
  "theme",
- "zune-jpeg",
 ]
 
 [[package]]
@@ -172,9 +172,9 @@ version = "0.1.0"
 dependencies = [
  "app-shell",
  "baker",
+ "jpegdec",
  "slint",
  "theme",
- "zune-jpeg",
 ]
 
 [[package]]
@@ -3674,6 +3674,13 @@ checksum = "1c00acbd29eabad4a2392fa0e921c874934dbbf4194312ad20f04a0ed67a3cb3"
 dependencies = [
  "getrandom",
  "libc",
+]
+
+[[package]]
+name = "jpegdec"
+version = "0.1.0"
+dependencies = [
+ "cc",
 ]
 
 [[package]]

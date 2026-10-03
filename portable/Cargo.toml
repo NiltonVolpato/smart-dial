@@ -32,6 +32,7 @@ slint-build = {
 theme = { path = "crates/theme", default-features = false }
 app-shell = { path = "crates/app-shell", default-features = false }
 baker = { path = "crates/baker" }
+jpegdec = { path = "crates/jpegdec" }
 defmt = { version = "1.0.1" }
 critical-section = "1.2"
 heapless = "0.8"

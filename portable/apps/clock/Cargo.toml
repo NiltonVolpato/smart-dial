@@ -31,7 +31,7 @@ simulator = [
 slint = { workspace = true }
 theme = { workspace = true }
 app-shell = { workspace = true }
-zune-jpeg = { version = "0.5", default-features = false }
+jpegdec = { workspace = true }
 
 [build-dependencies]
 baker = { workspace = true }

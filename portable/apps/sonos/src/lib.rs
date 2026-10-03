@@ -128,20 +128,17 @@ pub fn resample_and_dim_rgb8(
 /// Decodes an arbitrary JPEG byte slice and resamples it to `target_size` square with
 /// 35% dimming (65% brightness) directly into a Slint RGB8 SharedPixelBuffer allocated in PSRAM.
 pub fn decode_and_resample_album_art(jpeg_bytes: &[u8], target_size: u32) -> Option<slint::Image> {
-    let mut decoder = Box::new(zune_jpeg::JpegDecoder::new(
-        zune_jpeg::zune_core::bytestream::ZCursor::new(jpeg_bytes),
-    ));
-    decoder.decode_headers().ok()?;
-    let info = decoder.info()?;
+    let dims = jpegdec::dimensions(jpeg_bytes).ok()?;
 
-    let raw_rgb = decoder.decode().ok()?;
+    let mut raw_rgb = alloc::vec![0u8; (dims.width * dims.height * 3) as usize];
+    jpegdec::decode_into(jpeg_bytes, &mut raw_rgb).ok()?;
 
     let mut pixel_buffer =
         slint::SharedPixelBuffer::<slint::Rgb8Pixel>::new(target_size, target_size);
     resample_and_dim_rgb8(
         &raw_rgb,
-        info.width as u32,
-        info.height as u32,
+        dims.width,
+        dims.height,
         pixel_buffer.make_mut_bytes(),
         target_size,
         target_size,
