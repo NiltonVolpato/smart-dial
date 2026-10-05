@@ -18,6 +18,26 @@ fn main() {
         build.compiler("xtensa-esp32s3-elf-g++");
         build.define("ESP_PLATFORM", None);
         build.define("ARDUINO_ARCH_ESP32", None);
+        build.define("ALLOWS_UNALIGNED", None); // Fast 16/32-bit reads in internal SRAM
+
+        // Safety & Xtensa relocations
+        build.flag("-mlongcalls");
+        build.flag("-mtarget-align");
+        build.flag("-fno-shrink-wrap");
+        build.flag("-fno-jump-tables");
+        build.flag("-fno-tree-switch-conversion");
+        build.flag("-fstrict-volatile-bitfields");
+
+        // Prevent unsafe inline compiler built-ins
+        build.flag("-fno-builtin-memcpy");
+        build.flag("-fno-builtin-memset");
+        build.flag("-fno-builtin-bzero");
+
+        // Code size & embedded C++ optimization
+        build.flag("-fno-exceptions");
+        build.flag("-fno-rtti");
+        build.flag("-ffunction-sections");
+        build.flag("-fdata-sections");
     } else {
         build.define("__LINUX__", None);
     }

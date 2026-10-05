@@ -37,7 +37,7 @@ static int jpeg_draw_callback(JPEGDRAW *pDraw) {
 
 int jpegdec_get_dimensions(const uint8_t *data, int size, int *width, int *height) {
     JPEGDEC decoder;
-    if (decoder.openFLASH(const_cast<uint8_t *>(data), size, nullptr) != 1) {
+    if (decoder.openRAM(const_cast<uint8_t *>(data), size, nullptr) != 1) {
         return 0;
     }
     *width = decoder.getWidth();
@@ -48,7 +48,7 @@ int jpegdec_get_dimensions(const uint8_t *data, int size, int *width, int *heigh
 
 int jpegdec_decode_rgb8(const uint8_t *data, int size, uint8_t *output, int *width, int *height) {
     JPEGDEC decoder;
-    if (decoder.openFLASH(const_cast<uint8_t *>(data), size, jpeg_draw_callback) != 1) {
+    if (decoder.openRAM(const_cast<uint8_t *>(data), size, jpeg_draw_callback) != 1) {
         return 0;
     }
 
