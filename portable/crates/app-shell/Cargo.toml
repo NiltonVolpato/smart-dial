@@ -14,12 +14,24 @@ std = [
     "theme/std",
     "slint/std",
     "critical-section/std",
+    "jiff/std",
+    "embassy-executor/platform-std",
+    "embassy-executor/executor-thread",
+]
+defmt = [
+    "embassy-executor/defmt",
+    "embassy-sync/defmt",
+    "embassy-futures/defmt",
 ]
 
 [dependencies]
 theme = { workspace = true }
 critical-section = "1.2.0"
 defmt = { workspace = true }
+jiff = { workspace = true }
+embassy-executor = { workspace = true }
+embassy-sync = { workspace = true }
+embassy-futures = { workspace = true }
 
 [dev-dependencies]
 slint = { workspace = true }

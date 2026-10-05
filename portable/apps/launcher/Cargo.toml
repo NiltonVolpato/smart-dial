@@ -16,6 +16,7 @@ test = false
 
 [features]
 default = ["apps", "simulator"]
+std = ["app-shell/std", "theme/std", "slint/std"]
 apps = [
     "dep:app-clock",
     "dep:app-pomodoro",

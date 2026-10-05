@@ -32,6 +32,7 @@ slint = { workspace = true }
 theme = { workspace = true }
 app-shell = { workspace = true }
 jpegdec = { workspace = true }
+jiff = { workspace = true }
 
 [build-dependencies]
 baker = { workspace = true }

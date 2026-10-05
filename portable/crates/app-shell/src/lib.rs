@@ -3,7 +3,7 @@
 
 //! Headless Application Shell: lifecycle coordination and system services.
 
-#![cfg_attr(not(test), no_std)]
+#![cfg_attr(all(not(feature = "std"), not(test)), no_std)]
 
 extern crate alloc;
 
@@ -11,15 +11,14 @@ pub mod feedback;
 pub mod lifecycle;
 pub mod perf;
 pub mod profile;
-pub mod time;
 
 pub use feedback::Feedback;
-pub use lifecycle::{
-    AppFactory, AppInfo, AppShell, AppShellPlatform, DefaultAppShellPlatform, ShellContext,
-};
+pub use jiff::{Timestamp, Zoned};
+#[cfg(feature = "std")]
+pub use lifecycle::StdPlatform;
+pub use lifecycle::{AppFactory, AppInfo, AppShell, Handle, Platform, ShellContext};
 pub use perf::{FrameCycles, PerfSummary, PerfTracker};
 pub use profile::{DEFAULT_TABLE_CAPACITY, PcSample, SampleTable};
-pub use time::WallTime;
 
 #[cfg(test)]
 mod tests {
@@ -80,18 +79,49 @@ mod tests {
 
     struct TestPlatform {
         launched_names: Rc<RefCell<alloc::vec::Vec<String>>>,
+        wake_count: Rc<RefCell<usize>>,
+        feedback_events: Rc<RefCell<alloc::vec::Vec<Feedback>>>,
     }
 
-    impl AppShellPlatform for TestPlatform {
+    impl TestPlatform {
+        fn new() -> Self {
+            Self {
+                launched_names: Rc::new(RefCell::new(alloc::vec::Vec::new())),
+                wake_count: Rc::new(RefCell::new(0)),
+                feedback_events: Rc::new(RefCell::new(alloc::vec::Vec::new())),
+            }
+        }
+    }
+
+    impl Platform for TestPlatform {
         fn on_app_launched(&self, info: &AppInfo) {
             self.launched_names.borrow_mut().push(info.name.as_str().into());
         }
+        fn wake_event_loop(&self) {
+            *self.wake_count.borrow_mut() += 1;
+        }
+        fn now_utc(&self) -> Option<Timestamp> {
+            None
+        }
+        fn now_local(&self) -> Option<jiff::Zoned> {
+            None
+        }
+        fn duration_since_boot(&self) -> core::time::Duration {
+            core::time::Duration::from_secs(123)
+        }
+        fn signal_feedback(&self, feedback: Feedback) {
+            self.feedback_events.borrow_mut().push(feedback);
+        }
+    }
+
+    fn test_spawner() -> embassy_executor::Spawner {
+        StdPlatform::host_spawner()
     }
 
     #[test]
     fn test_single_app_lifecycle() {
         let (clock, launch_count) = MockAppFactory::new("Clock");
-        let shell = AppShell::new(Box::new(DefaultAppShellPlatform), Box::new(clock));
+        let shell = AppShell::new(test_spawner(), Rc::new(StdPlatform::new()), Box::new(clock));
 
         assert!(!shell.borrow().has_active_app());
         assert_eq!(*launch_count.borrow(), 0);
@@ -109,10 +139,10 @@ mod tests {
 
     #[test]
     fn test_platform_on_app_launched_hook() {
-        let launched_names = Rc::new(RefCell::new(alloc::vec::Vec::new()));
-        let platform = TestPlatform { launched_names: launched_names.clone() };
+        let platform = Rc::new(TestPlatform::new());
+        let launched_names = platform.launched_names.clone();
         let (clock, _) = MockAppFactory::new("Clock");
-        let shell = AppShell::new(Box::new(platform), Box::new(clock));
+        let shell = AppShell::new(test_spawner(), platform, Box::new(clock));
 
         AppShell::start(&shell);
         assert_eq!(*launched_names.borrow(), alloc::vec!["Clock"]);
@@ -133,7 +163,7 @@ mod tests {
                 ctx.exit();
             });
 
-        let shell = AppShell::new(Box::new(DefaultAppShellPlatform), Box::new(launcher));
+        let shell = AppShell::new(test_spawner(), Rc::new(StdPlatform::new()), Box::new(launcher));
 
         // Starting shell launches Launcher, which queues Simon and exits, so Simon runs
         AppShell::start(&shell);
@@ -149,31 +179,109 @@ mod tests {
 
     #[test]
     fn test_feedback_service() {
-        feedback::clear();
-        assert_eq!(feedback::try_receive(), None);
+        let platform = Rc::new(TestPlatform::new());
+        let feedback_events = platform.feedback_events.clone();
 
-        feedback::signal(Feedback::DialStepForward);
-        feedback::signal(Feedback::DialStepBackward);
-        feedback::signal(Feedback::Click);
-        feedback::signal(Feedback::Haptic);
-        feedback::signal(Feedback::Tone { hz: 440, ms: 100 });
+        let captured_ctx = Rc::new(RefCell::new(None));
+        let captured_ctx_clone = captured_ctx.clone();
+        let (app, _) = MockAppFactory::with_action("App", move |ctx| {
+            *captured_ctx_clone.borrow_mut() = Some(ctx);
+        });
 
-        assert_eq!(feedback::try_receive(), Some(Feedback::DialStepForward));
-        assert_eq!(feedback::try_receive(), Some(Feedback::DialStepBackward));
-        assert_eq!(feedback::try_receive(), Some(Feedback::Click));
-        assert_eq!(feedback::try_receive(), Some(Feedback::Haptic));
-        assert_eq!(feedback::try_receive(), Some(Feedback::Tone { hz: 440, ms: 100 }));
-        assert_eq!(feedback::try_receive(), None);
+        let shell = AppShell::new(test_spawner(), platform, Box::new(app));
+        AppShell::start(&shell);
 
-        static WAKE_COUNT: core::sync::atomic::AtomicUsize =
-            core::sync::atomic::AtomicUsize::new(0);
-        fn test_waker() {
-            WAKE_COUNT.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
-        }
+        let ctx = captured_ctx.borrow().clone().expect("Context should be captured");
+        ctx.feedback(Feedback::DialStepForward);
+        ctx.feedback(Feedback::DialStepBackward);
+        ctx.feedback(Feedback::Click);
+        ctx.feedback(Feedback::Haptic);
+        ctx.feedback(Feedback::Tone { hz: 440, ms: 100 });
 
-        feedback::register_waker(test_waker);
-        feedback::signal(Feedback::Click);
-        assert_eq!(WAKE_COUNT.load(core::sync::atomic::Ordering::Relaxed), 1);
-        let _ = feedback::try_receive();
+        assert_eq!(
+            *feedback_events.borrow(),
+            alloc::vec![
+                Feedback::DialStepForward,
+                Feedback::DialStepBackward,
+                Feedback::Click,
+                Feedback::Haptic,
+                Feedback::Tone { hz: 440, ms: 100 }
+            ]
+        );
+    }
+
+    #[test]
+    fn test_wake_event_loop() {
+        let platform = Rc::new(TestPlatform::new());
+        let wake_count = platform.wake_count.clone();
+
+        let captured_ctx = Rc::new(RefCell::new(None));
+        let captured_ctx_clone = captured_ctx.clone();
+        let (app, _) = MockAppFactory::with_action("App", move |ctx| {
+            *captured_ctx_clone.borrow_mut() = Some(ctx);
+        });
+
+        let shell = AppShell::new(test_spawner(), platform, Box::new(app));
+        AppShell::start(&shell);
+
+        assert_eq!(*wake_count.borrow(), 0);
+        let ctx = captured_ctx.borrow().clone().expect("Context should be captured");
+        ctx.platform().wake_event_loop();
+        assert_eq!(*wake_count.borrow(), 1);
+        assert_eq!(ctx.platform().duration_since_boot(), core::time::Duration::from_secs(123));
+    }
+
+    static TASK_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn test_schedule_future_raii_cancellation() {
+        let _guard = TASK_TEST_LOCK.lock().unwrap();
+        let (app, _) = MockAppFactory::with_action("TaskApp", |ctx| {
+            let handle = ctx.schedule_future(
+                "test_task",
+                Box::pin(async {
+                    core::future::pending::<()>().await;
+                }),
+            );
+            // Drop handle immediately to verify cancel
+            drop(handle);
+        });
+
+        let shell = AppShell::new(test_spawner(), Rc::new(StdPlatform::new()), Box::new(app));
+        AppShell::start(&shell);
+    }
+
+    #[test]
+    fn test_consecutive_app_transition_task_overlap() {
+        let _guard = TASK_TEST_LOCK.lock().unwrap();
+        #[allow(dead_code)]
+        struct AppHandles(Handle);
+
+        let (app2, _) = MockAppFactory::with_action("App2", |ctx| {
+            let handle = ctx.schedule_future(
+                "app2_task",
+                Box::pin(async {
+                    core::future::pending::<()>().await;
+                }),
+            );
+            let _ = AppHandles(handle);
+        });
+
+        let app2_clone = app2.clone();
+        let (app1, _) = MockAppFactory::with_action("App1", move |ctx| {
+            let handle = ctx.schedule_future(
+                "app1_task",
+                Box::pin(async {
+                    core::future::pending::<()>().await;
+                }),
+            );
+            let _ = AppHandles(handle);
+            ctx.set_next_app(Box::new(app2_clone.clone()));
+        });
+
+        let shell = AppShell::new(test_spawner(), Rc::new(StdPlatform::new()), Box::new(app1));
+        AppShell::start(&shell);
+        // Step directly from App1 into App2 synchronously
+        AppShell::step(shell.clone());
     }
 }

@@ -11,7 +11,7 @@ use alloc::vec::Vec;
 use core::any::Any;
 use core::cell::RefCell;
 
-pub use app_shell::{AppFactory, AppInfo, AppShell, DefaultAppShellPlatform, ShellContext};
+pub use app_shell::{AppFactory, AppInfo, AppShell, ShellContext};
 use slint::ComponentHandle;
 
 slint::include_modules!();
@@ -32,13 +32,20 @@ impl LauncherAppFactory {
     /// Creates a new `LauncherAppFactory` configured with the default suite of applications.
     #[cfg(feature = "apps")]
     pub fn default_apps() -> Self {
+        Self::default_apps_with_sonos(Box::new(app_sonos::SonosAppFactory::without_client()))
+    }
+
+    /// Creates a new `LauncherAppFactory` configured with the default suite of applications,
+    /// injecting a custom Sonos factory (e.g. configured with an active Tether RPC client).
+    #[cfg(feature = "apps")]
+    pub fn default_apps_with_sonos(sonos_factory: Box<dyn AppFactory>) -> Self {
         let factories: Vec<Box<dyn AppFactory>> = alloc::vec![
             Box::new(app_clock::ClockAppFactory::new()),
             Box::new(app_pomodoro::PomodoroAppFactory::new()),
             Box::new(app_macropad::MacropadAppFactory::new()),
             Box::new(app_simon::SimonAppFactory::new()),
             Box::new(app_magic8::Magic8AppFactory::new()),
-            Box::new(app_sonos::SonosAppFactory::new()),
+            sonos_factory,
         ];
         Self::new(factories)
     }
@@ -61,6 +68,7 @@ impl AppFactory for LauncherAppFactory {
         let cards: Vec<AppInfo> = self.factories.iter().map(|f| f.info()).collect();
         launcher.set_cards(Rc::new(slint::VecModel::from(cards)).into());
 
+        let ctx_fb = context.clone();
         let factories = self.factories.clone();
         let selected_index = self.selected_index.clone();
         launcher.on_launch(move |idx| {
@@ -75,8 +83,8 @@ impl AppFactory for LauncherAppFactory {
         theme::setup_navigation(
             &launcher,
             || {},
-            || {
-                app_shell::feedback::signal(app_shell::Feedback::Click);
+            move || {
+                ctx_fb.feedback(app_shell::Feedback::Click);
             },
         );
 
@@ -91,6 +99,7 @@ impl AppFactory for LauncherAppFactory {
 
 #[cfg(test)]
 mod tests {
+    use app_shell::StdPlatform;
     use slint::Model;
 
     use super::*;
@@ -160,7 +169,8 @@ mod tests {
         drop(launcher);
 
         let launcher_factory = LauncherAppFactory::new(test_factories());
-        let shell = AppShell::new(Box::new(DefaultAppShellPlatform), Box::new(launcher_factory));
+        let spawner = StdPlatform::host_spawner();
+        let shell = AppShell::new(spawner, Rc::new(StdPlatform::new()), Box::new(launcher_factory));
         AppShell::start(&shell);
 
         assert!(shell.borrow().has_active_app());

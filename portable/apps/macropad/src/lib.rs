@@ -37,11 +37,12 @@ impl app_shell::AppFactory for MacropadAppFactory {
     fn launch(&self, context: app_shell::ShellContext) -> Box<dyn Any> {
         let app = MacropadApp::new().expect("Failed to create MacropadApp");
         let ctx = context.clone();
+        let ctx_fb = context.clone();
         theme::setup_navigation(
             &app,
             move || ctx.exit(),
-            || {
-                app_shell::feedback::signal(app_shell::Feedback::Click);
+            move || {
+                ctx_fb.feedback(app_shell::Feedback::Click);
             },
         );
         app.on_exit(move || context.exit());

@@ -36,17 +36,19 @@ impl app_shell::AppFactory for ClockAppFactory {
 
     fn launch(&self, context: app_shell::ShellContext) -> Box<dyn Any> {
         let app = ClockApp::new().expect("Failed to create ClockApp");
-        let initial_time = if let Some(now) = app_shell::time::now() {
-            Time::new(now.hours, now.minutes, now.seconds)
+        let initial_zoned = context.platform().now_local();
+        let initial_time = if let Some(ref zdt) = initial_zoned {
+            Time::new(zdt.hour() as u8, zdt.minute() as u8, zdt.second() as u8)
         } else {
             Time::new(10, 42, 35)
         };
         setup_clock(&app, &initial_time);
 
-        if let Some(now) = app_shell::time::now() {
+        if let Some(ref zdt) = initial_zoned {
             let mut date_str = alloc::string::String::new();
             use core::fmt::Write;
-            let _ = write!(date_str, "{}, {} {:02}", now.weekday_str(), now.month_str(), now.day);
+            let weekday = zdt.weekday();
+            let _ = write!(date_str, "{:?}, {:?} {:02}", weekday, zdt.month(), zdt.day());
             app.set_date_str(date_str.as_str().into());
         }
 
@@ -72,11 +74,12 @@ impl app_shell::AppFactory for ClockAppFactory {
         let time = alloc::rc::Rc::new(core::cell::RefCell::new(initial_time));
         let time_clone = time.clone();
         let manual_offset_timer = manual_offset_minutes.clone();
+        let platform_context = context.clone();
         timer.start(slint::TimerMode::Repeated, core::time::Duration::from_secs(1), move || {
             if let Some(app) = app_weak.upgrade() {
-                if let Some(now) = app_shell::time::now() {
+                if let Some(zdt) = platform_context.platform().now_local() {
                     let mut time = time_clone.borrow_mut();
-                    *time = Time::new(now.hours, now.minutes, now.seconds);
+                    *time = Time::new(zdt.hour() as u8, zdt.minute() as u8, zdt.second() as u8);
                     let offset = *manual_offset_timer.borrow();
                     if offset != 0 {
                         time.adjust_minutes(offset);
@@ -87,13 +90,8 @@ impl app_shell::AppFactory for ClockAppFactory {
 
                     let mut date_str = alloc::string::String::new();
                     use core::fmt::Write;
-                    let _ = write!(
-                        date_str,
-                        "{}, {} {:02}",
-                        now.weekday_str(),
-                        now.month_str(),
-                        now.day
-                    );
+                    let _ =
+                        write!(date_str, "{:?}, {:?} {:02}", zdt.weekday(), zdt.month(), zdt.day());
                     app.set_date_str(date_str.as_str().into());
                 } else {
                     let mut time = time_clone.borrow_mut();
@@ -106,11 +104,12 @@ impl app_shell::AppFactory for ClockAppFactory {
         });
 
         let ctx = context.clone();
+        let ctx_fb = context.clone();
         theme::setup_navigation(
             &app,
             move || ctx.exit(),
-            || {
-                app_shell::feedback::signal(app_shell::Feedback::Click);
+            move || {
+                ctx_fb.feedback(app_shell::Feedback::Click);
             },
         );
         app.on_exit(move || context.exit());
