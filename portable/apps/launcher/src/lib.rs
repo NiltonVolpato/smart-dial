@@ -11,9 +11,9 @@ use alloc::vec::Vec;
 use core::any::Any;
 use core::cell::RefCell;
 
-pub use app_shell::{AppFactory, AppShell, ShellContext};
+use app_shell::{AppFactory, ShellContext};
 use slint::ComponentHandle;
-pub use theme::AppInfo;
+use theme::AppInfo;
 
 slint::include_modules!();
 
@@ -100,7 +100,7 @@ impl AppFactory for LauncherAppFactory {
 
 #[cfg(test)]
 mod tests {
-    use app_shell::StdPlatform;
+    use app_shell::{AppShell, StdPlatform};
     use slint::Model;
 
     use super::*;

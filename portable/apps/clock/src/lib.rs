@@ -125,19 +125,19 @@ impl app_shell::AppFactory for ClockAppFactory {
 
 /// Representation of time for the clock app.
 #[cfg_attr(test, derive(Debug, Clone, Copy, PartialEq, Eq))]
-pub struct Time {
-    pub hours: u8,
-    pub minutes: u8,
-    pub seconds: u8,
+struct Time {
+    hours: u8,
+    minutes: u8,
+    seconds: u8,
 }
 
 impl Time {
-    pub const fn new(hours: u8, minutes: u8, seconds: u8) -> Self {
+    const fn new(hours: u8, minutes: u8, seconds: u8) -> Self {
         Self { hours, minutes, seconds }
     }
 
     /// Advances time by one second, handling minute and hour rollover.
-    pub fn tick(&mut self) {
+    fn tick(&mut self) {
         self.seconds += 1;
         if self.seconds >= 60 {
             self.seconds = 0;
@@ -150,7 +150,7 @@ impl Time {
     }
 
     /// Adjusts minutes by `delta` (+1 or -1 from rotary dial), handling rollover.
-    pub fn adjust_minutes(&mut self, delta: i32) {
+    fn adjust_minutes(&mut self, delta: i32) {
         let total = self.minutes as i32 + delta;
         if total < 0 {
             self.minutes = (total + 60) as u8 % 60;
@@ -170,7 +170,7 @@ const BACKGROUND_JPEG_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/b
 const BACKGROUND_JPEG_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/bg_360.jpg"));
 
 /// Decodes the embedded background JPEG image into a Slint RGB8 pixel buffer.
-pub fn load_background_image() -> Option<slint::Image> {
+fn load_background_image() -> Option<slint::Image> {
     let dims = jpegdec::dimensions(BACKGROUND_JPEG_BYTES).ok()?;
     let mut pixel_buffer =
         slint::SharedPixelBuffer::<slint::Rgb8Pixel>::new(dims.width, dims.height);
@@ -179,7 +179,7 @@ pub fn load_background_image() -> Option<slint::Image> {
 }
 
 /// Binds default reactive controller logic to a `ClockApp` instance.
-pub fn setup_clock(app: &ClockApp, initial_time: &Time) {
+fn setup_clock(app: &ClockApp, initial_time: &Time) {
     if let Some(background) = load_background_image() {
         app.set_background_image(background);
     }
