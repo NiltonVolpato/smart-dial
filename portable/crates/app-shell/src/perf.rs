@@ -5,9 +5,8 @@
 
 use core::time::Duration;
 
-pub const CPU_FREQ_HZ: u32 = 240_000_000;
-pub const CYCLES_PER_MS: u32 = 240_000;
-pub const SCREEN_PIXELS: u32 = 390 * 390; // 152,100 pixels
+const CYCLES_PER_MS: u32 = 240_000;
+const SCREEN_PIXELS: u32 = 390 * 390; // 152,100 pixels
 
 /// Per-frame cycle metrics collected with hardware counter.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]

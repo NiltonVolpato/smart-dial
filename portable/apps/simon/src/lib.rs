@@ -12,7 +12,7 @@ slint::include_modules!();
 
 #[derive(Clone)]
 pub struct SimonAppFactory {
-    info: app_shell::AppInfo,
+    info: theme::AppInfo,
 }
 
 impl SimonAppFactory {
@@ -30,7 +30,7 @@ impl Default for SimonAppFactory {
 }
 
 impl app_shell::AppFactory for SimonAppFactory {
-    fn info(&self) -> app_shell::AppInfo {
+    fn info(&self) -> theme::AppInfo {
         self.info.clone()
     }
 

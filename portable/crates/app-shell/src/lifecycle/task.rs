@@ -24,7 +24,7 @@ use embassy_sync::signal::Signal;
 /// allocate its task slot while the outgoing task finishes cancellation and despawns on the
 /// very next executor poll.
 #[embassy_executor::task(pool_size = 2)]
-pub async fn app_task(
+pub(crate) async fn app_task(
     name: &'static str,
     future: Pin<Box<dyn Future<Output = ()>>>,
     cancel: Rc<Signal<NoopRawMutex, ()>>,

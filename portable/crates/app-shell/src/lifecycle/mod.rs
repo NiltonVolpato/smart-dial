@@ -6,11 +6,11 @@
 use alloc::boxed::Box;
 use core::any::Any;
 
-pub use theme::AppInfo;
+use theme::AppInfo;
 
-pub mod platform;
+mod platform;
 mod shell;
-pub mod task;
+mod task;
 
 pub use platform::Platform;
 #[cfg(feature = "std")]

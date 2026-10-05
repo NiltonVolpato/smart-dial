@@ -12,7 +12,7 @@ slint::include_modules!();
 
 #[derive(Clone)]
 pub struct Magic8AppFactory {
-    info: app_shell::AppInfo,
+    info: theme::AppInfo,
 }
 
 impl Magic8AppFactory {
@@ -30,7 +30,7 @@ impl Default for Magic8AppFactory {
 }
 
 impl app_shell::AppFactory for Magic8AppFactory {
-    fn info(&self) -> app_shell::AppInfo {
+    fn info(&self) -> theme::AppInfo {
         self.info.clone()
     }
 

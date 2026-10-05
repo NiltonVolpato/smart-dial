@@ -12,7 +12,7 @@ slint::include_modules!();
 
 #[derive(Clone)]
 pub struct PomodoroAppFactory {
-    info: app_shell::AppInfo,
+    info: theme::AppInfo,
 }
 
 impl PomodoroAppFactory {
@@ -30,7 +30,7 @@ impl Default for PomodoroAppFactory {
 }
 
 impl app_shell::AppFactory for PomodoroAppFactory {
-    fn info(&self) -> app_shell::AppInfo {
+    fn info(&self) -> theme::AppInfo {
         self.info.clone()
     }
 

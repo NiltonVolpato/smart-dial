@@ -3,8 +3,6 @@
 
 //! Statistical profiling data structures for tracking program counter (PC) hotspots.
 
-pub const DEFAULT_TABLE_CAPACITY: usize = 128;
-
 /// A program counter sample and the number of times it was observed.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct PcSample {
@@ -14,7 +12,7 @@ pub struct PcSample {
 
 /// A fixed-size, open-addressing hash table for storing PC samples without heap allocation.
 #[derive(Clone, Debug)]
-pub struct SampleTable<const CAPACITY: usize = DEFAULT_TABLE_CAPACITY> {
+pub struct SampleTable<const CAPACITY: usize = 128> {
     entries: [PcSample; CAPACITY],
     total_samples: u32,
     unique_count: usize,

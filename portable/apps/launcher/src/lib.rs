@@ -11,8 +11,9 @@ use alloc::vec::Vec;
 use core::any::Any;
 use core::cell::RefCell;
 
-pub use app_shell::{AppFactory, AppInfo, AppShell, ShellContext};
+pub use app_shell::{AppFactory, AppShell, ShellContext};
 use slint::ComponentHandle;
+pub use theme::AppInfo;
 
 slint::include_modules!();
 

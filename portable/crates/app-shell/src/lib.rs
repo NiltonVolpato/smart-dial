@@ -7,18 +7,17 @@
 
 extern crate alloc;
 
-pub mod feedback;
-pub mod lifecycle;
-pub mod perf;
-pub mod profile;
+mod feedback;
+mod lifecycle;
+mod perf;
+mod profile;
 
 pub use feedback::Feedback;
-pub use jiff::{Timestamp, Zoned};
 #[cfg(feature = "std")]
 pub use lifecycle::StdPlatform;
-pub use lifecycle::{AppFactory, AppInfo, AppShell, Handle, Platform, ShellContext};
+pub use lifecycle::{AppFactory, AppShell, Handle, Platform, ShellContext};
 pub use perf::{FrameCycles, PerfSummary, PerfTracker};
-pub use profile::{DEFAULT_TABLE_CAPACITY, PcSample, SampleTable};
+pub use profile::{PcSample, SampleTable};
 
 #[cfg(test)]
 mod tests {
@@ -27,6 +26,9 @@ mod tests {
     use alloc::string::String;
     use core::any::Any;
     use core::cell::RefCell;
+
+    use jiff::Timestamp;
+    use theme::AppInfo;
 
     use super::*;
 

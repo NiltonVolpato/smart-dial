@@ -12,7 +12,7 @@ slint::include_modules!();
 
 #[derive(Clone)]
 pub struct ClockAppFactory {
-    info: app_shell::AppInfo,
+    info: theme::AppInfo,
 }
 
 impl ClockAppFactory {
@@ -30,7 +30,7 @@ impl Default for ClockAppFactory {
 }
 
 impl app_shell::AppFactory for ClockAppFactory {
-    fn info(&self) -> app_shell::AppInfo {
+    fn info(&self) -> theme::AppInfo {
         self.info.clone()
     }
 

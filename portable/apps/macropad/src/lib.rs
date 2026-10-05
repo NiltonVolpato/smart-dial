@@ -12,7 +12,7 @@ slint::include_modules!();
 
 #[derive(Clone)]
 pub struct MacropadAppFactory {
-    info: app_shell::AppInfo,
+    info: theme::AppInfo,
 }
 
 impl MacropadAppFactory {
@@ -30,7 +30,7 @@ impl Default for MacropadAppFactory {
 }
 
 impl app_shell::AppFactory for MacropadAppFactory {
-    fn info(&self) -> app_shell::AppInfo {
+    fn info(&self) -> theme::AppInfo {
         self.info.clone()
     }
 

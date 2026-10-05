@@ -25,7 +25,7 @@ pub struct ShellContext {
 
 impl ShellContext {
     /// Creates a new `ShellContext` from weak shell reference, platform handle, and task spawner.
-    pub fn new(
+    pub(crate) fn new(
         shell: Weak<RefCell<AppShell>>,
         platform: Rc<dyn Platform>,
         spawner: embassy_executor::Spawner,
@@ -117,7 +117,7 @@ impl AppShell {
     /// 1. Drops the currently active application (triggering RAII cleanup).
     /// 2. If `next_app` is set, consumes it and launches that application.
     /// 3. Otherwise, launches the `default_app`.
-    pub fn step(shell: Rc<RefCell<Self>>) {
+    pub(crate) fn step(shell: Rc<RefCell<Self>>) {
         let (next_factory, platform, spawner) = {
             let mut borrow = shell.borrow_mut();
             borrow.active_app = None;
@@ -137,13 +137,8 @@ impl AppShell {
     }
 
     /// Configures an application to run once upon the next lifecycle transition.
-    pub fn set_next_app(&mut self, factory: Box<dyn AppFactory>) {
+    pub(crate) fn set_next_app(&mut self, factory: Box<dyn AppFactory>) {
         self.next_app = Some(factory);
-    }
-
-    /// Clears any queued run-once application.
-    pub fn clear_next_app(&mut self) {
-        self.next_app = None;
     }
 
     /// Signals an external exit (e.g. user gesture or button long-press) for the active app.
