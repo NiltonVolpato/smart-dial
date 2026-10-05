@@ -1,20 +1,22 @@
 {
-    "lsp": {
-        "rust-analyzer": {
-            "initialization_options": {
-                "cargo": {
-                    "allTargets": false,
-                    "target": "xtensa-esp32s3-none-elf",
-                    "extraEnv": {
-                        "RUSTUP_TOOLCHAIN": "esp"
-                    }
-                },
-                "server": {
-                    "extraEnv": {
-                        "RUSTUP_TOOLCHAIN": "stable"
-                    }
-                },
-            }
-        }
-    }
+  "lsp": {
+    "rust-analyzer": {
+      "initialization_options": {
+        "cargo": {
+          "allTargets": false,
+          "target": "xtensa-esp32s3-none-elf",
+          "extraEnv": {
+            "PATH": "/Users/nilton/.rustup/toolchains/esp/xtensa-esp-elf/esp-15.2.0_20250920/xtensa-esp-elf/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+            "RUSTUP_TOOLCHAIN": "esp",
+          },
+        },
+        "server": {
+          "extraEnv": {
+            "PATH": "/Users/nilton/.rustup/toolchains/esp/xtensa-esp-elf/esp-15.2.0_20250920/xtensa-esp-elf/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+            "RUSTUP_TOOLCHAIN": "stable",
+          },
+        },
+      },
+    },
+  },
 }

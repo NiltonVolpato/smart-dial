@@ -1,5 +1,5 @@
 [env]
-DEFMT_LOG="info,common=debug,waveshare_knob_1_8=debug,coprocessor=debug,lilygo_t_encoder_pro=debug,app_clock=debug"
+DEFMT_LOG="info,common=debug,waveshare_knob_1_8=info,coprocessor=debug,lilygo_t_encoder_pro=info,app_clock=debug,app_sonos=debug"
 ESP_HAL_CONFIG_DATA_CACHE_SIZE="64KB"
 ESP_HAL_CONFIG_PLACE_SPI_MASTER_DRIVER_IN_RAM="true"
 # ESP_HAL_CONFIG_INSTRUCTION_CACHE_SIZE="16KB"
