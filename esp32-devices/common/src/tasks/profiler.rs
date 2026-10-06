@@ -10,7 +10,7 @@ use core::num::NonZeroU8;
 use core::sync::atomic::{AtomicU8, Ordering};
 
 use allocator_api2::boxed::Box;
-use app_shell::profile::SampleTable;
+use app_shell::SampleTable;
 use critical_section::Mutex;
 use defmt::info;
 use embassy_time::{Duration, Timer};

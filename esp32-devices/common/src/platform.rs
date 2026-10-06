@@ -249,6 +249,9 @@ where
                     }
                     on_screen_event(screen_event).await;
                 }
+                Event::WakeUp => {
+                    defmt::debug!("WakeUp event received");
+                }
             }
             event = try_receive_event();
         }
@@ -275,14 +278,64 @@ where
     }
 }
 
+/// Physical feedback channel shared across Embassy tasks on Core 0.
+pub type FeedbackChannel = embassy_sync::channel::Channel<
+    embassy_sync::blocking_mutex::raw::NoopRawMutex,
+    app_shell::Feedback,
+    16,
+>;
+
 /// Application shell platform integration for ESP32 devices.
 ///
 /// Logs application launch events and heap statistics via `defmt`.
-#[derive(Default, Clone, Copy, Debug)]
-pub struct EspAppShellPlatform;
+pub struct EspAppShellPlatform {
+    start_time: esp_hal::time::Instant,
+    current_utc_fn: Option<fn() -> Option<jiff::Timestamp>>,
+    current_local_fn: Option<fn() -> Option<jiff::Zoned>>,
+    feedback_channel: Option<Rc<FeedbackChannel>>,
+}
 
-impl app_shell::AppShellPlatform for EspAppShellPlatform {
-    fn on_app_launched(&self, info: &app_shell::AppInfo) {
+impl EspAppShellPlatform {
+    pub fn new(
+        current_utc_fn: Option<fn() -> Option<jiff::Timestamp>>,
+        current_local_fn: Option<fn() -> Option<jiff::Zoned>>,
+        feedback_channel: Option<Rc<FeedbackChannel>>,
+    ) -> Self {
+        Self {
+            start_time: esp_hal::time::Instant::now(),
+            current_utc_fn,
+            current_local_fn,
+            feedback_channel,
+        }
+    }
+}
+
+impl app_shell::Platform for EspAppShellPlatform {
+    fn on_app_launched(&self, info: &theme::AppInfo) {
         defmt::debug!("Launched app: {}, {}", info.name.as_str(), esp_alloc::HEAP.stats());
+    }
+
+    fn wake_event_loop(&self) {
+        crate::channels::wake_event_loop();
+    }
+
+    fn now_utc(&self) -> Option<jiff::Timestamp> {
+        self.current_utc_fn.and_then(|f| f())
+    }
+
+    fn now_local(&self) -> Option<jiff::Zoned> {
+        self.current_local_fn.and_then(|f| f())
+    }
+
+    fn duration_since_boot(&self) -> core::time::Duration {
+        core::time::Duration::from_micros(
+            (esp_hal::time::Instant::now() - self.start_time).as_micros(),
+        )
+    }
+
+    fn signal_feedback(&self, feedback: app_shell::Feedback) {
+        if let Some(ref channel) = self.feedback_channel {
+            let _ = channel.try_send(feedback);
+        }
     }
 }

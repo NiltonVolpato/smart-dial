@@ -31,13 +31,13 @@ mod tests {
     use alloc::vec::Vec;
 
     use app_launcher::LauncherApp;
-    use app_shell::AppInfo;
     use defmt::assert_eq;
     use lilygo_t_encoder_pro::bsp::EspPlatform;
     use lilygo_t_encoder_pro::bsp::display::{BUFFER_HEIGHT, NativeRgb565, RENDER_STRIDE};
     use slint::ComponentHandle;
     use slint::platform::software_renderer::MinimalSoftwareWindow;
     use slint::platform::{Key, WindowEvent};
+    use theme::AppInfo;
 
     #[init]
     fn init() {

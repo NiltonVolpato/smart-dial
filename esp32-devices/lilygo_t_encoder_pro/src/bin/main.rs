@@ -91,8 +91,11 @@ async fn main(spawner: Spawner) -> ! {
     let bsp = Bsp::init(board.core0);
 
     // 6. Spawn background buzzer & haptics task on GPIO17
-    spawner
-        .spawn(buzzer_task(bsp.buzzer.ledc, bsp.buzzer.pin).expect("Failed to create buzzer task"));
+    let feedback_channel = alloc::rc::Rc::new(lilygo_t_encoder_pro::bsp::BuzzerChannel::new());
+    spawner.spawn(
+        buzzer_task(bsp.buzzer.ledc, bsp.buzzer.pin, feedback_channel.clone())
+            .expect("Failed to create buzzer task"),
+    );
 
     // 7. Spawn interrupt-driven input & screensaver tasks
     spawner.spawn(button_task(bsp.button).expect("Failed to create button task"));
@@ -107,9 +110,15 @@ async fn main(spawner: Spawner) -> ! {
 
     info!("Starting AppShell with Launcher on Core 0...");
     let launcher = LauncherAppFactory::default_apps();
-    let shell = AppShell::new(Box::new(common::EspAppShellPlatform), Box::new(launcher));
+    let platform = alloc::rc::Rc::new(common::EspAppShellPlatform::new(
+        None,
+        None,
+        Some(feedback_channel.clone()),
+    ));
+    let shell = AppShell::new(spawner, platform, Box::new(launcher));
     AppShell::start(&shell);
 
     // 8. Enter Slint MCU event loop on Core 0
-    run_event_loop(bsp.window).await;
+    let feedback = lilygo_t_encoder_pro::bsp::LilygoFeedback(feedback_channel);
+    run_event_loop(bsp.window, &feedback).await;
 }

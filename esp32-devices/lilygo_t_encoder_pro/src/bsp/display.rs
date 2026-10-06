@@ -548,7 +548,7 @@ pub async fn display_task(mut display: Co5300) {
                     (Instant::now() - loop_start_time).as_micros(),
                 );
                 if let Some(summary) = perf_tracker.take_summary(now_since_start) {
-                    defmt::info!("[PERF] {}", summary);
+                    defmt::debug!("[PERF] {}", summary);
                 }
             }
             DisplayCommand::SetBrightness(level) => {

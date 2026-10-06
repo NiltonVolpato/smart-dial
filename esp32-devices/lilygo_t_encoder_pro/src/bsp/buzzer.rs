@@ -3,11 +3,11 @@
 
 //! Transducer buzzer & haptics driver using a single dynamic LEDC timer on GPIO17.
 
+use alloc::rc::Rc;
 use core::cell::RefCell;
 
 pub use app_shell::Feedback;
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_sync::signal::Signal;
+pub use common::FeedbackChannel as BuzzerChannel;
 use embassy_time::{Duration, Timer};
 use esp_hal::gpio::DriveMode;
 use esp_hal::ledc::channel::{self, ChannelIFace};
@@ -15,20 +15,6 @@ use esp_hal::ledc::timer::{self, TimerIFace};
 use esp_hal::ledc::{LSGlobalClkSource, Ledc, LowSpeed};
 use esp_hal::peripherals::{GPIO17, LEDC};
 use esp_hal::time::Rate;
-
-/// Signal used to park and wake the buzzer task with zero CPU polling when idle.
-static BUZZER_WAKER: Signal<CriticalSectionRawMutex, ()> = Signal::new();
-
-fn wake_buzzer() {
-    BUZZER_WAKER.signal(());
-}
-
-/// Queues a feedback event and wakes the parked buzzer task to play it.
-pub fn signal_feedback(feedback: Feedback) {
-    if !app_shell::feedback::signal(feedback) {
-        defmt::error!("feedback queue full, dropped {}", defmt::Debug2Format(&feedback));
-    }
-}
 
 /// A wrapper around `esp_hal::ledc::timer::Timer` that provides interior mutability
 /// so its frequency can be changed on the fly while bound to an LEDC channel.
@@ -75,7 +61,11 @@ impl DynamicTimer<'_> {
 
 /// Asynchronous Embassy task serving buzzer & haptic requests.
 #[embassy_executor::task]
-pub async fn buzzer_task(ledc_periph: LEDC<'static>, pin: GPIO17<'static>) {
+pub async fn buzzer_task(
+    ledc_periph: LEDC<'static>,
+    pin: GPIO17<'static>,
+    channel: Rc<BuzzerChannel>,
+) {
     let mut ledc = Ledc::new(ledc_periph);
     ledc.set_global_slow_clock(LSGlobalClkSource::APBClk);
 
@@ -103,38 +93,33 @@ pub async fn buzzer_task(ledc_periph: LEDC<'static>, pin: GPIO17<'static>) {
         }};
     }
 
-    app_shell::feedback::register_waker(wake_buzzer);
-
     // Initial boot beep (1,100 Hz for 80ms)
     pulse!(1100, 50, 80);
 
     loop {
-        while let Some(feedback) = app_shell::feedback::try_receive() {
-            match feedback {
-                Feedback::DialStepForward => {
-                    // Ascending two-tone chirp (523 Hz -> 659 Hz)
-                    pulse!(523, 50, 25);
-                    pulse!(659, 50, 25);
-                }
-                Feedback::DialStepBackward => {
-                    // Descending two-tone chirp (659 Hz -> 523 Hz)
-                    pulse!(659, 50, 25);
-                    pulse!(523, 50, 25);
-                }
-                Feedback::Click => {
-                    // Crisp blip (880 Hz for 15ms)
-                    pulse!(880, 50, 15);
-                }
-                Feedback::Haptic => {
-                    // Low-frequency vibration buzz (200 Hz, 70% duty for 250ms)
-                    pulse!(200, 70, 250);
-                }
-                Feedback::Tone { hz, ms } => {
-                    pulse!(hz, 50, ms);
-                }
+        let feedback = channel.receive().await;
+        match feedback {
+            Feedback::DialStepForward => {
+                // Ascending two-tone chirp (523 Hz -> 659 Hz)
+                pulse!(523, 50, 25);
+                pulse!(659, 50, 25);
+            }
+            Feedback::DialStepBackward => {
+                // Descending two-tone chirp (659 Hz -> 523 Hz)
+                pulse!(659, 50, 25);
+                pulse!(523, 50, 25);
+            }
+            Feedback::Click => {
+                // Crisp blip (880 Hz for 15ms)
+                pulse!(880, 50, 15);
+            }
+            Feedback::Haptic => {
+                // Low-frequency vibration buzz (200 Hz, 70% duty for 250ms)
+                pulse!(200, 70, 250);
+            }
+            Feedback::Tone { hz, ms } => {
+                pulse!(hz, 50, ms);
             }
         }
-        // Park task with 0% CPU consumption until next signal arrives
-        BUZZER_WAKER.wait().await;
     }
 }

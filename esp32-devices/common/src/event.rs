@@ -50,4 +50,6 @@ pub enum Event {
     Input(InputEvent),
     /// Screen power/brightness change request.
     Screen(ScreenEvent),
+    /// Wake up request from background task or property changes.
+    WakeUp,
 }

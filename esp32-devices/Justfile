@@ -2,6 +2,10 @@ set shell := ["bash", "-uc"]
 set unstable := true
 set lists := true
 set dotenv-load := true
+set dotenv-filename := [".env", ".env.local"]
+set dotenv-override := true
+
+export SONOS_SEED_IP := env('SONOS_SEED_IP', "")
 
 # Ensure xtensa GCC toolchain is in PATH for the linker
 xtensa_bin := `ls -d ~/.rustup/toolchains/esp/xtensa-esp-elf/*/xtensa-esp-elf/bin 2>/dev/null | head -1`

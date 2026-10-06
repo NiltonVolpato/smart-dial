@@ -44,10 +44,10 @@ pub type SharedI2c = I2cDevice<'static, CriticalSectionRawMutex, I2c<'static, es
 static I2C_BUS: static_cell::StaticCell<SharedI2cBus> = static_cell::StaticCell::new();
 
 pub use coprocessor::{
-    CoprocessorCommand, connect_wifi, coprocessor_task, get_wifi_ssid, is_provisioning,
-    is_wifi_connected, send_battery_status, start_provisioning, stop_provisioning,
+    CoprocessorCommand, connect_wifi, coprocessor_task, create_shared_client, get_wifi_ssid,
+    is_provisioning, is_wifi_connected, send_battery_status, start_provisioning, stop_provisioning,
 };
-pub use haptics::{Feedback, haptic_task, signal_feedback};
+pub use haptics::{Feedback, HapticChannel, haptic_task};
 pub use platform::{EspPlatform, WaveshareFeedback, WindowHolder, run_event_loop};
 pub use rotary::rotary_task;
 pub use touch::{TouchHw, touch_task};

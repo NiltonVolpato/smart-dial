@@ -244,6 +244,7 @@ impl Sh8601 {
             .await
     }
 
+    #[allow(clippy::too_many_lines)]
     pub async fn init(&mut self) -> Result<(), esp_hal::spi::Error> {
         self.power_on_and_reset().await;
 
@@ -583,7 +584,7 @@ pub async fn display_task(mut display: Sh8601) {
                     (Instant::now() - loop_start_time).as_micros(),
                 );
                 if let Some(summary) = perf_tracker.take_summary(now_since_start) {
-                    defmt::info!("[PERF] {}", summary);
+                    defmt::debug!("[PERF] {}", summary);
                 }
             }
             DisplayCommand::SetBrightness(level) => {

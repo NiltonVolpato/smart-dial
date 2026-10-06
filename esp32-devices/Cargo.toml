@@ -49,6 +49,7 @@ embassy-sync = { version = "0.8.0", features = ["defmt"] }
 embassy-time = { version = "0.5.0", features = ["defmt"] }
 embassy-embedded-hal = { version = "0.6.0", features = ["defmt"] }
 embedded-hal-async = "1.0.0"
+embedded-io-async = "0.7"
 heapless = "0.8"
 static_cell = "2.1"
 critical-section = "1.2"
@@ -57,12 +58,16 @@ rtt-target = { version = "0.6.2", features = ["defmt"] }
 jiff = { version = "0.2.10", default-features = false, features = ["static"] }
 
 app-launcher = { path = "../portable/apps/launcher", default-features = false, features = ["apps"] }
+app-sonos = { path = "../portable/apps/sonos", default-features = false, features = ["defmt"] }
 app-shell = { path = "../portable/crates/app-shell", default-features = false }
 detent-decoder = { path = "../portable/crates/detent-decoder" }
 cst816 = { path = "../portable/crates/cst816", features = ["defmt"] }
 drv2605 = { path = "../portable/crates/drv2605", features = ["defmt"] }
 allocator-api2 = { version = "0.3", default-features = false, features = ["alloc"] }
 coprocessor = { path = "../portable/crates/coprocessor" }
+tether = { path = "../../../tether-worktree/main/tether", default-features = false }
+tether-core = { path = "../../../tether-worktree/main/core", default-features = false }
+tether-embassy = { path = "../../../tether-worktree/main/embassy", default-features = false }
 common = { path = "common" }
 theme = { path = "../portable/crates/theme", default-features = false }
 
@@ -78,6 +83,8 @@ nb = "1.1"
 complexity = { level = "warn", priority = -1 }
 correctness = { level = "warn", priority = -1 }
 perf = { level = "warn", priority = -1 }
+
+too-many-lines = { level = "warn", priority = -1 }
 
 [profile.dev]
 opt-level = "z"

@@ -19,6 +19,7 @@ heapless                  = { workspace = true }
 static_cell               = { workspace = true }
 critical-section          = { workspace = true }
 app-shell                 = { workspace = true }
+jiff                      = { workspace = true }
 esp-alloc                 = { workspace = true }
 allocator-api2            = { workspace = true }
 theme                     = { workspace = true }

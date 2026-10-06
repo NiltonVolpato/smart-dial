@@ -30,8 +30,6 @@ pub fn init(lpwr: LPWR<'static>) {
     critical_section::with(|cs| {
         *RTC.borrow(cs).borrow_mut() = Some(rtc);
     });
-
-    app_shell::time::register_time_provider(current_wall_time);
 }
 
 /// Synchronizes the hardware RTC with UTC epoch seconds and microsecond fraction received over UART.
@@ -67,8 +65,8 @@ pub fn sync_rtc(epoch_seconds: u64, subsec_micros: u32) {
     });
 }
 
-/// Returns the current local wall-clock time broken down into components.
-pub fn current_wall_time() -> Option<app_shell::WallTime> {
+/// Returns the current UTC wall-clock time as a `jiff::Timestamp`.
+pub fn current_timestamp() -> Option<jiff::Timestamp> {
     critical_section::with(|cs| {
         let guard = RTC.borrow(cs);
         let rtc_ref = guard.borrow();
@@ -79,17 +77,11 @@ pub fn current_wall_time() -> Option<app_shell::WallTime> {
             return None;
         }
 
-        let ts = jiff::Timestamp::from_microsecond(us as i64).ok()?;
-        let zdt = ts.to_zoned(TIMEZONE);
-
-        Some(app_shell::WallTime {
-            hours: zdt.hour() as u8,
-            minutes: zdt.minute() as u8,
-            seconds: zdt.second() as u8,
-            year: zdt.year(),
-            month: zdt.month() as u8,
-            day: zdt.day() as u8,
-            weekday: zdt.weekday().to_monday_one_offset() as u8,
-        })
+        jiff::Timestamp::from_microsecond(us as i64).ok()
     })
+}
+
+/// Returns the current local wall-clock time configured for this device as a `jiff::Zoned`.
+pub fn current_zoned() -> Option<jiff::Zoned> {
+    current_timestamp().map(|ts| ts.to_zoned(TIMEZONE))
 }

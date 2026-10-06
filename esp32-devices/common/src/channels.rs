@@ -42,6 +42,15 @@ pub fn send_screen_event(screen: ScreenEvent) {
     send_event(Event::Screen(screen));
 }
 
+/// Sends an event to wake the event loop and render dirty regions.
+pub fn wake_event_loop() {
+    // We only need to wake up if the queue is empty, as any pending
+    // events will wake up the event loop anyway.
+    if EVENTS.is_empty() {
+        EVENTS.try_send(Event::WakeUp).ok();
+    }
+}
+
 /// Attempts to receive a pending event from the queue without blocking.
 pub fn try_receive_event() -> Option<Event> {
     EVENTS.try_receive().ok()

@@ -21,12 +21,16 @@ slint = { workspace = true }
 i-slint-renderer-software = { workspace = true }
 
 app-launcher = { workspace = true }
+app-sonos = { workspace = true }
 app-shell = { workspace = true }
 detent-decoder = { workspace = true }
 common = { workspace = true }
 cst816 = { workspace = true }
 drv2605 = { workspace = true }
 coprocessor = { workspace = true }
+tether = { workspace = true }
+tether-core = { workspace = true }
+tether-embassy = { workspace = true }
 theme = { workspace = true }
 nb = { workspace = true }
 jiff = { workspace = true }
@@ -42,6 +46,7 @@ embassy-sync = { workspace = true }
 embassy-time = { workspace = true }
 embassy-embedded-hal = { workspace = true }
 embedded-hal-async = { workspace = true }
+embedded-io-async = { workspace = true }
 heapless = { workspace = true }
 static_cell = { workspace = true }
 critical-section = { workspace = true }

@@ -18,19 +18,19 @@ use super::display::{
 };
 use super::event::ScreenEvent;
 
-pub struct LilygoFeedback;
+pub struct LilygoFeedback(pub Rc<buzzer::BuzzerChannel>);
 impl FeedbackSink for LilygoFeedback {
     fn on_dial_step_forward(&self) {
-        buzzer::signal_feedback(buzzer::Feedback::DialStepForward);
+        let _ = self.0.try_send(buzzer::Feedback::DialStepForward);
     }
     fn on_dial_step_backward(&self) {
-        buzzer::signal_feedback(buzzer::Feedback::DialStepBackward);
+        let _ = self.0.try_send(buzzer::Feedback::DialStepBackward);
     }
     fn on_click(&self) {
-        buzzer::signal_feedback(buzzer::Feedback::Click);
+        let _ = self.0.try_send(buzzer::Feedback::Click);
     }
     fn on_long_press(&self) {
-        buzzer::signal_feedback(buzzer::Feedback::Haptic);
+        let _ = self.0.try_send(buzzer::Feedback::Haptic);
     }
 }
 
@@ -55,7 +55,7 @@ fn cycle_count() -> u32 {
 
 /// Runs the main Slint event loop: awaits interrupt-driven inputs, advances
 /// animations, and renders updates.
-pub async fn run_event_loop(window_holder: WindowHolder) -> ! {
+pub async fn run_event_loop(window_holder: WindowHolder, feedback: &LilygoFeedback) -> ! {
     // Two framebuffers in fast internal SRAM (2 * ~78.4 KiB = ~156.8 KiB)
     #[repr(align(16))]
     struct FrameBuffer([NativeRgb565; RENDER_STRIDE * BUFFER_HEIGHT]);
@@ -82,7 +82,7 @@ pub async fn run_event_loop(window_holder: WindowHolder) -> ! {
 
     run_common_event_loop(
         window_holder,
-        &LilygoFeedback,
+        feedback,
         base_brightness,
         async |screen_event| match screen_event {
             ScreenEvent::DimRelative(ratio) => {

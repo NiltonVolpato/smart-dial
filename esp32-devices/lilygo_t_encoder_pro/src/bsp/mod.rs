@@ -17,6 +17,7 @@ pub use board::{
     Board, BuzzerPeripherals, Core0Peripherals, Core1Peripherals, DisplayPeripherals,
     EncoderPeripherals, SystemPeripherals, TouchPeripherals,
 };
+pub use buzzer::{BuzzerChannel, Feedback, buzzer_task};
 pub use display::{
     BigEndianRgb565, Co5300, DISPLAY_HEIGHT, DISPLAY_WIDTH, RENDER_HEIGHT, RENDER_WIDTH,
     TX_BUF_BYTES, display_task,
@@ -26,7 +27,7 @@ use esp_hal::i2c::master::{BusTimeout, Config as I2cConfig, I2c};
 use esp_hal::time::Rate;
 pub use event::{EVENTS, Event, ScreenEvent, send_event};
 pub use input::{InputEvent, send_input_event};
-pub use platform::{EspPlatform, WindowHolder, run_event_loop};
+pub use platform::{EspPlatform, LilygoFeedback, WindowHolder, run_event_loop};
 pub use rotary::{EncoderHw, button_task, init_rotary, rotary_decode_once, rotary_task};
 pub use touch::{Chsc5816, touch_task};
 

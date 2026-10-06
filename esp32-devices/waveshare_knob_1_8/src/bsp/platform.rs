@@ -18,19 +18,19 @@ use super::display::{
 };
 use super::haptics;
 
-pub struct WaveshareFeedback;
+pub struct WaveshareFeedback(pub Rc<haptics::HapticChannel>);
 impl FeedbackSink for WaveshareFeedback {
     fn on_dial_step_forward(&self) {
-        haptics::signal_feedback(haptics::Feedback::DialStepForward);
+        let _ = self.0.try_send(haptics::Feedback::DialStepForward);
     }
     fn on_dial_step_backward(&self) {
-        haptics::signal_feedback(haptics::Feedback::DialStepBackward);
+        let _ = self.0.try_send(haptics::Feedback::DialStepBackward);
     }
     fn on_click(&self) {
-        haptics::signal_feedback(haptics::Feedback::Click);
+        let _ = self.0.try_send(haptics::Feedback::Click);
     }
     fn on_long_press(&self) {
-        haptics::signal_feedback(haptics::Feedback::Haptic);
+        let _ = self.0.try_send(haptics::Feedback::Haptic);
     }
 }
 
@@ -55,7 +55,7 @@ fn cycle_count() -> u32 {
 
 /// Runs the main Slint event loop: awaits interrupt-driven inputs, advances
 /// animations, and renders updates.
-pub async fn run_event_loop(window_holder: WindowHolder) -> ! {
+pub async fn run_event_loop(window_holder: WindowHolder, feedback: &WaveshareFeedback) -> ! {
     // Single framebuffer in fast internal SRAM (259,200 bytes = 253.125 KiB)
     #[repr(align(16))]
     struct FrameBuffer([BigEndianRgb565; RENDER_STRIDE * RENDER_HEIGHT as usize]);
@@ -78,7 +78,7 @@ pub async fn run_event_loop(window_holder: WindowHolder) -> ! {
 
     run_common_event_loop(
         window_holder,
-        &WaveshareFeedback,
+        feedback,
         base_brightness,
         async |screen_event| match screen_event {
             ScreenEvent::DimRelative(ratio) => {
