@@ -1,17 +1,23 @@
 .PHONY: all clean
 
-FBS := coprocessor.fbs media.fbs
-CPP_OUT := ../coprocessor/include/coprocessor_generated.h ../coprocessor/include/media_generated.h
-RUST_OUT := ../portable/crates/coprocessor/src/coprocessor_generated.rs
+TETHER_SCHEMA := ../../../tether-worktree/main/schema
+FBS := coprocessor.fbs common.fbs wifi.fbs system.fbs sonos.fbs
+CPP_DIR := ../coprocessor/include
+RUST_DIR := ../portable/crates/coprocessor/src
+
+CPP_OUT := $(CPP_DIR)/coprocessor_generated.h $(CPP_DIR)/coprocessor_rpc.h
+RUST_OUT := $(RUST_DIR)/coprocessor_generated.rs $(RUST_DIR)/coprocessor_rpc.rs
 STAMP := .flatc.stamp
 
 all: $(STAMP)
 
 $(STAMP): $(FBS)
-	flatc --cpp -o ../coprocessor/include/ $(FBS)
-	flatc --rust --gen-all -o ../portable/crates/coprocessor/src/ coprocessor.fbs
+	flatc --cpp --cpp-std c++17 --scoped-enums --gen-all -I $(TETHER_SCHEMA) -o $(CPP_DIR)/ coprocessor.fbs
+	tether-gen coprocessor.fbs -I $(TETHER_SCHEMA) --lang cpp --include coprocessor_generated.h > $(CPP_DIR)/coprocessor_rpc.h
+	flatc --rust --gen-object-api --gen-all -I $(TETHER_SCHEMA) -o $(RUST_DIR)/ coprocessor.fbs
+	tether-gen coprocessor.fbs -I $(TETHER_SCHEMA) --types crate::coprocessor_generated > $(RUST_DIR)/coprocessor_rpc.rs
 	rustup run nightly rustfmt $(RUST_OUT)
 	touch $(STAMP)
 
 clean:
-	rm -f $(CPP_OUT) $(RUST_OUT) ../portable/crates/coprocessor/src/media_generated.rs $(STAMP)
+	rm -f $(CPP_OUT) $(RUST_OUT) $(STAMP)

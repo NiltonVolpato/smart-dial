@@ -1,0 +1,26 @@
+// Copyright © 2026 Nilton Volpato
+// SPDX-License-Identifier: MIT
+
+include "tether.fbs";
+include "common.fbs";
+
+namespace CoprocessorProto;
+
+table TimeSync {
+    epoch_seconds: uint64;
+    subsec_micros: uint32;
+}
+
+table BatteryStatus {
+    millivolts: uint32;
+    percent: uint8;
+    is_plugged: bool;
+}
+
+/// System telemetry and network clock synchronization service.
+rpc_service System {
+    /// Streams network time updates whenever SNTP synchronizes.
+    WatchTime(Empty): TimeSync (streaming: "server");
+    /// Reports battery state from the host ADC to the co-processor.
+    ReportBattery(BatteryStatus): Empty;
+}

@@ -1,110 +1,17 @@
 // Copyright © 2026 Nilton Volpato
 // SPDX-License-Identifier: MIT
 
-include "media.fbs";
+include "tether.fbs";
+include "common.fbs";
+include "wifi.fbs";
+include "system.fbs";
+include "sonos.fbs";
 
 namespace CoprocessorProto;
 
-// Status of Wi-Fi connection reported by the co-processor
-table WifiStatus {
-    connected: bool;
-    ip: string;
-    ssid: string;
-    rssi: int16;
+/// The services the co-processor serves: wire IDs are fixed in append-only order.
+enum Server : ubyte (rpc_server) {
+    Wifi,
+    System,
+    Sonos,
 }
-
-// Request co-processor to connect to Wi-Fi manually
-table WifiConnectRequest {
-    ssid: string;
-    password: string;
-}
-
-// Battery status forwarded from S3 ADC to co-processor
-table BatteryStatus {
-    millivolts: uint32;
-    percent: uint8;
-    is_plugged: bool;
-}
-
-// Heartbeat for liveness and latency checks
-table Heartbeat {
-    uptime_ms: uint64;
-    heap_free: uint32;
-    battery: BatteryStatus;
-}
-
-// Streaming chunk for multiplexed large payloads (album art, OTA, etc.)
-table StreamChunk {
-    stream_id: uint32;
-    sequence: uint32;
-    is_last: bool;
-    payload: [ubyte];
-}
-
-// Provisioning state for on-demand BLE setup
-enum ProvisioningState : ubyte {
-    Inactive = 0,
-    Active = 1,
-    Provisioned = 2,
-    TimedOut = 3,
-}
-
-// Request co-processor to open on-demand BLE provisioning window
-table StartProvisioning {
-    timeout_seconds: uint32;
-}
-
-// Request co-processor to immediately stop/cancel BLE provisioning
-table StopProvisioning {}
-
-// Status update of BLE provisioning session
-table ProvisioningStatus {
-    state: ProvisioningState;
-}
-
-// Handshake message sent on boot to establish link and detect peer reboots
-table Hello {}
-
-// Network time synchronization event from co-processor to S3
-table TimeSync {
-    epoch_seconds: uint64;
-    subsec_micros: uint32;
-}
-
-// Union of all Requests (S3 -> Co-processor)
-union Request {
-    Heartbeat,
-    WifiConnectRequest,
-    StartProvisioning,
-    StopProvisioning,
-    StreamChunk,
-    Hello,
-    BatteryStatus,
-    Media.Action,
-    Media.VolumeCommand,
-    Media.Subscribe,
-    Media.UnsubscribeAll,
-    Media.GetTopology,
-}
-
-// Union of all Responses / Events (Co-processor -> S3)
-union Response {
-    Heartbeat,
-    WifiStatus,
-    ProvisioningStatus,
-    StreamChunk,
-    Hello,
-    TimeSync,
-    Media.StateUpdate,
-    Media.TopologyUpdate,
-}
-
-table RequestEnvelope {
-    message: Request;
-}
-
-table ResponseEnvelope {
-    message: Response;
-}
-
-root_type RequestEnvelope;

@@ -1,0 +1,103 @@
+// Copyright © 2026 Nilton Volpato
+// SPDX-License-Identifier: MIT
+
+include "tether.fbs";
+include "common.fbs";
+
+namespace CoprocessorProto;
+
+// Playback state of a media renderer
+enum TransportState : ubyte {
+    Stopped = 0,
+    Playing = 1,
+    Paused = 2,
+    Transitioning = 3,
+}
+
+// Media transport action to execute on a renderer
+enum ActionType : ubyte {
+    Play = 0,
+    Pause = 1,
+    TogglePlayPause = 2,
+    Next = 3,
+    Previous = 4,
+    Stop = 5,
+}
+
+// Command from Host to Co-processor to perform a media transport action.
+table ActionRequest {
+    endpoint_ip: string;
+    endpoint_port: uint16 = 1400;
+    action: ActionType;
+}
+
+// Command to set or adjust volume on a renderer.
+table VolumeRequest {
+    endpoint_ip: string;
+    endpoint_port: uint16 = 1400;
+    volume: int16;        // 0..100 for absolute, or signed delta if is_relative
+    is_relative: bool;    // If true, volume is treated as signed delta
+}
+
+// Track metadata
+table TrackMetadata {
+    title: string;
+    artist: string;
+    album: string;
+    duration_seconds: uint32 = null;
+    elapsed_seconds: uint32 = null;
+    album_art_uri: string;
+}
+
+// Current media state update pushed from Co-processor to Host.
+table StateUpdate {
+    endpoint_ip: string;
+    transport_state: TransportState = null;
+    volume: uint8 = null;
+    is_muted: bool = null;
+    track: TrackMetadata;
+}
+
+// Discovered speaker member in a zone group
+table Member {
+    name: string;
+    uuid: string;
+    ip: string;
+}
+
+// Discovered group/room in the household.
+table Group {
+    id: string;
+    name: string;
+    coordinator_ip: string;
+    coordinator_port: uint16 = 1400;
+    is_playing: bool;
+    members: [Member];
+}
+
+// Household topology update pushed from Co-processor to Host
+table TopologyUpdate {
+    sequence: uint32;
+    group_index: uint16;
+    total_groups: uint16;
+    group: Group;
+}
+
+// Request to watch household topology using a seed speaker IP.
+table TopologyRequest {
+    seed_ip: string;
+    seed_port: uint16 = 1400;
+}
+
+// Request to watch playback state on a group coordinator endpoint.
+table PlaybackRequest {
+    endpoint_ip: string;
+    endpoint_port: uint16 = 1400;
+}
+
+rpc_service Sonos {
+    WatchTopology(TopologyRequest): TopologyUpdate (streaming: "server");
+    WatchPlayback(PlaybackRequest): StateUpdate (streaming: "server");
+    Action(ActionRequest): CoprocessorProto.Empty (timeout_ms: "2000");
+    SetVolume(VolumeRequest): CoprocessorProto.Empty (timeout_ms: "1000");
+}
