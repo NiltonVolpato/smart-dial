@@ -1,4 +1,4 @@
 ---
 Checks: 'modernize*,-modernize-use-trailing-return-type'
 HeaderFilterRegex: '^(coprocessor/)?src/.*\.h$'
-WarningsAsErrors: ''
+WarningsAsErrors: '*'
