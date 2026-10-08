@@ -1,0 +1,10 @@
+// Copyright © 2026 Nilton Volpato
+// SPDX-License-Identifier: MIT
+
+#include <stddef.h>
+#include <gtest/gtest.h>
+
+int main(int argc, char** argv) {
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}
