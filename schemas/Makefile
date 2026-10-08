@@ -16,7 +16,7 @@ $(STAMP): $(FBS) Makefile
 	tether-gen coprocessor.fbs -I $(TETHER_SCHEMA) --lang cpp --include coprocessor_generated.h > $(CPP_DIR)/coprocessor_rpc.h
 	flatc --rust --gen-object-api --gen-all -I $(TETHER_SCHEMA) -o $(RUST_DIR)/ coprocessor.fbs
 	tether-gen coprocessor.fbs -I $(TETHER_SCHEMA) --types crate::coprocessor_generated > $(RUST_DIR)/coprocessor_rpc.rs
-	rustup run nightly rustfmt $(RUST_OUT)
+	cargo +nightly fmt --manifest-path ../portable/Cargo.toml -- $(RUST_OUT)
 	touch $(STAMP)
 
 clean:

@@ -3,7 +3,7 @@
 
 use alloc::vec::Vec;
 
-use tether::{flatbuffers, Pack, Table};
+use tether::{Pack, Table, flatbuffers};
 
 use crate::coprocessor_generated as fb;
 
@@ -294,8 +294,8 @@ pub mod coprocessor_proto {
 
     pub mod sonos {
         use tether::{
-            flatbuffers, Call, CallId, Channel, MethodId, Pack, RawReply, RawSink, Reply,
-            ServerTypes, Sink, Status, Transport,
+            Call, CallId, Channel, MethodId, Pack, RawReply, RawSink, Reply, ServerTypes, Sink,
+            Status, Transport, flatbuffers,
         };
 
         use crate::coprocessor_generated as fb;
@@ -431,8 +431,8 @@ pub mod coprocessor_proto {
     /// System telemetry and network clock synchronization service.
     pub mod system {
         use tether::{
-            flatbuffers, Call, CallId, Channel, MethodId, Pack, RawReply, RawSink, Reply,
-            ServerTypes, Sink, Status, Transport,
+            Call, CallId, Channel, MethodId, Pack, RawReply, RawSink, Reply, ServerTypes, Sink,
+            Status, Transport, flatbuffers,
         };
 
         use crate::coprocessor_generated as fb;
@@ -518,8 +518,8 @@ pub mod coprocessor_proto {
     /// Wi-Fi and BLE provisioning service.
     pub mod wifi {
         use tether::{
-            flatbuffers, Call, CallId, Channel, MethodId, Pack, RawReply, RawSink, Reply,
-            ServerTypes, Sink, Status, Transport,
+            Call, CallId, Channel, MethodId, Pack, RawReply, RawSink, Reply, ServerTypes, Sink,
+            Status, Transport, flatbuffers,
         };
 
         use crate::coprocessor_generated as fb;
