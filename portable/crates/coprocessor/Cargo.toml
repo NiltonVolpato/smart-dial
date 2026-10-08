@@ -6,10 +6,10 @@ license = "MIT"
 
 [dependencies]
 flatbuffers = { version = "25.12.19", default-features = false }
-cobs = { version = "0.5.1", default-features = false, features = ["alloc"] }
-crc32fast = { version = "1.5.2", default-features = false }
+tether = { path = "../../../../../tether-worktree/main/tether", default-features = false }
+tether-core = { path = "../../../../../tether-worktree/main/core", default-features = false }
 
 [dev-dependencies]
 flatbuffers = { version = "25.12.19" }
-cobs = { version = "0.5.1" }
-crc32fast = { version = "1.5.2" }
+tether = { path = "../../../../../tether-worktree/main/tether" }
+tether-core = { path = "../../../../../tether-worktree/main/core" }

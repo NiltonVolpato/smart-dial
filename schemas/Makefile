@@ -11,8 +11,8 @@ STAMP := .flatc.stamp
 
 all: $(STAMP)
 
-$(STAMP): $(FBS)
-	flatc --cpp --cpp-std c++17 --scoped-enums --gen-all -I $(TETHER_SCHEMA) -o $(CPP_DIR)/ coprocessor.fbs
+$(STAMP): $(FBS) Makefile
+	flatc --cpp --gen-object-api --cpp-std c++17 --scoped-enums --gen-all -I $(TETHER_SCHEMA) -o $(CPP_DIR)/ coprocessor.fbs
 	tether-gen coprocessor.fbs -I $(TETHER_SCHEMA) --lang cpp --include coprocessor_generated.h > $(CPP_DIR)/coprocessor_rpc.h
 	flatc --rust --gen-object-api --gen-all -I $(TETHER_SCHEMA) -o $(RUST_DIR)/ coprocessor.fbs
 	tether-gen coprocessor.fbs -I $(TETHER_SCHEMA) --types crate::coprocessor_generated > $(RUST_DIR)/coprocessor_rpc.rs

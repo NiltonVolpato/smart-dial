@@ -95,9 +95,22 @@ table PlaybackRequest {
     endpoint_port: uint16 = 1400;
 }
 
+// Summarized state of a single speaker group for the carousel
+table GroupSummary {
+    id: string;
+    is_playing: bool;
+    title: string;
+}
+
+// Collection of summaries for all known speaker groups
+table GroupsSummary {
+    groups: [GroupSummary];
+}
+
 rpc_service Sonos {
     WatchTopology(TopologyRequest): TopologyUpdate (streaming: "server");
     WatchPlayback(PlaybackRequest): StateUpdate (streaming: "server");
     Action(ActionRequest): CoprocessorProto.Empty (timeout_ms: "2000");
     SetVolume(VolumeRequest): CoprocessorProto.Empty (timeout_ms: "1000");
+    GetGroupsSummary(CoprocessorProto.Empty): GroupsSummary (timeout_ms: "2000");
 }

@@ -13,61 +13,95 @@ static_assert(FLATBUFFERS_VERSION_MAJOR == 25 &&
               FLATBUFFERS_VERSION_REVISION == 19,
              "Non-compatible flatbuffers version included");
 
-#include "media_generated.h"
-
 namespace CoprocessorProto {
 
-struct WifiStatus;
-struct WifiStatusBuilder;
+struct Empty;
+struct EmptyBuilder;
+struct EmptyT;
 
 struct WifiConnectRequest;
 struct WifiConnectRequestBuilder;
+struct WifiConnectRequestT;
 
-struct BatteryStatus;
-struct BatteryStatusBuilder;
+struct WifiStatus;
+struct WifiStatusBuilder;
+struct WifiStatusT;
 
-struct Heartbeat;
-struct HeartbeatBuilder;
-
-struct StreamChunk;
-struct StreamChunkBuilder;
-
-struct StartProvisioning;
-struct StartProvisioningBuilder;
-
-struct StopProvisioning;
-struct StopProvisioningBuilder;
+struct StartProvisioningRequest;
+struct StartProvisioningRequestBuilder;
+struct StartProvisioningRequestT;
 
 struct ProvisioningStatus;
 struct ProvisioningStatusBuilder;
-
-struct Hello;
-struct HelloBuilder;
+struct ProvisioningStatusT;
 
 struct TimeSync;
 struct TimeSyncBuilder;
+struct TimeSyncT;
 
-struct RequestEnvelope;
-struct RequestEnvelopeBuilder;
+struct BatteryStatus;
+struct BatteryStatusBuilder;
+struct BatteryStatusT;
 
-struct ResponseEnvelope;
-struct ResponseEnvelopeBuilder;
+struct ActionRequest;
+struct ActionRequestBuilder;
+struct ActionRequestT;
 
-enum ProvisioningState : uint8_t {
-  ProvisioningState_Inactive = 0,
-  ProvisioningState_Active = 1,
-  ProvisioningState_Provisioned = 2,
-  ProvisioningState_TimedOut = 3,
-  ProvisioningState_MIN = ProvisioningState_Inactive,
-  ProvisioningState_MAX = ProvisioningState_TimedOut
+struct VolumeRequest;
+struct VolumeRequestBuilder;
+struct VolumeRequestT;
+
+struct TrackMetadata;
+struct TrackMetadataBuilder;
+struct TrackMetadataT;
+
+struct StateUpdate;
+struct StateUpdateBuilder;
+struct StateUpdateT;
+
+struct Member;
+struct MemberBuilder;
+struct MemberT;
+
+struct Group;
+struct GroupBuilder;
+struct GroupT;
+
+struct TopologyUpdate;
+struct TopologyUpdateBuilder;
+struct TopologyUpdateT;
+
+struct TopologyRequest;
+struct TopologyRequestBuilder;
+struct TopologyRequestT;
+
+struct PlaybackRequest;
+struct PlaybackRequestBuilder;
+struct PlaybackRequestT;
+
+struct GroupSummary;
+struct GroupSummaryBuilder;
+struct GroupSummaryT;
+
+struct GroupsSummary;
+struct GroupsSummaryBuilder;
+struct GroupsSummaryT;
+
+enum class ProvisioningState : uint8_t {
+  Inactive = 0,
+  Active = 1,
+  Provisioned = 2,
+  TimedOut = 3,
+  MIN = Inactive,
+  MAX = TimedOut
 };
 
 inline const ProvisioningState (&EnumValuesProvisioningState())[4] {
   static const ProvisioningState values[] = {
-    ProvisioningState_Inactive,
-    ProvisioningState_Active,
-    ProvisioningState_Provisioned,
-    ProvisioningState_TimedOut
+    ProvisioningState::Inactive,
+    ProvisioningState::Active,
+    ProvisioningState::Provisioned,
+    ProvisioningState::TimedOut
   };
   return values;
 }
@@ -84,225 +118,265 @@ inline const char * const *EnumNamesProvisioningState() {
 }
 
 inline const char *EnumNameProvisioningState(ProvisioningState e) {
-  if (::flatbuffers::IsOutRange(e, ProvisioningState_Inactive, ProvisioningState_TimedOut)) return "";
+  if (::flatbuffers::IsOutRange(e, ProvisioningState::Inactive, ProvisioningState::TimedOut)) return "";
   const size_t index = static_cast<size_t>(e);
   return EnumNamesProvisioningState()[index];
 }
 
-enum Request : uint8_t {
-  Request_NONE = 0,
-  Request_Heartbeat = 1,
-  Request_WifiConnectRequest = 2,
-  Request_StartProvisioning = 3,
-  Request_StopProvisioning = 4,
-  Request_StreamChunk = 5,
-  Request_Hello = 6,
-  Request_BatteryStatus = 7,
-  Request_Media_Action = 8,
-  Request_Media_VolumeCommand = 9,
-  Request_Media_Subscribe = 10,
-  Request_Media_UnsubscribeAll = 11,
-  Request_Media_GetTopology = 12,
-  Request_MIN = Request_NONE,
-  Request_MAX = Request_Media_GetTopology
+enum class TransportState : uint8_t {
+  Stopped = 0,
+  Playing = 1,
+  Paused = 2,
+  Transitioning = 3,
+  MIN = Stopped,
+  MAX = Transitioning
 };
 
-inline const Request (&EnumValuesRequest())[13] {
-  static const Request values[] = {
-    Request_NONE,
-    Request_Heartbeat,
-    Request_WifiConnectRequest,
-    Request_StartProvisioning,
-    Request_StopProvisioning,
-    Request_StreamChunk,
-    Request_Hello,
-    Request_BatteryStatus,
-    Request_Media_Action,
-    Request_Media_VolumeCommand,
-    Request_Media_Subscribe,
-    Request_Media_UnsubscribeAll,
-    Request_Media_GetTopology
+inline const TransportState (&EnumValuesTransportState())[4] {
+  static const TransportState values[] = {
+    TransportState::Stopped,
+    TransportState::Playing,
+    TransportState::Paused,
+    TransportState::Transitioning
   };
   return values;
 }
 
-inline const char * const *EnumNamesRequest() {
-  static const char * const names[14] = {
-    "NONE",
-    "Heartbeat",
-    "WifiConnectRequest",
-    "StartProvisioning",
-    "StopProvisioning",
-    "StreamChunk",
-    "Hello",
-    "BatteryStatus",
-    "Media_Action",
-    "Media_VolumeCommand",
-    "Media_Subscribe",
-    "Media_UnsubscribeAll",
-    "Media_GetTopology",
+inline const char * const *EnumNamesTransportState() {
+  static const char * const names[5] = {
+    "Stopped",
+    "Playing",
+    "Paused",
+    "Transitioning",
     nullptr
   };
   return names;
 }
 
-inline const char *EnumNameRequest(Request e) {
-  if (::flatbuffers::IsOutRange(e, Request_NONE, Request_Media_GetTopology)) return "";
+inline const char *EnumNameTransportState(TransportState e) {
+  if (::flatbuffers::IsOutRange(e, TransportState::Stopped, TransportState::Transitioning)) return "";
   const size_t index = static_cast<size_t>(e);
-  return EnumNamesRequest()[index];
+  return EnumNamesTransportState()[index];
 }
 
-template<typename T> struct RequestTraits {
-  static const Request enum_value = Request_NONE;
+enum class ActionType : uint8_t {
+  Play = 0,
+  Pause = 1,
+  TogglePlayPause = 2,
+  Next = 3,
+  Previous = 4,
+  Stop = 5,
+  MIN = Play,
+  MAX = Stop
 };
 
-template<> struct RequestTraits<CoprocessorProto::Heartbeat> {
-  static const Request enum_value = Request_Heartbeat;
-};
-
-template<> struct RequestTraits<CoprocessorProto::WifiConnectRequest> {
-  static const Request enum_value = Request_WifiConnectRequest;
-};
-
-template<> struct RequestTraits<CoprocessorProto::StartProvisioning> {
-  static const Request enum_value = Request_StartProvisioning;
-};
-
-template<> struct RequestTraits<CoprocessorProto::StopProvisioning> {
-  static const Request enum_value = Request_StopProvisioning;
-};
-
-template<> struct RequestTraits<CoprocessorProto::StreamChunk> {
-  static const Request enum_value = Request_StreamChunk;
-};
-
-template<> struct RequestTraits<CoprocessorProto::Hello> {
-  static const Request enum_value = Request_Hello;
-};
-
-template<> struct RequestTraits<CoprocessorProto::BatteryStatus> {
-  static const Request enum_value = Request_BatteryStatus;
-};
-
-template<> struct RequestTraits<CoprocessorProto::Media::Action> {
-  static const Request enum_value = Request_Media_Action;
-};
-
-template<> struct RequestTraits<CoprocessorProto::Media::VolumeCommand> {
-  static const Request enum_value = Request_Media_VolumeCommand;
-};
-
-template<> struct RequestTraits<CoprocessorProto::Media::Subscribe> {
-  static const Request enum_value = Request_Media_Subscribe;
-};
-
-template<> struct RequestTraits<CoprocessorProto::Media::UnsubscribeAll> {
-  static const Request enum_value = Request_Media_UnsubscribeAll;
-};
-
-template<> struct RequestTraits<CoprocessorProto::Media::GetTopology> {
-  static const Request enum_value = Request_Media_GetTopology;
-};
-
-template <bool B = false>
-bool VerifyRequest(::flatbuffers::VerifierTemplate<B> &verifier, const void *obj, Request type);
-template <bool B = false>
-bool VerifyRequestVector(::flatbuffers::VerifierTemplate<B> &verifier, const ::flatbuffers::Vector<::flatbuffers::Offset<void>> *values, const ::flatbuffers::Vector<uint8_t> *types);
-
-enum Response : uint8_t {
-  Response_NONE = 0,
-  Response_Heartbeat = 1,
-  Response_WifiStatus = 2,
-  Response_ProvisioningStatus = 3,
-  Response_StreamChunk = 4,
-  Response_Hello = 5,
-  Response_TimeSync = 6,
-  Response_Media_StateUpdate = 7,
-  Response_Media_TopologyUpdate = 8,
-  Response_MIN = Response_NONE,
-  Response_MAX = Response_Media_TopologyUpdate
-};
-
-inline const Response (&EnumValuesResponse())[9] {
-  static const Response values[] = {
-    Response_NONE,
-    Response_Heartbeat,
-    Response_WifiStatus,
-    Response_ProvisioningStatus,
-    Response_StreamChunk,
-    Response_Hello,
-    Response_TimeSync,
-    Response_Media_StateUpdate,
-    Response_Media_TopologyUpdate
+inline const ActionType (&EnumValuesActionType())[6] {
+  static const ActionType values[] = {
+    ActionType::Play,
+    ActionType::Pause,
+    ActionType::TogglePlayPause,
+    ActionType::Next,
+    ActionType::Previous,
+    ActionType::Stop
   };
   return values;
 }
 
-inline const char * const *EnumNamesResponse() {
-  static const char * const names[10] = {
-    "NONE",
-    "Heartbeat",
-    "WifiStatus",
-    "ProvisioningStatus",
-    "StreamChunk",
-    "Hello",
-    "TimeSync",
-    "Media_StateUpdate",
-    "Media_TopologyUpdate",
+inline const char * const *EnumNamesActionType() {
+  static const char * const names[7] = {
+    "Play",
+    "Pause",
+    "TogglePlayPause",
+    "Next",
+    "Previous",
+    "Stop",
     nullptr
   };
   return names;
 }
 
-inline const char *EnumNameResponse(Response e) {
-  if (::flatbuffers::IsOutRange(e, Response_NONE, Response_Media_TopologyUpdate)) return "";
+inline const char *EnumNameActionType(ActionType e) {
+  if (::flatbuffers::IsOutRange(e, ActionType::Play, ActionType::Stop)) return "";
   const size_t index = static_cast<size_t>(e);
-  return EnumNamesResponse()[index];
+  return EnumNamesActionType()[index];
 }
 
-template<typename T> struct ResponseTraits {
-  static const Response enum_value = Response_NONE;
+/// The services the co-processor serves: wire IDs are fixed in append-only order.
+enum class Server : uint8_t {
+  Wifi = 0,
+  System = 1,
+  Sonos = 2,
+  MIN = Wifi,
+  MAX = Sonos
 };
 
-template<> struct ResponseTraits<CoprocessorProto::Heartbeat> {
-  static const Response enum_value = Response_Heartbeat;
+inline const Server (&EnumValuesServer())[3] {
+  static const Server values[] = {
+    Server::Wifi,
+    Server::System,
+    Server::Sonos
+  };
+  return values;
+}
+
+inline const char * const *EnumNamesServer() {
+  static const char * const names[4] = {
+    "Wifi",
+    "System",
+    "Sonos",
+    nullptr
+  };
+  return names;
+}
+
+inline const char *EnumNameServer(Server e) {
+  if (::flatbuffers::IsOutRange(e, Server::Wifi, Server::Sonos)) return "";
+  const size_t index = static_cast<size_t>(e);
+  return EnumNamesServer()[index];
+}
+
+struct EmptyT : public ::flatbuffers::NativeTable {
+  typedef Empty TableType;
 };
 
-template<> struct ResponseTraits<CoprocessorProto::WifiStatus> {
-  static const Response enum_value = Response_WifiStatus;
+struct Empty FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef EmptyT NativeTableType;
+  typedef EmptyBuilder Builder;
+  struct Traits;
+  template <bool B = false>
+  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
+    return VerifyTableStart(verifier) &&
+           verifier.EndTable();
+  }
+  EmptyT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(EmptyT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<Empty> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const EmptyT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 };
 
-template<> struct ResponseTraits<CoprocessorProto::ProvisioningStatus> {
-  static const Response enum_value = Response_ProvisioningStatus;
+struct EmptyBuilder {
+  typedef Empty Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  explicit EmptyBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<Empty> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<Empty>(end);
+    return o;
+  }
 };
 
-template<> struct ResponseTraits<CoprocessorProto::StreamChunk> {
-  static const Response enum_value = Response_StreamChunk;
+inline ::flatbuffers::Offset<Empty> CreateEmpty(
+    ::flatbuffers::FlatBufferBuilder &_fbb) {
+  EmptyBuilder builder_(_fbb);
+  return builder_.Finish();
+}
+
+struct Empty::Traits {
+  using type = Empty;
+  static auto constexpr Create = CreateEmpty;
 };
 
-template<> struct ResponseTraits<CoprocessorProto::Hello> {
-  static const Response enum_value = Response_Hello;
+::flatbuffers::Offset<Empty> CreateEmpty(::flatbuffers::FlatBufferBuilder &_fbb, const EmptyT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct WifiConnectRequestT : public ::flatbuffers::NativeTable {
+  typedef WifiConnectRequest TableType;
+  std::string ssid{};
+  std::string password{};
 };
 
-template<> struct ResponseTraits<CoprocessorProto::TimeSync> {
-  static const Response enum_value = Response_TimeSync;
+struct WifiConnectRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef WifiConnectRequestT NativeTableType;
+  typedef WifiConnectRequestBuilder Builder;
+  struct Traits;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_SSID = 4,
+    VT_PASSWORD = 6
+  };
+  const ::flatbuffers::String *ssid() const {
+    return GetPointer<const ::flatbuffers::String *>(VT_SSID);
+  }
+  const ::flatbuffers::String *password() const {
+    return GetPointer<const ::flatbuffers::String *>(VT_PASSWORD);
+  }
+  template <bool B = false>
+  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyOffset(verifier, VT_SSID) &&
+           verifier.VerifyString(ssid()) &&
+           VerifyOffset(verifier, VT_PASSWORD) &&
+           verifier.VerifyString(password()) &&
+           verifier.EndTable();
+  }
+  WifiConnectRequestT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(WifiConnectRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<WifiConnectRequest> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const WifiConnectRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 };
 
-template<> struct ResponseTraits<CoprocessorProto::Media::StateUpdate> {
-  static const Response enum_value = Response_Media_StateUpdate;
+struct WifiConnectRequestBuilder {
+  typedef WifiConnectRequest Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_ssid(::flatbuffers::Offset<::flatbuffers::String> ssid) {
+    fbb_.AddOffset(WifiConnectRequest::VT_SSID, ssid);
+  }
+  void add_password(::flatbuffers::Offset<::flatbuffers::String> password) {
+    fbb_.AddOffset(WifiConnectRequest::VT_PASSWORD, password);
+  }
+  explicit WifiConnectRequestBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<WifiConnectRequest> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<WifiConnectRequest>(end);
+    return o;
+  }
 };
 
-template<> struct ResponseTraits<CoprocessorProto::Media::TopologyUpdate> {
-  static const Response enum_value = Response_Media_TopologyUpdate;
+inline ::flatbuffers::Offset<WifiConnectRequest> CreateWifiConnectRequest(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    ::flatbuffers::Offset<::flatbuffers::String> ssid = 0,
+    ::flatbuffers::Offset<::flatbuffers::String> password = 0) {
+  WifiConnectRequestBuilder builder_(_fbb);
+  builder_.add_password(password);
+  builder_.add_ssid(ssid);
+  return builder_.Finish();
+}
+
+struct WifiConnectRequest::Traits {
+  using type = WifiConnectRequest;
+  static auto constexpr Create = CreateWifiConnectRequest;
 };
 
-template <bool B = false>
-bool VerifyResponse(::flatbuffers::VerifierTemplate<B> &verifier, const void *obj, Response type);
-template <bool B = false>
-bool VerifyResponseVector(::flatbuffers::VerifierTemplate<B> &verifier, const ::flatbuffers::Vector<::flatbuffers::Offset<void>> *values, const ::flatbuffers::Vector<uint8_t> *types);
+inline ::flatbuffers::Offset<WifiConnectRequest> CreateWifiConnectRequestDirect(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    const char *ssid = nullptr,
+    const char *password = nullptr) {
+  auto ssid__ = ssid ? _fbb.CreateString(ssid) : 0;
+  auto password__ = password ? _fbb.CreateString(password) : 0;
+  return CoprocessorProto::CreateWifiConnectRequest(
+      _fbb,
+      ssid__,
+      password__);
+}
+
+::flatbuffers::Offset<WifiConnectRequest> CreateWifiConnectRequest(::flatbuffers::FlatBufferBuilder &_fbb, const WifiConnectRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct WifiStatusT : public ::flatbuffers::NativeTable {
+  typedef WifiStatus TableType;
+  bool connected = false;
+  std::string ip{};
+  std::string ssid{};
+  int16_t rssi = 0;
+};
 
 struct WifiStatus FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef WifiStatusT NativeTableType;
   typedef WifiStatusBuilder Builder;
+  struct Traits;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_CONNECTED = 4,
     VT_IP = 6,
@@ -332,6 +406,9 @@ struct WifiStatus FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
            VerifyField<int16_t>(verifier, VT_RSSI, 2) &&
            verifier.EndTable();
   }
+  WifiStatusT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(WifiStatusT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<WifiStatus> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const WifiStatusT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 };
 
 struct WifiStatusBuilder {
@@ -375,6 +452,11 @@ inline ::flatbuffers::Offset<WifiStatus> CreateWifiStatus(
   return builder_.Finish();
 }
 
+struct WifiStatus::Traits {
+  using type = WifiStatus;
+  static auto constexpr Create = CreateWifiStatus;
+};
+
 inline ::flatbuffers::Offset<WifiStatus> CreateWifiStatusDirect(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     bool connected = false,
@@ -391,74 +473,207 @@ inline ::flatbuffers::Offset<WifiStatus> CreateWifiStatusDirect(
       rssi);
 }
 
-struct WifiConnectRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef WifiConnectRequestBuilder Builder;
+::flatbuffers::Offset<WifiStatus> CreateWifiStatus(::flatbuffers::FlatBufferBuilder &_fbb, const WifiStatusT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct StartProvisioningRequestT : public ::flatbuffers::NativeTable {
+  typedef StartProvisioningRequest TableType;
+  uint32_t timeout_seconds = 0;
+};
+
+struct StartProvisioningRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef StartProvisioningRequestT NativeTableType;
+  typedef StartProvisioningRequestBuilder Builder;
+  struct Traits;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_SSID = 4,
-    VT_PASSWORD = 6
+    VT_TIMEOUT_SECONDS = 4
   };
-  const ::flatbuffers::String *ssid() const {
-    return GetPointer<const ::flatbuffers::String *>(VT_SSID);
-  }
-  const ::flatbuffers::String *password() const {
-    return GetPointer<const ::flatbuffers::String *>(VT_PASSWORD);
+  uint32_t timeout_seconds() const {
+    return GetField<uint32_t>(VT_TIMEOUT_SECONDS, 0);
   }
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyOffset(verifier, VT_SSID) &&
-           verifier.VerifyString(ssid()) &&
-           VerifyOffset(verifier, VT_PASSWORD) &&
-           verifier.VerifyString(password()) &&
+           VerifyField<uint32_t>(verifier, VT_TIMEOUT_SECONDS, 4) &&
            verifier.EndTable();
   }
+  StartProvisioningRequestT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(StartProvisioningRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<StartProvisioningRequest> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const StartProvisioningRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 };
 
-struct WifiConnectRequestBuilder {
-  typedef WifiConnectRequest Table;
+struct StartProvisioningRequestBuilder {
+  typedef StartProvisioningRequest Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
-  void add_ssid(::flatbuffers::Offset<::flatbuffers::String> ssid) {
-    fbb_.AddOffset(WifiConnectRequest::VT_SSID, ssid);
+  void add_timeout_seconds(uint32_t timeout_seconds) {
+    fbb_.AddElement<uint32_t>(StartProvisioningRequest::VT_TIMEOUT_SECONDS, timeout_seconds, 0);
   }
-  void add_password(::flatbuffers::Offset<::flatbuffers::String> password) {
-    fbb_.AddOffset(WifiConnectRequest::VT_PASSWORD, password);
-  }
-  explicit WifiConnectRequestBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+  explicit StartProvisioningRequestBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  ::flatbuffers::Offset<WifiConnectRequest> Finish() {
+  ::flatbuffers::Offset<StartProvisioningRequest> Finish() {
     const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<WifiConnectRequest>(end);
+    auto o = ::flatbuffers::Offset<StartProvisioningRequest>(end);
     return o;
   }
 };
 
-inline ::flatbuffers::Offset<WifiConnectRequest> CreateWifiConnectRequest(
+inline ::flatbuffers::Offset<StartProvisioningRequest> CreateStartProvisioningRequest(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    ::flatbuffers::Offset<::flatbuffers::String> ssid = 0,
-    ::flatbuffers::Offset<::flatbuffers::String> password = 0) {
-  WifiConnectRequestBuilder builder_(_fbb);
-  builder_.add_password(password);
-  builder_.add_ssid(ssid);
+    uint32_t timeout_seconds = 0) {
+  StartProvisioningRequestBuilder builder_(_fbb);
+  builder_.add_timeout_seconds(timeout_seconds);
   return builder_.Finish();
 }
 
-inline ::flatbuffers::Offset<WifiConnectRequest> CreateWifiConnectRequestDirect(
+struct StartProvisioningRequest::Traits {
+  using type = StartProvisioningRequest;
+  static auto constexpr Create = CreateStartProvisioningRequest;
+};
+
+::flatbuffers::Offset<StartProvisioningRequest> CreateStartProvisioningRequest(::flatbuffers::FlatBufferBuilder &_fbb, const StartProvisioningRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct ProvisioningStatusT : public ::flatbuffers::NativeTable {
+  typedef ProvisioningStatus TableType;
+  CoprocessorProto::ProvisioningState state = CoprocessorProto::ProvisioningState::Inactive;
+};
+
+struct ProvisioningStatus FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef ProvisioningStatusT NativeTableType;
+  typedef ProvisioningStatusBuilder Builder;
+  struct Traits;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_STATE = 4
+  };
+  CoprocessorProto::ProvisioningState state() const {
+    return static_cast<CoprocessorProto::ProvisioningState>(GetField<uint8_t>(VT_STATE, 0));
+  }
+  template <bool B = false>
+  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint8_t>(verifier, VT_STATE, 1) &&
+           verifier.EndTable();
+  }
+  ProvisioningStatusT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(ProvisioningStatusT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<ProvisioningStatus> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const ProvisioningStatusT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct ProvisioningStatusBuilder {
+  typedef ProvisioningStatus Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_state(CoprocessorProto::ProvisioningState state) {
+    fbb_.AddElement<uint8_t>(ProvisioningStatus::VT_STATE, static_cast<uint8_t>(state), 0);
+  }
+  explicit ProvisioningStatusBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<ProvisioningStatus> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<ProvisioningStatus>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<ProvisioningStatus> CreateProvisioningStatus(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    const char *ssid = nullptr,
-    const char *password = nullptr) {
-  auto ssid__ = ssid ? _fbb.CreateString(ssid) : 0;
-  auto password__ = password ? _fbb.CreateString(password) : 0;
-  return CoprocessorProto::CreateWifiConnectRequest(
-      _fbb,
-      ssid__,
-      password__);
+    CoprocessorProto::ProvisioningState state = CoprocessorProto::ProvisioningState::Inactive) {
+  ProvisioningStatusBuilder builder_(_fbb);
+  builder_.add_state(state);
+  return builder_.Finish();
 }
 
+struct ProvisioningStatus::Traits {
+  using type = ProvisioningStatus;
+  static auto constexpr Create = CreateProvisioningStatus;
+};
+
+::flatbuffers::Offset<ProvisioningStatus> CreateProvisioningStatus(::flatbuffers::FlatBufferBuilder &_fbb, const ProvisioningStatusT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct TimeSyncT : public ::flatbuffers::NativeTable {
+  typedef TimeSync TableType;
+  uint64_t epoch_seconds = 0;
+  uint32_t subsec_micros = 0;
+};
+
+struct TimeSync FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef TimeSyncT NativeTableType;
+  typedef TimeSyncBuilder Builder;
+  struct Traits;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_EPOCH_SECONDS = 4,
+    VT_SUBSEC_MICROS = 6
+  };
+  uint64_t epoch_seconds() const {
+    return GetField<uint64_t>(VT_EPOCH_SECONDS, 0);
+  }
+  uint32_t subsec_micros() const {
+    return GetField<uint32_t>(VT_SUBSEC_MICROS, 0);
+  }
+  template <bool B = false>
+  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint64_t>(verifier, VT_EPOCH_SECONDS, 8) &&
+           VerifyField<uint32_t>(verifier, VT_SUBSEC_MICROS, 4) &&
+           verifier.EndTable();
+  }
+  TimeSyncT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(TimeSyncT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<TimeSync> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const TimeSyncT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct TimeSyncBuilder {
+  typedef TimeSync Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_epoch_seconds(uint64_t epoch_seconds) {
+    fbb_.AddElement<uint64_t>(TimeSync::VT_EPOCH_SECONDS, epoch_seconds, 0);
+  }
+  void add_subsec_micros(uint32_t subsec_micros) {
+    fbb_.AddElement<uint32_t>(TimeSync::VT_SUBSEC_MICROS, subsec_micros, 0);
+  }
+  explicit TimeSyncBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<TimeSync> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<TimeSync>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<TimeSync> CreateTimeSync(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    uint64_t epoch_seconds = 0,
+    uint32_t subsec_micros = 0) {
+  TimeSyncBuilder builder_(_fbb);
+  builder_.add_epoch_seconds(epoch_seconds);
+  builder_.add_subsec_micros(subsec_micros);
+  return builder_.Finish();
+}
+
+struct TimeSync::Traits {
+  using type = TimeSync;
+  static auto constexpr Create = CreateTimeSync;
+};
+
+::flatbuffers::Offset<TimeSync> CreateTimeSync(::flatbuffers::FlatBufferBuilder &_fbb, const TimeSyncT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct BatteryStatusT : public ::flatbuffers::NativeTable {
+  typedef BatteryStatus TableType;
+  uint32_t millivolts = 0;
+  uint8_t percent = 0;
+  bool is_plugged = false;
+};
+
 struct BatteryStatus FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef BatteryStatusT NativeTableType;
   typedef BatteryStatusBuilder Builder;
+  struct Traits;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_MILLIVOLTS = 4,
     VT_PERCENT = 6,
@@ -481,6 +696,9 @@ struct BatteryStatus FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
            VerifyField<uint8_t>(verifier, VT_IS_PLUGGED, 1) &&
            verifier.EndTable();
   }
+  BatteryStatusT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(BatteryStatusT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<BatteryStatus> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const BatteryStatusT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 };
 
 struct BatteryStatusBuilder {
@@ -519,757 +737,1788 @@ inline ::flatbuffers::Offset<BatteryStatus> CreateBatteryStatus(
   return builder_.Finish();
 }
 
-struct Heartbeat FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef HeartbeatBuilder Builder;
+struct BatteryStatus::Traits {
+  using type = BatteryStatus;
+  static auto constexpr Create = CreateBatteryStatus;
+};
+
+::flatbuffers::Offset<BatteryStatus> CreateBatteryStatus(::flatbuffers::FlatBufferBuilder &_fbb, const BatteryStatusT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct ActionRequestT : public ::flatbuffers::NativeTable {
+  typedef ActionRequest TableType;
+  std::string endpoint_ip{};
+  uint16_t endpoint_port = 1400;
+  CoprocessorProto::ActionType action = CoprocessorProto::ActionType::Play;
+};
+
+struct ActionRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef ActionRequestT NativeTableType;
+  typedef ActionRequestBuilder Builder;
+  struct Traits;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_UPTIME_MS = 4,
-    VT_HEAP_FREE = 6,
-    VT_BATTERY = 8
+    VT_ENDPOINT_IP = 4,
+    VT_ENDPOINT_PORT = 6,
+    VT_ACTION = 8
   };
-  uint64_t uptime_ms() const {
-    return GetField<uint64_t>(VT_UPTIME_MS, 0);
+  const ::flatbuffers::String *endpoint_ip() const {
+    return GetPointer<const ::flatbuffers::String *>(VT_ENDPOINT_IP);
   }
-  uint32_t heap_free() const {
-    return GetField<uint32_t>(VT_HEAP_FREE, 0);
+  uint16_t endpoint_port() const {
+    return GetField<uint16_t>(VT_ENDPOINT_PORT, 1400);
   }
-  const CoprocessorProto::BatteryStatus *battery() const {
-    return GetPointer<const CoprocessorProto::BatteryStatus *>(VT_BATTERY);
+  CoprocessorProto::ActionType action() const {
+    return static_cast<CoprocessorProto::ActionType>(GetField<uint8_t>(VT_ACTION, 0));
   }
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyField<uint64_t>(verifier, VT_UPTIME_MS, 8) &&
-           VerifyField<uint32_t>(verifier, VT_HEAP_FREE, 4) &&
-           VerifyOffset(verifier, VT_BATTERY) &&
-           verifier.VerifyTable(battery()) &&
+           VerifyOffset(verifier, VT_ENDPOINT_IP) &&
+           verifier.VerifyString(endpoint_ip()) &&
+           VerifyField<uint16_t>(verifier, VT_ENDPOINT_PORT, 2) &&
+           VerifyField<uint8_t>(verifier, VT_ACTION, 1) &&
            verifier.EndTable();
   }
+  ActionRequestT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(ActionRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<ActionRequest> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const ActionRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 };
 
-struct HeartbeatBuilder {
-  typedef Heartbeat Table;
+struct ActionRequestBuilder {
+  typedef ActionRequest Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
-  void add_uptime_ms(uint64_t uptime_ms) {
-    fbb_.AddElement<uint64_t>(Heartbeat::VT_UPTIME_MS, uptime_ms, 0);
+  void add_endpoint_ip(::flatbuffers::Offset<::flatbuffers::String> endpoint_ip) {
+    fbb_.AddOffset(ActionRequest::VT_ENDPOINT_IP, endpoint_ip);
   }
-  void add_heap_free(uint32_t heap_free) {
-    fbb_.AddElement<uint32_t>(Heartbeat::VT_HEAP_FREE, heap_free, 0);
+  void add_endpoint_port(uint16_t endpoint_port) {
+    fbb_.AddElement<uint16_t>(ActionRequest::VT_ENDPOINT_PORT, endpoint_port, 1400);
   }
-  void add_battery(::flatbuffers::Offset<CoprocessorProto::BatteryStatus> battery) {
-    fbb_.AddOffset(Heartbeat::VT_BATTERY, battery);
+  void add_action(CoprocessorProto::ActionType action) {
+    fbb_.AddElement<uint8_t>(ActionRequest::VT_ACTION, static_cast<uint8_t>(action), 0);
   }
-  explicit HeartbeatBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+  explicit ActionRequestBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  ::flatbuffers::Offset<Heartbeat> Finish() {
+  ::flatbuffers::Offset<ActionRequest> Finish() {
     const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<Heartbeat>(end);
+    auto o = ::flatbuffers::Offset<ActionRequest>(end);
     return o;
   }
 };
 
-inline ::flatbuffers::Offset<Heartbeat> CreateHeartbeat(
+inline ::flatbuffers::Offset<ActionRequest> CreateActionRequest(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    uint64_t uptime_ms = 0,
-    uint32_t heap_free = 0,
-    ::flatbuffers::Offset<CoprocessorProto::BatteryStatus> battery = 0) {
-  HeartbeatBuilder builder_(_fbb);
-  builder_.add_uptime_ms(uptime_ms);
-  builder_.add_battery(battery);
-  builder_.add_heap_free(heap_free);
+    ::flatbuffers::Offset<::flatbuffers::String> endpoint_ip = 0,
+    uint16_t endpoint_port = 1400,
+    CoprocessorProto::ActionType action = CoprocessorProto::ActionType::Play) {
+  ActionRequestBuilder builder_(_fbb);
+  builder_.add_endpoint_ip(endpoint_ip);
+  builder_.add_endpoint_port(endpoint_port);
+  builder_.add_action(action);
   return builder_.Finish();
 }
 
-struct StreamChunk FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef StreamChunkBuilder Builder;
+struct ActionRequest::Traits {
+  using type = ActionRequest;
+  static auto constexpr Create = CreateActionRequest;
+};
+
+inline ::flatbuffers::Offset<ActionRequest> CreateActionRequestDirect(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    const char *endpoint_ip = nullptr,
+    uint16_t endpoint_port = 1400,
+    CoprocessorProto::ActionType action = CoprocessorProto::ActionType::Play) {
+  auto endpoint_ip__ = endpoint_ip ? _fbb.CreateString(endpoint_ip) : 0;
+  return CoprocessorProto::CreateActionRequest(
+      _fbb,
+      endpoint_ip__,
+      endpoint_port,
+      action);
+}
+
+::flatbuffers::Offset<ActionRequest> CreateActionRequest(::flatbuffers::FlatBufferBuilder &_fbb, const ActionRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct VolumeRequestT : public ::flatbuffers::NativeTable {
+  typedef VolumeRequest TableType;
+  std::string endpoint_ip{};
+  uint16_t endpoint_port = 1400;
+  int16_t volume = 0;
+  bool is_relative = false;
+};
+
+struct VolumeRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef VolumeRequestT NativeTableType;
+  typedef VolumeRequestBuilder Builder;
+  struct Traits;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_STREAM_ID = 4,
-    VT_SEQUENCE = 6,
-    VT_IS_LAST = 8,
-    VT_PAYLOAD = 10
+    VT_ENDPOINT_IP = 4,
+    VT_ENDPOINT_PORT = 6,
+    VT_VOLUME = 8,
+    VT_IS_RELATIVE = 10
   };
-  uint32_t stream_id() const {
-    return GetField<uint32_t>(VT_STREAM_ID, 0);
+  const ::flatbuffers::String *endpoint_ip() const {
+    return GetPointer<const ::flatbuffers::String *>(VT_ENDPOINT_IP);
   }
+  uint16_t endpoint_port() const {
+    return GetField<uint16_t>(VT_ENDPOINT_PORT, 1400);
+  }
+  int16_t volume() const {
+    return GetField<int16_t>(VT_VOLUME, 0);
+  }
+  bool is_relative() const {
+    return GetField<uint8_t>(VT_IS_RELATIVE, 0) != 0;
+  }
+  template <bool B = false>
+  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyOffset(verifier, VT_ENDPOINT_IP) &&
+           verifier.VerifyString(endpoint_ip()) &&
+           VerifyField<uint16_t>(verifier, VT_ENDPOINT_PORT, 2) &&
+           VerifyField<int16_t>(verifier, VT_VOLUME, 2) &&
+           VerifyField<uint8_t>(verifier, VT_IS_RELATIVE, 1) &&
+           verifier.EndTable();
+  }
+  VolumeRequestT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(VolumeRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<VolumeRequest> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const VolumeRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct VolumeRequestBuilder {
+  typedef VolumeRequest Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_endpoint_ip(::flatbuffers::Offset<::flatbuffers::String> endpoint_ip) {
+    fbb_.AddOffset(VolumeRequest::VT_ENDPOINT_IP, endpoint_ip);
+  }
+  void add_endpoint_port(uint16_t endpoint_port) {
+    fbb_.AddElement<uint16_t>(VolumeRequest::VT_ENDPOINT_PORT, endpoint_port, 1400);
+  }
+  void add_volume(int16_t volume) {
+    fbb_.AddElement<int16_t>(VolumeRequest::VT_VOLUME, volume, 0);
+  }
+  void add_is_relative(bool is_relative) {
+    fbb_.AddElement<uint8_t>(VolumeRequest::VT_IS_RELATIVE, static_cast<uint8_t>(is_relative), 0);
+  }
+  explicit VolumeRequestBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<VolumeRequest> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<VolumeRequest>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<VolumeRequest> CreateVolumeRequest(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    ::flatbuffers::Offset<::flatbuffers::String> endpoint_ip = 0,
+    uint16_t endpoint_port = 1400,
+    int16_t volume = 0,
+    bool is_relative = false) {
+  VolumeRequestBuilder builder_(_fbb);
+  builder_.add_endpoint_ip(endpoint_ip);
+  builder_.add_volume(volume);
+  builder_.add_endpoint_port(endpoint_port);
+  builder_.add_is_relative(is_relative);
+  return builder_.Finish();
+}
+
+struct VolumeRequest::Traits {
+  using type = VolumeRequest;
+  static auto constexpr Create = CreateVolumeRequest;
+};
+
+inline ::flatbuffers::Offset<VolumeRequest> CreateVolumeRequestDirect(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    const char *endpoint_ip = nullptr,
+    uint16_t endpoint_port = 1400,
+    int16_t volume = 0,
+    bool is_relative = false) {
+  auto endpoint_ip__ = endpoint_ip ? _fbb.CreateString(endpoint_ip) : 0;
+  return CoprocessorProto::CreateVolumeRequest(
+      _fbb,
+      endpoint_ip__,
+      endpoint_port,
+      volume,
+      is_relative);
+}
+
+::flatbuffers::Offset<VolumeRequest> CreateVolumeRequest(::flatbuffers::FlatBufferBuilder &_fbb, const VolumeRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct TrackMetadataT : public ::flatbuffers::NativeTable {
+  typedef TrackMetadata TableType;
+  std::string title{};
+  std::string artist{};
+  std::string album{};
+  ::flatbuffers::Optional<uint32_t> duration_seconds = ::flatbuffers::nullopt;
+  ::flatbuffers::Optional<uint32_t> elapsed_seconds = ::flatbuffers::nullopt;
+  std::string album_art_uri{};
+};
+
+struct TrackMetadata FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef TrackMetadataT NativeTableType;
+  typedef TrackMetadataBuilder Builder;
+  struct Traits;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_TITLE = 4,
+    VT_ARTIST = 6,
+    VT_ALBUM = 8,
+    VT_DURATION_SECONDS = 10,
+    VT_ELAPSED_SECONDS = 12,
+    VT_ALBUM_ART_URI = 14
+  };
+  const ::flatbuffers::String *title() const {
+    return GetPointer<const ::flatbuffers::String *>(VT_TITLE);
+  }
+  const ::flatbuffers::String *artist() const {
+    return GetPointer<const ::flatbuffers::String *>(VT_ARTIST);
+  }
+  const ::flatbuffers::String *album() const {
+    return GetPointer<const ::flatbuffers::String *>(VT_ALBUM);
+  }
+  ::flatbuffers::Optional<uint32_t> duration_seconds() const {
+    return GetOptional<uint32_t, uint32_t>(VT_DURATION_SECONDS);
+  }
+  ::flatbuffers::Optional<uint32_t> elapsed_seconds() const {
+    return GetOptional<uint32_t, uint32_t>(VT_ELAPSED_SECONDS);
+  }
+  const ::flatbuffers::String *album_art_uri() const {
+    return GetPointer<const ::flatbuffers::String *>(VT_ALBUM_ART_URI);
+  }
+  template <bool B = false>
+  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyOffset(verifier, VT_TITLE) &&
+           verifier.VerifyString(title()) &&
+           VerifyOffset(verifier, VT_ARTIST) &&
+           verifier.VerifyString(artist()) &&
+           VerifyOffset(verifier, VT_ALBUM) &&
+           verifier.VerifyString(album()) &&
+           VerifyField<uint32_t>(verifier, VT_DURATION_SECONDS, 4) &&
+           VerifyField<uint32_t>(verifier, VT_ELAPSED_SECONDS, 4) &&
+           VerifyOffset(verifier, VT_ALBUM_ART_URI) &&
+           verifier.VerifyString(album_art_uri()) &&
+           verifier.EndTable();
+  }
+  TrackMetadataT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(TrackMetadataT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<TrackMetadata> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const TrackMetadataT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct TrackMetadataBuilder {
+  typedef TrackMetadata Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_title(::flatbuffers::Offset<::flatbuffers::String> title) {
+    fbb_.AddOffset(TrackMetadata::VT_TITLE, title);
+  }
+  void add_artist(::flatbuffers::Offset<::flatbuffers::String> artist) {
+    fbb_.AddOffset(TrackMetadata::VT_ARTIST, artist);
+  }
+  void add_album(::flatbuffers::Offset<::flatbuffers::String> album) {
+    fbb_.AddOffset(TrackMetadata::VT_ALBUM, album);
+  }
+  void add_duration_seconds(uint32_t duration_seconds) {
+    fbb_.AddElement<uint32_t>(TrackMetadata::VT_DURATION_SECONDS, duration_seconds);
+  }
+  void add_elapsed_seconds(uint32_t elapsed_seconds) {
+    fbb_.AddElement<uint32_t>(TrackMetadata::VT_ELAPSED_SECONDS, elapsed_seconds);
+  }
+  void add_album_art_uri(::flatbuffers::Offset<::flatbuffers::String> album_art_uri) {
+    fbb_.AddOffset(TrackMetadata::VT_ALBUM_ART_URI, album_art_uri);
+  }
+  explicit TrackMetadataBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<TrackMetadata> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<TrackMetadata>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<TrackMetadata> CreateTrackMetadata(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    ::flatbuffers::Offset<::flatbuffers::String> title = 0,
+    ::flatbuffers::Offset<::flatbuffers::String> artist = 0,
+    ::flatbuffers::Offset<::flatbuffers::String> album = 0,
+    ::flatbuffers::Optional<uint32_t> duration_seconds = ::flatbuffers::nullopt,
+    ::flatbuffers::Optional<uint32_t> elapsed_seconds = ::flatbuffers::nullopt,
+    ::flatbuffers::Offset<::flatbuffers::String> album_art_uri = 0) {
+  TrackMetadataBuilder builder_(_fbb);
+  builder_.add_album_art_uri(album_art_uri);
+  if(elapsed_seconds) { builder_.add_elapsed_seconds(*elapsed_seconds); }
+  if(duration_seconds) { builder_.add_duration_seconds(*duration_seconds); }
+  builder_.add_album(album);
+  builder_.add_artist(artist);
+  builder_.add_title(title);
+  return builder_.Finish();
+}
+
+struct TrackMetadata::Traits {
+  using type = TrackMetadata;
+  static auto constexpr Create = CreateTrackMetadata;
+};
+
+inline ::flatbuffers::Offset<TrackMetadata> CreateTrackMetadataDirect(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    const char *title = nullptr,
+    const char *artist = nullptr,
+    const char *album = nullptr,
+    ::flatbuffers::Optional<uint32_t> duration_seconds = ::flatbuffers::nullopt,
+    ::flatbuffers::Optional<uint32_t> elapsed_seconds = ::flatbuffers::nullopt,
+    const char *album_art_uri = nullptr) {
+  auto title__ = title ? _fbb.CreateString(title) : 0;
+  auto artist__ = artist ? _fbb.CreateString(artist) : 0;
+  auto album__ = album ? _fbb.CreateString(album) : 0;
+  auto album_art_uri__ = album_art_uri ? _fbb.CreateString(album_art_uri) : 0;
+  return CoprocessorProto::CreateTrackMetadata(
+      _fbb,
+      title__,
+      artist__,
+      album__,
+      duration_seconds,
+      elapsed_seconds,
+      album_art_uri__);
+}
+
+::flatbuffers::Offset<TrackMetadata> CreateTrackMetadata(::flatbuffers::FlatBufferBuilder &_fbb, const TrackMetadataT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct StateUpdateT : public ::flatbuffers::NativeTable {
+  typedef StateUpdate TableType;
+  std::string endpoint_ip{};
+  ::flatbuffers::Optional<CoprocessorProto::TransportState> transport_state = ::flatbuffers::nullopt;
+  ::flatbuffers::Optional<uint8_t> volume = ::flatbuffers::nullopt;
+  ::flatbuffers::Optional<bool> is_muted = ::flatbuffers::nullopt;
+  std::unique_ptr<CoprocessorProto::TrackMetadataT> track{};
+  StateUpdateT() = default;
+  StateUpdateT(const StateUpdateT &o);
+  StateUpdateT(StateUpdateT&&) FLATBUFFERS_NOEXCEPT = default;
+  StateUpdateT &operator=(StateUpdateT o) FLATBUFFERS_NOEXCEPT;
+};
+
+struct StateUpdate FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef StateUpdateT NativeTableType;
+  typedef StateUpdateBuilder Builder;
+  struct Traits;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_ENDPOINT_IP = 4,
+    VT_TRANSPORT_STATE = 6,
+    VT_VOLUME = 8,
+    VT_IS_MUTED = 10,
+    VT_TRACK = 12
+  };
+  const ::flatbuffers::String *endpoint_ip() const {
+    return GetPointer<const ::flatbuffers::String *>(VT_ENDPOINT_IP);
+  }
+  ::flatbuffers::Optional<CoprocessorProto::TransportState> transport_state() const {
+    return GetOptional<uint8_t, CoprocessorProto::TransportState>(VT_TRANSPORT_STATE);
+  }
+  ::flatbuffers::Optional<uint8_t> volume() const {
+    return GetOptional<uint8_t, uint8_t>(VT_VOLUME);
+  }
+  ::flatbuffers::Optional<bool> is_muted() const {
+    return GetOptional<uint8_t, bool>(VT_IS_MUTED);
+  }
+  const CoprocessorProto::TrackMetadata *track() const {
+    return GetPointer<const CoprocessorProto::TrackMetadata *>(VT_TRACK);
+  }
+  template <bool B = false>
+  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyOffset(verifier, VT_ENDPOINT_IP) &&
+           verifier.VerifyString(endpoint_ip()) &&
+           VerifyField<uint8_t>(verifier, VT_TRANSPORT_STATE, 1) &&
+           VerifyField<uint8_t>(verifier, VT_VOLUME, 1) &&
+           VerifyField<uint8_t>(verifier, VT_IS_MUTED, 1) &&
+           VerifyOffset(verifier, VT_TRACK) &&
+           verifier.VerifyTable(track()) &&
+           verifier.EndTable();
+  }
+  StateUpdateT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(StateUpdateT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<StateUpdate> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const StateUpdateT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct StateUpdateBuilder {
+  typedef StateUpdate Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_endpoint_ip(::flatbuffers::Offset<::flatbuffers::String> endpoint_ip) {
+    fbb_.AddOffset(StateUpdate::VT_ENDPOINT_IP, endpoint_ip);
+  }
+  void add_transport_state(CoprocessorProto::TransportState transport_state) {
+    fbb_.AddElement<uint8_t>(StateUpdate::VT_TRANSPORT_STATE, static_cast<uint8_t>(transport_state));
+  }
+  void add_volume(uint8_t volume) {
+    fbb_.AddElement<uint8_t>(StateUpdate::VT_VOLUME, volume);
+  }
+  void add_is_muted(bool is_muted) {
+    fbb_.AddElement<uint8_t>(StateUpdate::VT_IS_MUTED, static_cast<uint8_t>(is_muted));
+  }
+  void add_track(::flatbuffers::Offset<CoprocessorProto::TrackMetadata> track) {
+    fbb_.AddOffset(StateUpdate::VT_TRACK, track);
+  }
+  explicit StateUpdateBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<StateUpdate> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<StateUpdate>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<StateUpdate> CreateStateUpdate(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    ::flatbuffers::Offset<::flatbuffers::String> endpoint_ip = 0,
+    ::flatbuffers::Optional<CoprocessorProto::TransportState> transport_state = ::flatbuffers::nullopt,
+    ::flatbuffers::Optional<uint8_t> volume = ::flatbuffers::nullopt,
+    ::flatbuffers::Optional<bool> is_muted = ::flatbuffers::nullopt,
+    ::flatbuffers::Offset<CoprocessorProto::TrackMetadata> track = 0) {
+  StateUpdateBuilder builder_(_fbb);
+  builder_.add_track(track);
+  builder_.add_endpoint_ip(endpoint_ip);
+  if(is_muted) { builder_.add_is_muted(*is_muted); }
+  if(volume) { builder_.add_volume(*volume); }
+  if(transport_state) { builder_.add_transport_state(*transport_state); }
+  return builder_.Finish();
+}
+
+struct StateUpdate::Traits {
+  using type = StateUpdate;
+  static auto constexpr Create = CreateStateUpdate;
+};
+
+inline ::flatbuffers::Offset<StateUpdate> CreateStateUpdateDirect(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    const char *endpoint_ip = nullptr,
+    ::flatbuffers::Optional<CoprocessorProto::TransportState> transport_state = ::flatbuffers::nullopt,
+    ::flatbuffers::Optional<uint8_t> volume = ::flatbuffers::nullopt,
+    ::flatbuffers::Optional<bool> is_muted = ::flatbuffers::nullopt,
+    ::flatbuffers::Offset<CoprocessorProto::TrackMetadata> track = 0) {
+  auto endpoint_ip__ = endpoint_ip ? _fbb.CreateString(endpoint_ip) : 0;
+  return CoprocessorProto::CreateStateUpdate(
+      _fbb,
+      endpoint_ip__,
+      transport_state,
+      volume,
+      is_muted,
+      track);
+}
+
+::flatbuffers::Offset<StateUpdate> CreateStateUpdate(::flatbuffers::FlatBufferBuilder &_fbb, const StateUpdateT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct MemberT : public ::flatbuffers::NativeTable {
+  typedef Member TableType;
+  std::string name{};
+  std::string uuid{};
+  std::string ip{};
+};
+
+struct Member FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef MemberT NativeTableType;
+  typedef MemberBuilder Builder;
+  struct Traits;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_NAME = 4,
+    VT_UUID = 6,
+    VT_IP = 8
+  };
+  const ::flatbuffers::String *name() const {
+    return GetPointer<const ::flatbuffers::String *>(VT_NAME);
+  }
+  const ::flatbuffers::String *uuid() const {
+    return GetPointer<const ::flatbuffers::String *>(VT_UUID);
+  }
+  const ::flatbuffers::String *ip() const {
+    return GetPointer<const ::flatbuffers::String *>(VT_IP);
+  }
+  template <bool B = false>
+  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyOffset(verifier, VT_NAME) &&
+           verifier.VerifyString(name()) &&
+           VerifyOffset(verifier, VT_UUID) &&
+           verifier.VerifyString(uuid()) &&
+           VerifyOffset(verifier, VT_IP) &&
+           verifier.VerifyString(ip()) &&
+           verifier.EndTable();
+  }
+  MemberT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(MemberT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<Member> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const MemberT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct MemberBuilder {
+  typedef Member Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_name(::flatbuffers::Offset<::flatbuffers::String> name) {
+    fbb_.AddOffset(Member::VT_NAME, name);
+  }
+  void add_uuid(::flatbuffers::Offset<::flatbuffers::String> uuid) {
+    fbb_.AddOffset(Member::VT_UUID, uuid);
+  }
+  void add_ip(::flatbuffers::Offset<::flatbuffers::String> ip) {
+    fbb_.AddOffset(Member::VT_IP, ip);
+  }
+  explicit MemberBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<Member> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<Member>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<Member> CreateMember(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    ::flatbuffers::Offset<::flatbuffers::String> name = 0,
+    ::flatbuffers::Offset<::flatbuffers::String> uuid = 0,
+    ::flatbuffers::Offset<::flatbuffers::String> ip = 0) {
+  MemberBuilder builder_(_fbb);
+  builder_.add_ip(ip);
+  builder_.add_uuid(uuid);
+  builder_.add_name(name);
+  return builder_.Finish();
+}
+
+struct Member::Traits {
+  using type = Member;
+  static auto constexpr Create = CreateMember;
+};
+
+inline ::flatbuffers::Offset<Member> CreateMemberDirect(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    const char *name = nullptr,
+    const char *uuid = nullptr,
+    const char *ip = nullptr) {
+  auto name__ = name ? _fbb.CreateString(name) : 0;
+  auto uuid__ = uuid ? _fbb.CreateString(uuid) : 0;
+  auto ip__ = ip ? _fbb.CreateString(ip) : 0;
+  return CoprocessorProto::CreateMember(
+      _fbb,
+      name__,
+      uuid__,
+      ip__);
+}
+
+::flatbuffers::Offset<Member> CreateMember(::flatbuffers::FlatBufferBuilder &_fbb, const MemberT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct GroupT : public ::flatbuffers::NativeTable {
+  typedef Group TableType;
+  std::string id{};
+  std::string name{};
+  std::string coordinator_ip{};
+  uint16_t coordinator_port = 1400;
+  bool is_playing = false;
+  std::vector<std::unique_ptr<CoprocessorProto::MemberT>> members{};
+  GroupT() = default;
+  GroupT(const GroupT &o);
+  GroupT(GroupT&&) FLATBUFFERS_NOEXCEPT = default;
+  GroupT &operator=(GroupT o) FLATBUFFERS_NOEXCEPT;
+};
+
+struct Group FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef GroupT NativeTableType;
+  typedef GroupBuilder Builder;
+  struct Traits;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_ID = 4,
+    VT_NAME = 6,
+    VT_COORDINATOR_IP = 8,
+    VT_COORDINATOR_PORT = 10,
+    VT_IS_PLAYING = 12,
+    VT_MEMBERS = 14
+  };
+  const ::flatbuffers::String *id() const {
+    return GetPointer<const ::flatbuffers::String *>(VT_ID);
+  }
+  const ::flatbuffers::String *name() const {
+    return GetPointer<const ::flatbuffers::String *>(VT_NAME);
+  }
+  const ::flatbuffers::String *coordinator_ip() const {
+    return GetPointer<const ::flatbuffers::String *>(VT_COORDINATOR_IP);
+  }
+  uint16_t coordinator_port() const {
+    return GetField<uint16_t>(VT_COORDINATOR_PORT, 1400);
+  }
+  bool is_playing() const {
+    return GetField<uint8_t>(VT_IS_PLAYING, 0) != 0;
+  }
+  const ::flatbuffers::Vector<::flatbuffers::Offset<CoprocessorProto::Member>> *members() const {
+    return GetPointer<const ::flatbuffers::Vector<::flatbuffers::Offset<CoprocessorProto::Member>> *>(VT_MEMBERS);
+  }
+  template <bool B = false>
+  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyOffset(verifier, VT_ID) &&
+           verifier.VerifyString(id()) &&
+           VerifyOffset(verifier, VT_NAME) &&
+           verifier.VerifyString(name()) &&
+           VerifyOffset(verifier, VT_COORDINATOR_IP) &&
+           verifier.VerifyString(coordinator_ip()) &&
+           VerifyField<uint16_t>(verifier, VT_COORDINATOR_PORT, 2) &&
+           VerifyField<uint8_t>(verifier, VT_IS_PLAYING, 1) &&
+           VerifyOffset(verifier, VT_MEMBERS) &&
+           verifier.VerifyVector(members()) &&
+           verifier.VerifyVectorOfTables(members()) &&
+           verifier.EndTable();
+  }
+  GroupT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(GroupT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<Group> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const GroupT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct GroupBuilder {
+  typedef Group Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_id(::flatbuffers::Offset<::flatbuffers::String> id) {
+    fbb_.AddOffset(Group::VT_ID, id);
+  }
+  void add_name(::flatbuffers::Offset<::flatbuffers::String> name) {
+    fbb_.AddOffset(Group::VT_NAME, name);
+  }
+  void add_coordinator_ip(::flatbuffers::Offset<::flatbuffers::String> coordinator_ip) {
+    fbb_.AddOffset(Group::VT_COORDINATOR_IP, coordinator_ip);
+  }
+  void add_coordinator_port(uint16_t coordinator_port) {
+    fbb_.AddElement<uint16_t>(Group::VT_COORDINATOR_PORT, coordinator_port, 1400);
+  }
+  void add_is_playing(bool is_playing) {
+    fbb_.AddElement<uint8_t>(Group::VT_IS_PLAYING, static_cast<uint8_t>(is_playing), 0);
+  }
+  void add_members(::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<CoprocessorProto::Member>>> members) {
+    fbb_.AddOffset(Group::VT_MEMBERS, members);
+  }
+  explicit GroupBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<Group> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<Group>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<Group> CreateGroup(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    ::flatbuffers::Offset<::flatbuffers::String> id = 0,
+    ::flatbuffers::Offset<::flatbuffers::String> name = 0,
+    ::flatbuffers::Offset<::flatbuffers::String> coordinator_ip = 0,
+    uint16_t coordinator_port = 1400,
+    bool is_playing = false,
+    ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<CoprocessorProto::Member>>> members = 0) {
+  GroupBuilder builder_(_fbb);
+  builder_.add_members(members);
+  builder_.add_coordinator_ip(coordinator_ip);
+  builder_.add_name(name);
+  builder_.add_id(id);
+  builder_.add_coordinator_port(coordinator_port);
+  builder_.add_is_playing(is_playing);
+  return builder_.Finish();
+}
+
+struct Group::Traits {
+  using type = Group;
+  static auto constexpr Create = CreateGroup;
+};
+
+inline ::flatbuffers::Offset<Group> CreateGroupDirect(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    const char *id = nullptr,
+    const char *name = nullptr,
+    const char *coordinator_ip = nullptr,
+    uint16_t coordinator_port = 1400,
+    bool is_playing = false,
+    const std::vector<::flatbuffers::Offset<CoprocessorProto::Member>> *members = nullptr) {
+  auto id__ = id ? _fbb.CreateString(id) : 0;
+  auto name__ = name ? _fbb.CreateString(name) : 0;
+  auto coordinator_ip__ = coordinator_ip ? _fbb.CreateString(coordinator_ip) : 0;
+  auto members__ = members ? _fbb.CreateVector<::flatbuffers::Offset<CoprocessorProto::Member>>(*members) : 0;
+  return CoprocessorProto::CreateGroup(
+      _fbb,
+      id__,
+      name__,
+      coordinator_ip__,
+      coordinator_port,
+      is_playing,
+      members__);
+}
+
+::flatbuffers::Offset<Group> CreateGroup(::flatbuffers::FlatBufferBuilder &_fbb, const GroupT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct TopologyUpdateT : public ::flatbuffers::NativeTable {
+  typedef TopologyUpdate TableType;
+  uint32_t sequence = 0;
+  uint16_t group_index = 0;
+  uint16_t total_groups = 0;
+  std::unique_ptr<CoprocessorProto::GroupT> group{};
+  TopologyUpdateT() = default;
+  TopologyUpdateT(const TopologyUpdateT &o);
+  TopologyUpdateT(TopologyUpdateT&&) FLATBUFFERS_NOEXCEPT = default;
+  TopologyUpdateT &operator=(TopologyUpdateT o) FLATBUFFERS_NOEXCEPT;
+};
+
+struct TopologyUpdate FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef TopologyUpdateT NativeTableType;
+  typedef TopologyUpdateBuilder Builder;
+  struct Traits;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_SEQUENCE = 4,
+    VT_GROUP_INDEX = 6,
+    VT_TOTAL_GROUPS = 8,
+    VT_GROUP = 10
+  };
   uint32_t sequence() const {
     return GetField<uint32_t>(VT_SEQUENCE, 0);
   }
-  bool is_last() const {
-    return GetField<uint8_t>(VT_IS_LAST, 0) != 0;
+  uint16_t group_index() const {
+    return GetField<uint16_t>(VT_GROUP_INDEX, 0);
   }
-  const ::flatbuffers::Vector<uint8_t> *payload() const {
-    return GetPointer<const ::flatbuffers::Vector<uint8_t> *>(VT_PAYLOAD);
+  uint16_t total_groups() const {
+    return GetField<uint16_t>(VT_TOTAL_GROUPS, 0);
+  }
+  const CoprocessorProto::Group *group() const {
+    return GetPointer<const CoprocessorProto::Group *>(VT_GROUP);
   }
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyField<uint32_t>(verifier, VT_STREAM_ID, 4) &&
            VerifyField<uint32_t>(verifier, VT_SEQUENCE, 4) &&
-           VerifyField<uint8_t>(verifier, VT_IS_LAST, 1) &&
-           VerifyOffset(verifier, VT_PAYLOAD) &&
-           verifier.VerifyVector(payload()) &&
+           VerifyField<uint16_t>(verifier, VT_GROUP_INDEX, 2) &&
+           VerifyField<uint16_t>(verifier, VT_TOTAL_GROUPS, 2) &&
+           VerifyOffset(verifier, VT_GROUP) &&
+           verifier.VerifyTable(group()) &&
            verifier.EndTable();
   }
+  TopologyUpdateT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(TopologyUpdateT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<TopologyUpdate> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const TopologyUpdateT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 };
 
-struct StreamChunkBuilder {
-  typedef StreamChunk Table;
+struct TopologyUpdateBuilder {
+  typedef TopologyUpdate Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
-  void add_stream_id(uint32_t stream_id) {
-    fbb_.AddElement<uint32_t>(StreamChunk::VT_STREAM_ID, stream_id, 0);
-  }
   void add_sequence(uint32_t sequence) {
-    fbb_.AddElement<uint32_t>(StreamChunk::VT_SEQUENCE, sequence, 0);
+    fbb_.AddElement<uint32_t>(TopologyUpdate::VT_SEQUENCE, sequence, 0);
   }
-  void add_is_last(bool is_last) {
-    fbb_.AddElement<uint8_t>(StreamChunk::VT_IS_LAST, static_cast<uint8_t>(is_last), 0);
+  void add_group_index(uint16_t group_index) {
+    fbb_.AddElement<uint16_t>(TopologyUpdate::VT_GROUP_INDEX, group_index, 0);
   }
-  void add_payload(::flatbuffers::Offset<::flatbuffers::Vector<uint8_t>> payload) {
-    fbb_.AddOffset(StreamChunk::VT_PAYLOAD, payload);
+  void add_total_groups(uint16_t total_groups) {
+    fbb_.AddElement<uint16_t>(TopologyUpdate::VT_TOTAL_GROUPS, total_groups, 0);
   }
-  explicit StreamChunkBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+  void add_group(::flatbuffers::Offset<CoprocessorProto::Group> group) {
+    fbb_.AddOffset(TopologyUpdate::VT_GROUP, group);
+  }
+  explicit TopologyUpdateBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  ::flatbuffers::Offset<StreamChunk> Finish() {
+  ::flatbuffers::Offset<TopologyUpdate> Finish() {
     const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<StreamChunk>(end);
+    auto o = ::flatbuffers::Offset<TopologyUpdate>(end);
     return o;
   }
 };
 
-inline ::flatbuffers::Offset<StreamChunk> CreateStreamChunk(
+inline ::flatbuffers::Offset<TopologyUpdate> CreateTopologyUpdate(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    uint32_t stream_id = 0,
     uint32_t sequence = 0,
-    bool is_last = false,
-    ::flatbuffers::Offset<::flatbuffers::Vector<uint8_t>> payload = 0) {
-  StreamChunkBuilder builder_(_fbb);
-  builder_.add_payload(payload);
+    uint16_t group_index = 0,
+    uint16_t total_groups = 0,
+    ::flatbuffers::Offset<CoprocessorProto::Group> group = 0) {
+  TopologyUpdateBuilder builder_(_fbb);
+  builder_.add_group(group);
   builder_.add_sequence(sequence);
-  builder_.add_stream_id(stream_id);
-  builder_.add_is_last(is_last);
+  builder_.add_total_groups(total_groups);
+  builder_.add_group_index(group_index);
   return builder_.Finish();
 }
 
-inline ::flatbuffers::Offset<StreamChunk> CreateStreamChunkDirect(
+struct TopologyUpdate::Traits {
+  using type = TopologyUpdate;
+  static auto constexpr Create = CreateTopologyUpdate;
+};
+
+::flatbuffers::Offset<TopologyUpdate> CreateTopologyUpdate(::flatbuffers::FlatBufferBuilder &_fbb, const TopologyUpdateT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct TopologyRequestT : public ::flatbuffers::NativeTable {
+  typedef TopologyRequest TableType;
+  std::string seed_ip{};
+  uint16_t seed_port = 1400;
+};
+
+struct TopologyRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef TopologyRequestT NativeTableType;
+  typedef TopologyRequestBuilder Builder;
+  struct Traits;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_SEED_IP = 4,
+    VT_SEED_PORT = 6
+  };
+  const ::flatbuffers::String *seed_ip() const {
+    return GetPointer<const ::flatbuffers::String *>(VT_SEED_IP);
+  }
+  uint16_t seed_port() const {
+    return GetField<uint16_t>(VT_SEED_PORT, 1400);
+  }
+  template <bool B = false>
+  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyOffset(verifier, VT_SEED_IP) &&
+           verifier.VerifyString(seed_ip()) &&
+           VerifyField<uint16_t>(verifier, VT_SEED_PORT, 2) &&
+           verifier.EndTable();
+  }
+  TopologyRequestT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(TopologyRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<TopologyRequest> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const TopologyRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct TopologyRequestBuilder {
+  typedef TopologyRequest Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_seed_ip(::flatbuffers::Offset<::flatbuffers::String> seed_ip) {
+    fbb_.AddOffset(TopologyRequest::VT_SEED_IP, seed_ip);
+  }
+  void add_seed_port(uint16_t seed_port) {
+    fbb_.AddElement<uint16_t>(TopologyRequest::VT_SEED_PORT, seed_port, 1400);
+  }
+  explicit TopologyRequestBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<TopologyRequest> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<TopologyRequest>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<TopologyRequest> CreateTopologyRequest(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    uint32_t stream_id = 0,
-    uint32_t sequence = 0,
-    bool is_last = false,
-    const std::vector<uint8_t> *payload = nullptr) {
-  auto payload__ = payload ? _fbb.CreateVector<uint8_t>(*payload) : 0;
-  return CoprocessorProto::CreateStreamChunk(
+    ::flatbuffers::Offset<::flatbuffers::String> seed_ip = 0,
+    uint16_t seed_port = 1400) {
+  TopologyRequestBuilder builder_(_fbb);
+  builder_.add_seed_ip(seed_ip);
+  builder_.add_seed_port(seed_port);
+  return builder_.Finish();
+}
+
+struct TopologyRequest::Traits {
+  using type = TopologyRequest;
+  static auto constexpr Create = CreateTopologyRequest;
+};
+
+inline ::flatbuffers::Offset<TopologyRequest> CreateTopologyRequestDirect(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    const char *seed_ip = nullptr,
+    uint16_t seed_port = 1400) {
+  auto seed_ip__ = seed_ip ? _fbb.CreateString(seed_ip) : 0;
+  return CoprocessorProto::CreateTopologyRequest(
       _fbb,
-      stream_id,
-      sequence,
-      is_last,
-      payload__);
+      seed_ip__,
+      seed_port);
 }
 
-struct StartProvisioning FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef StartProvisioningBuilder Builder;
+::flatbuffers::Offset<TopologyRequest> CreateTopologyRequest(::flatbuffers::FlatBufferBuilder &_fbb, const TopologyRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct PlaybackRequestT : public ::flatbuffers::NativeTable {
+  typedef PlaybackRequest TableType;
+  std::string endpoint_ip{};
+  uint16_t endpoint_port = 1400;
+};
+
+struct PlaybackRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef PlaybackRequestT NativeTableType;
+  typedef PlaybackRequestBuilder Builder;
+  struct Traits;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_TIMEOUT_SECONDS = 4
+    VT_ENDPOINT_IP = 4,
+    VT_ENDPOINT_PORT = 6
   };
-  uint32_t timeout_seconds() const {
-    return GetField<uint32_t>(VT_TIMEOUT_SECONDS, 0);
+  const ::flatbuffers::String *endpoint_ip() const {
+    return GetPointer<const ::flatbuffers::String *>(VT_ENDPOINT_IP);
+  }
+  uint16_t endpoint_port() const {
+    return GetField<uint16_t>(VT_ENDPOINT_PORT, 1400);
   }
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyField<uint32_t>(verifier, VT_TIMEOUT_SECONDS, 4) &&
+           VerifyOffset(verifier, VT_ENDPOINT_IP) &&
+           verifier.VerifyString(endpoint_ip()) &&
+           VerifyField<uint16_t>(verifier, VT_ENDPOINT_PORT, 2) &&
            verifier.EndTable();
   }
+  PlaybackRequestT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(PlaybackRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<PlaybackRequest> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const PlaybackRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 };
 
-struct StartProvisioningBuilder {
-  typedef StartProvisioning Table;
+struct PlaybackRequestBuilder {
+  typedef PlaybackRequest Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
-  void add_timeout_seconds(uint32_t timeout_seconds) {
-    fbb_.AddElement<uint32_t>(StartProvisioning::VT_TIMEOUT_SECONDS, timeout_seconds, 0);
+  void add_endpoint_ip(::flatbuffers::Offset<::flatbuffers::String> endpoint_ip) {
+    fbb_.AddOffset(PlaybackRequest::VT_ENDPOINT_IP, endpoint_ip);
   }
-  explicit StartProvisioningBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+  void add_endpoint_port(uint16_t endpoint_port) {
+    fbb_.AddElement<uint16_t>(PlaybackRequest::VT_ENDPOINT_PORT, endpoint_port, 1400);
+  }
+  explicit PlaybackRequestBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  ::flatbuffers::Offset<StartProvisioning> Finish() {
+  ::flatbuffers::Offset<PlaybackRequest> Finish() {
     const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<StartProvisioning>(end);
+    auto o = ::flatbuffers::Offset<PlaybackRequest>(end);
     return o;
   }
 };
 
-inline ::flatbuffers::Offset<StartProvisioning> CreateStartProvisioning(
+inline ::flatbuffers::Offset<PlaybackRequest> CreatePlaybackRequest(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    uint32_t timeout_seconds = 0) {
-  StartProvisioningBuilder builder_(_fbb);
-  builder_.add_timeout_seconds(timeout_seconds);
+    ::flatbuffers::Offset<::flatbuffers::String> endpoint_ip = 0,
+    uint16_t endpoint_port = 1400) {
+  PlaybackRequestBuilder builder_(_fbb);
+  builder_.add_endpoint_ip(endpoint_ip);
+  builder_.add_endpoint_port(endpoint_port);
   return builder_.Finish();
 }
 
-struct StopProvisioning FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef StopProvisioningBuilder Builder;
-  template <bool B = false>
-  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
-    return VerifyTableStart(verifier) &&
-           verifier.EndTable();
-  }
+struct PlaybackRequest::Traits {
+  using type = PlaybackRequest;
+  static auto constexpr Create = CreatePlaybackRequest;
 };
 
-struct StopProvisioningBuilder {
-  typedef StopProvisioning Table;
-  ::flatbuffers::FlatBufferBuilder &fbb_;
-  ::flatbuffers::uoffset_t start_;
-  explicit StopProvisioningBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
-        : fbb_(_fbb) {
-    start_ = fbb_.StartTable();
-  }
-  ::flatbuffers::Offset<StopProvisioning> Finish() {
-    const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<StopProvisioning>(end);
-    return o;
-  }
-};
-
-inline ::flatbuffers::Offset<StopProvisioning> CreateStopProvisioning(
-    ::flatbuffers::FlatBufferBuilder &_fbb) {
-  StopProvisioningBuilder builder_(_fbb);
-  return builder_.Finish();
+inline ::flatbuffers::Offset<PlaybackRequest> CreatePlaybackRequestDirect(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    const char *endpoint_ip = nullptr,
+    uint16_t endpoint_port = 1400) {
+  auto endpoint_ip__ = endpoint_ip ? _fbb.CreateString(endpoint_ip) : 0;
+  return CoprocessorProto::CreatePlaybackRequest(
+      _fbb,
+      endpoint_ip__,
+      endpoint_port);
 }
 
-struct ProvisioningStatus FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef ProvisioningStatusBuilder Builder;
+::flatbuffers::Offset<PlaybackRequest> CreatePlaybackRequest(::flatbuffers::FlatBufferBuilder &_fbb, const PlaybackRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct GroupSummaryT : public ::flatbuffers::NativeTable {
+  typedef GroupSummary TableType;
+  std::string id{};
+  bool is_playing = false;
+  std::string title{};
+};
+
+struct GroupSummary FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef GroupSummaryT NativeTableType;
+  typedef GroupSummaryBuilder Builder;
+  struct Traits;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_STATE = 4
+    VT_ID = 4,
+    VT_IS_PLAYING = 6,
+    VT_TITLE = 8
   };
-  CoprocessorProto::ProvisioningState state() const {
-    return static_cast<CoprocessorProto::ProvisioningState>(GetField<uint8_t>(VT_STATE, 0));
+  const ::flatbuffers::String *id() const {
+    return GetPointer<const ::flatbuffers::String *>(VT_ID);
+  }
+  bool is_playing() const {
+    return GetField<uint8_t>(VT_IS_PLAYING, 0) != 0;
+  }
+  const ::flatbuffers::String *title() const {
+    return GetPointer<const ::flatbuffers::String *>(VT_TITLE);
   }
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyField<uint8_t>(verifier, VT_STATE, 1) &&
+           VerifyOffset(verifier, VT_ID) &&
+           verifier.VerifyString(id()) &&
+           VerifyField<uint8_t>(verifier, VT_IS_PLAYING, 1) &&
+           VerifyOffset(verifier, VT_TITLE) &&
+           verifier.VerifyString(title()) &&
            verifier.EndTable();
   }
+  GroupSummaryT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(GroupSummaryT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<GroupSummary> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const GroupSummaryT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 };
 
-struct ProvisioningStatusBuilder {
-  typedef ProvisioningStatus Table;
+struct GroupSummaryBuilder {
+  typedef GroupSummary Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
-  void add_state(CoprocessorProto::ProvisioningState state) {
-    fbb_.AddElement<uint8_t>(ProvisioningStatus::VT_STATE, static_cast<uint8_t>(state), 0);
+  void add_id(::flatbuffers::Offset<::flatbuffers::String> id) {
+    fbb_.AddOffset(GroupSummary::VT_ID, id);
   }
-  explicit ProvisioningStatusBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+  void add_is_playing(bool is_playing) {
+    fbb_.AddElement<uint8_t>(GroupSummary::VT_IS_PLAYING, static_cast<uint8_t>(is_playing), 0);
+  }
+  void add_title(::flatbuffers::Offset<::flatbuffers::String> title) {
+    fbb_.AddOffset(GroupSummary::VT_TITLE, title);
+  }
+  explicit GroupSummaryBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  ::flatbuffers::Offset<ProvisioningStatus> Finish() {
+  ::flatbuffers::Offset<GroupSummary> Finish() {
     const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<ProvisioningStatus>(end);
+    auto o = ::flatbuffers::Offset<GroupSummary>(end);
     return o;
   }
 };
 
-inline ::flatbuffers::Offset<ProvisioningStatus> CreateProvisioningStatus(
+inline ::flatbuffers::Offset<GroupSummary> CreateGroupSummary(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    CoprocessorProto::ProvisioningState state = CoprocessorProto::ProvisioningState_Inactive) {
-  ProvisioningStatusBuilder builder_(_fbb);
-  builder_.add_state(state);
+    ::flatbuffers::Offset<::flatbuffers::String> id = 0,
+    bool is_playing = false,
+    ::flatbuffers::Offset<::flatbuffers::String> title = 0) {
+  GroupSummaryBuilder builder_(_fbb);
+  builder_.add_title(title);
+  builder_.add_id(id);
+  builder_.add_is_playing(is_playing);
   return builder_.Finish();
 }
 
-struct Hello FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef HelloBuilder Builder;
-  template <bool B = false>
-  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
-    return VerifyTableStart(verifier) &&
-           verifier.EndTable();
-  }
+struct GroupSummary::Traits {
+  using type = GroupSummary;
+  static auto constexpr Create = CreateGroupSummary;
 };
 
-struct HelloBuilder {
-  typedef Hello Table;
-  ::flatbuffers::FlatBufferBuilder &fbb_;
-  ::flatbuffers::uoffset_t start_;
-  explicit HelloBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
-        : fbb_(_fbb) {
-    start_ = fbb_.StartTable();
-  }
-  ::flatbuffers::Offset<Hello> Finish() {
-    const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<Hello>(end);
-    return o;
-  }
-};
-
-inline ::flatbuffers::Offset<Hello> CreateHello(
-    ::flatbuffers::FlatBufferBuilder &_fbb) {
-  HelloBuilder builder_(_fbb);
-  return builder_.Finish();
+inline ::flatbuffers::Offset<GroupSummary> CreateGroupSummaryDirect(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    const char *id = nullptr,
+    bool is_playing = false,
+    const char *title = nullptr) {
+  auto id__ = id ? _fbb.CreateString(id) : 0;
+  auto title__ = title ? _fbb.CreateString(title) : 0;
+  return CoprocessorProto::CreateGroupSummary(
+      _fbb,
+      id__,
+      is_playing,
+      title__);
 }
 
-struct TimeSync FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef TimeSyncBuilder Builder;
+::flatbuffers::Offset<GroupSummary> CreateGroupSummary(::flatbuffers::FlatBufferBuilder &_fbb, const GroupSummaryT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct GroupsSummaryT : public ::flatbuffers::NativeTable {
+  typedef GroupsSummary TableType;
+  std::vector<std::unique_ptr<CoprocessorProto::GroupSummaryT>> groups{};
+  GroupsSummaryT() = default;
+  GroupsSummaryT(const GroupsSummaryT &o);
+  GroupsSummaryT(GroupsSummaryT&&) FLATBUFFERS_NOEXCEPT = default;
+  GroupsSummaryT &operator=(GroupsSummaryT o) FLATBUFFERS_NOEXCEPT;
+};
+
+struct GroupsSummary FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef GroupsSummaryT NativeTableType;
+  typedef GroupsSummaryBuilder Builder;
+  struct Traits;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_EPOCH_SECONDS = 4,
-    VT_SUBSEC_MICROS = 6
+    VT_GROUPS = 4
   };
-  uint64_t epoch_seconds() const {
-    return GetField<uint64_t>(VT_EPOCH_SECONDS, 0);
-  }
-  uint32_t subsec_micros() const {
-    return GetField<uint32_t>(VT_SUBSEC_MICROS, 0);
+  const ::flatbuffers::Vector<::flatbuffers::Offset<CoprocessorProto::GroupSummary>> *groups() const {
+    return GetPointer<const ::flatbuffers::Vector<::flatbuffers::Offset<CoprocessorProto::GroupSummary>> *>(VT_GROUPS);
   }
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyField<uint64_t>(verifier, VT_EPOCH_SECONDS, 8) &&
-           VerifyField<uint32_t>(verifier, VT_SUBSEC_MICROS, 4) &&
+           VerifyOffset(verifier, VT_GROUPS) &&
+           verifier.VerifyVector(groups()) &&
+           verifier.VerifyVectorOfTables(groups()) &&
            verifier.EndTable();
   }
+  GroupsSummaryT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(GroupsSummaryT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<GroupsSummary> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const GroupsSummaryT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 };
 
-struct TimeSyncBuilder {
-  typedef TimeSync Table;
+struct GroupsSummaryBuilder {
+  typedef GroupsSummary Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
-  void add_epoch_seconds(uint64_t epoch_seconds) {
-    fbb_.AddElement<uint64_t>(TimeSync::VT_EPOCH_SECONDS, epoch_seconds, 0);
+  void add_groups(::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<CoprocessorProto::GroupSummary>>> groups) {
+    fbb_.AddOffset(GroupsSummary::VT_GROUPS, groups);
   }
-  void add_subsec_micros(uint32_t subsec_micros) {
-    fbb_.AddElement<uint32_t>(TimeSync::VT_SUBSEC_MICROS, subsec_micros, 0);
-  }
-  explicit TimeSyncBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+  explicit GroupsSummaryBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  ::flatbuffers::Offset<TimeSync> Finish() {
+  ::flatbuffers::Offset<GroupsSummary> Finish() {
     const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<TimeSync>(end);
+    auto o = ::flatbuffers::Offset<GroupsSummary>(end);
     return o;
   }
 };
 
-inline ::flatbuffers::Offset<TimeSync> CreateTimeSync(
+inline ::flatbuffers::Offset<GroupsSummary> CreateGroupsSummary(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    uint64_t epoch_seconds = 0,
-    uint32_t subsec_micros = 0) {
-  TimeSyncBuilder builder_(_fbb);
-  builder_.add_epoch_seconds(epoch_seconds);
-  builder_.add_subsec_micros(subsec_micros);
+    ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<CoprocessorProto::GroupSummary>>> groups = 0) {
+  GroupsSummaryBuilder builder_(_fbb);
+  builder_.add_groups(groups);
   return builder_.Finish();
 }
 
-struct RequestEnvelope FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef RequestEnvelopeBuilder Builder;
-  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_MESSAGE_TYPE = 4,
-    VT_MESSAGE = 6
-  };
-  CoprocessorProto::Request message_type() const {
-    return static_cast<CoprocessorProto::Request>(GetField<uint8_t>(VT_MESSAGE_TYPE, 0));
-  }
-  const void *message() const {
-    return GetPointer<const void *>(VT_MESSAGE);
-  }
-  template<typename T> const T *message_as() const;
-  const CoprocessorProto::Heartbeat *message_as_Heartbeat() const {
-    return message_type() == CoprocessorProto::Request_Heartbeat ? static_cast<const CoprocessorProto::Heartbeat *>(message()) : nullptr;
-  }
-  const CoprocessorProto::WifiConnectRequest *message_as_WifiConnectRequest() const {
-    return message_type() == CoprocessorProto::Request_WifiConnectRequest ? static_cast<const CoprocessorProto::WifiConnectRequest *>(message()) : nullptr;
-  }
-  const CoprocessorProto::StartProvisioning *message_as_StartProvisioning() const {
-    return message_type() == CoprocessorProto::Request_StartProvisioning ? static_cast<const CoprocessorProto::StartProvisioning *>(message()) : nullptr;
-  }
-  const CoprocessorProto::StopProvisioning *message_as_StopProvisioning() const {
-    return message_type() == CoprocessorProto::Request_StopProvisioning ? static_cast<const CoprocessorProto::StopProvisioning *>(message()) : nullptr;
-  }
-  const CoprocessorProto::StreamChunk *message_as_StreamChunk() const {
-    return message_type() == CoprocessorProto::Request_StreamChunk ? static_cast<const CoprocessorProto::StreamChunk *>(message()) : nullptr;
-  }
-  const CoprocessorProto::Hello *message_as_Hello() const {
-    return message_type() == CoprocessorProto::Request_Hello ? static_cast<const CoprocessorProto::Hello *>(message()) : nullptr;
-  }
-  const CoprocessorProto::BatteryStatus *message_as_BatteryStatus() const {
-    return message_type() == CoprocessorProto::Request_BatteryStatus ? static_cast<const CoprocessorProto::BatteryStatus *>(message()) : nullptr;
-  }
-  const CoprocessorProto::Media::Action *message_as_Media_Action() const {
-    return message_type() == CoprocessorProto::Request_Media_Action ? static_cast<const CoprocessorProto::Media::Action *>(message()) : nullptr;
-  }
-  const CoprocessorProto::Media::VolumeCommand *message_as_Media_VolumeCommand() const {
-    return message_type() == CoprocessorProto::Request_Media_VolumeCommand ? static_cast<const CoprocessorProto::Media::VolumeCommand *>(message()) : nullptr;
-  }
-  const CoprocessorProto::Media::Subscribe *message_as_Media_Subscribe() const {
-    return message_type() == CoprocessorProto::Request_Media_Subscribe ? static_cast<const CoprocessorProto::Media::Subscribe *>(message()) : nullptr;
-  }
-  const CoprocessorProto::Media::UnsubscribeAll *message_as_Media_UnsubscribeAll() const {
-    return message_type() == CoprocessorProto::Request_Media_UnsubscribeAll ? static_cast<const CoprocessorProto::Media::UnsubscribeAll *>(message()) : nullptr;
-  }
-  const CoprocessorProto::Media::GetTopology *message_as_Media_GetTopology() const {
-    return message_type() == CoprocessorProto::Request_Media_GetTopology ? static_cast<const CoprocessorProto::Media::GetTopology *>(message()) : nullptr;
-  }
-  template <bool B = false>
-  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
-    return VerifyTableStart(verifier) &&
-           VerifyField<uint8_t>(verifier, VT_MESSAGE_TYPE, 1) &&
-           VerifyOffset(verifier, VT_MESSAGE) &&
-           VerifyRequest(verifier, message(), message_type()) &&
-           verifier.EndTable();
-  }
+struct GroupsSummary::Traits {
+  using type = GroupsSummary;
+  static auto constexpr Create = CreateGroupsSummary;
 };
 
-template<> inline const CoprocessorProto::Heartbeat *RequestEnvelope::message_as<CoprocessorProto::Heartbeat>() const {
-  return message_as_Heartbeat();
-}
-
-template<> inline const CoprocessorProto::WifiConnectRequest *RequestEnvelope::message_as<CoprocessorProto::WifiConnectRequest>() const {
-  return message_as_WifiConnectRequest();
-}
-
-template<> inline const CoprocessorProto::StartProvisioning *RequestEnvelope::message_as<CoprocessorProto::StartProvisioning>() const {
-  return message_as_StartProvisioning();
-}
-
-template<> inline const CoprocessorProto::StopProvisioning *RequestEnvelope::message_as<CoprocessorProto::StopProvisioning>() const {
-  return message_as_StopProvisioning();
-}
-
-template<> inline const CoprocessorProto::StreamChunk *RequestEnvelope::message_as<CoprocessorProto::StreamChunk>() const {
-  return message_as_StreamChunk();
-}
-
-template<> inline const CoprocessorProto::Hello *RequestEnvelope::message_as<CoprocessorProto::Hello>() const {
-  return message_as_Hello();
-}
-
-template<> inline const CoprocessorProto::BatteryStatus *RequestEnvelope::message_as<CoprocessorProto::BatteryStatus>() const {
-  return message_as_BatteryStatus();
-}
-
-template<> inline const CoprocessorProto::Media::Action *RequestEnvelope::message_as<CoprocessorProto::Media::Action>() const {
-  return message_as_Media_Action();
-}
-
-template<> inline const CoprocessorProto::Media::VolumeCommand *RequestEnvelope::message_as<CoprocessorProto::Media::VolumeCommand>() const {
-  return message_as_Media_VolumeCommand();
-}
-
-template<> inline const CoprocessorProto::Media::Subscribe *RequestEnvelope::message_as<CoprocessorProto::Media::Subscribe>() const {
-  return message_as_Media_Subscribe();
-}
-
-template<> inline const CoprocessorProto::Media::UnsubscribeAll *RequestEnvelope::message_as<CoprocessorProto::Media::UnsubscribeAll>() const {
-  return message_as_Media_UnsubscribeAll();
-}
-
-template<> inline const CoprocessorProto::Media::GetTopology *RequestEnvelope::message_as<CoprocessorProto::Media::GetTopology>() const {
-  return message_as_Media_GetTopology();
-}
-
-struct RequestEnvelopeBuilder {
-  typedef RequestEnvelope Table;
-  ::flatbuffers::FlatBufferBuilder &fbb_;
-  ::flatbuffers::uoffset_t start_;
-  void add_message_type(CoprocessorProto::Request message_type) {
-    fbb_.AddElement<uint8_t>(RequestEnvelope::VT_MESSAGE_TYPE, static_cast<uint8_t>(message_type), 0);
-  }
-  void add_message(::flatbuffers::Offset<void> message) {
-    fbb_.AddOffset(RequestEnvelope::VT_MESSAGE, message);
-  }
-  explicit RequestEnvelopeBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
-        : fbb_(_fbb) {
-    start_ = fbb_.StartTable();
-  }
-  ::flatbuffers::Offset<RequestEnvelope> Finish() {
-    const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<RequestEnvelope>(end);
-    return o;
-  }
-};
-
-inline ::flatbuffers::Offset<RequestEnvelope> CreateRequestEnvelope(
+inline ::flatbuffers::Offset<GroupsSummary> CreateGroupsSummaryDirect(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    CoprocessorProto::Request message_type = CoprocessorProto::Request_NONE,
-    ::flatbuffers::Offset<void> message = 0) {
-  RequestEnvelopeBuilder builder_(_fbb);
-  builder_.add_message(message);
-  builder_.add_message_type(message_type);
-  return builder_.Finish();
+    const std::vector<::flatbuffers::Offset<CoprocessorProto::GroupSummary>> *groups = nullptr) {
+  auto groups__ = groups ? _fbb.CreateVector<::flatbuffers::Offset<CoprocessorProto::GroupSummary>>(*groups) : 0;
+  return CoprocessorProto::CreateGroupsSummary(
+      _fbb,
+      groups__);
 }
 
-struct ResponseEnvelope FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef ResponseEnvelopeBuilder Builder;
-  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_MESSAGE_TYPE = 4,
-    VT_MESSAGE = 6
-  };
-  CoprocessorProto::Response message_type() const {
-    return static_cast<CoprocessorProto::Response>(GetField<uint8_t>(VT_MESSAGE_TYPE, 0));
-  }
-  const void *message() const {
-    return GetPointer<const void *>(VT_MESSAGE);
-  }
-  template<typename T> const T *message_as() const;
-  const CoprocessorProto::Heartbeat *message_as_Heartbeat() const {
-    return message_type() == CoprocessorProto::Response_Heartbeat ? static_cast<const CoprocessorProto::Heartbeat *>(message()) : nullptr;
-  }
-  const CoprocessorProto::WifiStatus *message_as_WifiStatus() const {
-    return message_type() == CoprocessorProto::Response_WifiStatus ? static_cast<const CoprocessorProto::WifiStatus *>(message()) : nullptr;
-  }
-  const CoprocessorProto::ProvisioningStatus *message_as_ProvisioningStatus() const {
-    return message_type() == CoprocessorProto::Response_ProvisioningStatus ? static_cast<const CoprocessorProto::ProvisioningStatus *>(message()) : nullptr;
-  }
-  const CoprocessorProto::StreamChunk *message_as_StreamChunk() const {
-    return message_type() == CoprocessorProto::Response_StreamChunk ? static_cast<const CoprocessorProto::StreamChunk *>(message()) : nullptr;
-  }
-  const CoprocessorProto::Hello *message_as_Hello() const {
-    return message_type() == CoprocessorProto::Response_Hello ? static_cast<const CoprocessorProto::Hello *>(message()) : nullptr;
-  }
-  const CoprocessorProto::TimeSync *message_as_TimeSync() const {
-    return message_type() == CoprocessorProto::Response_TimeSync ? static_cast<const CoprocessorProto::TimeSync *>(message()) : nullptr;
-  }
-  const CoprocessorProto::Media::StateUpdate *message_as_Media_StateUpdate() const {
-    return message_type() == CoprocessorProto::Response_Media_StateUpdate ? static_cast<const CoprocessorProto::Media::StateUpdate *>(message()) : nullptr;
-  }
-  const CoprocessorProto::Media::TopologyUpdate *message_as_Media_TopologyUpdate() const {
-    return message_type() == CoprocessorProto::Response_Media_TopologyUpdate ? static_cast<const CoprocessorProto::Media::TopologyUpdate *>(message()) : nullptr;
-  }
-  template <bool B = false>
-  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
-    return VerifyTableStart(verifier) &&
-           VerifyField<uint8_t>(verifier, VT_MESSAGE_TYPE, 1) &&
-           VerifyOffset(verifier, VT_MESSAGE) &&
-           VerifyResponse(verifier, message(), message_type()) &&
-           verifier.EndTable();
-  }
-};
+::flatbuffers::Offset<GroupsSummary> CreateGroupsSummary(::flatbuffers::FlatBufferBuilder &_fbb, const GroupsSummaryT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
-template<> inline const CoprocessorProto::Heartbeat *ResponseEnvelope::message_as<CoprocessorProto::Heartbeat>() const {
-  return message_as_Heartbeat();
+inline EmptyT *Empty::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<EmptyT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
 }
 
-template<> inline const CoprocessorProto::WifiStatus *ResponseEnvelope::message_as<CoprocessorProto::WifiStatus>() const {
-  return message_as_WifiStatus();
+inline void Empty::UnPackTo(EmptyT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
 }
 
-template<> inline const CoprocessorProto::ProvisioningStatus *ResponseEnvelope::message_as<CoprocessorProto::ProvisioningStatus>() const {
-  return message_as_ProvisioningStatus();
+inline ::flatbuffers::Offset<Empty> CreateEmpty(::flatbuffers::FlatBufferBuilder &_fbb, const EmptyT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return Empty::Pack(_fbb, _o, _rehasher);
 }
 
-template<> inline const CoprocessorProto::StreamChunk *ResponseEnvelope::message_as<CoprocessorProto::StreamChunk>() const {
-  return message_as_StreamChunk();
+inline ::flatbuffers::Offset<Empty> Empty::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const EmptyT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const EmptyT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  return CoprocessorProto::CreateEmpty(
+      _fbb);
 }
 
-template<> inline const CoprocessorProto::Hello *ResponseEnvelope::message_as<CoprocessorProto::Hello>() const {
-  return message_as_Hello();
+inline WifiConnectRequestT *WifiConnectRequest::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<WifiConnectRequestT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
 }
 
-template<> inline const CoprocessorProto::TimeSync *ResponseEnvelope::message_as<CoprocessorProto::TimeSync>() const {
-  return message_as_TimeSync();
+inline void WifiConnectRequest::UnPackTo(WifiConnectRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = ssid(); if (_e) _o->ssid = _e->str(); }
+  { auto _e = password(); if (_e) _o->password = _e->str(); }
 }
 
-template<> inline const CoprocessorProto::Media::StateUpdate *ResponseEnvelope::message_as<CoprocessorProto::Media::StateUpdate>() const {
-  return message_as_Media_StateUpdate();
+inline ::flatbuffers::Offset<WifiConnectRequest> CreateWifiConnectRequest(::flatbuffers::FlatBufferBuilder &_fbb, const WifiConnectRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return WifiConnectRequest::Pack(_fbb, _o, _rehasher);
 }
 
-template<> inline const CoprocessorProto::Media::TopologyUpdate *ResponseEnvelope::message_as<CoprocessorProto::Media::TopologyUpdate>() const {
-  return message_as_Media_TopologyUpdate();
+inline ::flatbuffers::Offset<WifiConnectRequest> WifiConnectRequest::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const WifiConnectRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const WifiConnectRequestT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _ssid = _o->ssid.empty() ? 0 : _fbb.CreateString(_o->ssid);
+  auto _password = _o->password.empty() ? 0 : _fbb.CreateString(_o->password);
+  return CoprocessorProto::CreateWifiConnectRequest(
+      _fbb,
+      _ssid,
+      _password);
 }
 
-struct ResponseEnvelopeBuilder {
-  typedef ResponseEnvelope Table;
-  ::flatbuffers::FlatBufferBuilder &fbb_;
-  ::flatbuffers::uoffset_t start_;
-  void add_message_type(CoprocessorProto::Response message_type) {
-    fbb_.AddElement<uint8_t>(ResponseEnvelope::VT_MESSAGE_TYPE, static_cast<uint8_t>(message_type), 0);
-  }
-  void add_message(::flatbuffers::Offset<void> message) {
-    fbb_.AddOffset(ResponseEnvelope::VT_MESSAGE, message);
-  }
-  explicit ResponseEnvelopeBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
-        : fbb_(_fbb) {
-    start_ = fbb_.StartTable();
-  }
-  ::flatbuffers::Offset<ResponseEnvelope> Finish() {
-    const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<ResponseEnvelope>(end);
-    return o;
-  }
-};
-
-inline ::flatbuffers::Offset<ResponseEnvelope> CreateResponseEnvelope(
-    ::flatbuffers::FlatBufferBuilder &_fbb,
-    CoprocessorProto::Response message_type = CoprocessorProto::Response_NONE,
-    ::flatbuffers::Offset<void> message = 0) {
-  ResponseEnvelopeBuilder builder_(_fbb);
-  builder_.add_message(message);
-  builder_.add_message_type(message_type);
-  return builder_.Finish();
+inline WifiStatusT *WifiStatus::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<WifiStatusT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
 }
 
-template <bool B>
-inline bool VerifyRequest(::flatbuffers::VerifierTemplate<B> &verifier, const void *obj, Request type) {
-  switch (type) {
-    case Request_NONE: {
-      return true;
-    }
-    case Request_Heartbeat: {
-      auto ptr = reinterpret_cast<const CoprocessorProto::Heartbeat *>(obj);
-      return verifier.VerifyTable(ptr);
-    }
-    case Request_WifiConnectRequest: {
-      auto ptr = reinterpret_cast<const CoprocessorProto::WifiConnectRequest *>(obj);
-      return verifier.VerifyTable(ptr);
-    }
-    case Request_StartProvisioning: {
-      auto ptr = reinterpret_cast<const CoprocessorProto::StartProvisioning *>(obj);
-      return verifier.VerifyTable(ptr);
-    }
-    case Request_StopProvisioning: {
-      auto ptr = reinterpret_cast<const CoprocessorProto::StopProvisioning *>(obj);
-      return verifier.VerifyTable(ptr);
-    }
-    case Request_StreamChunk: {
-      auto ptr = reinterpret_cast<const CoprocessorProto::StreamChunk *>(obj);
-      return verifier.VerifyTable(ptr);
-    }
-    case Request_Hello: {
-      auto ptr = reinterpret_cast<const CoprocessorProto::Hello *>(obj);
-      return verifier.VerifyTable(ptr);
-    }
-    case Request_BatteryStatus: {
-      auto ptr = reinterpret_cast<const CoprocessorProto::BatteryStatus *>(obj);
-      return verifier.VerifyTable(ptr);
-    }
-    case Request_Media_Action: {
-      auto ptr = reinterpret_cast<const CoprocessorProto::Media::Action *>(obj);
-      return verifier.VerifyTable(ptr);
-    }
-    case Request_Media_VolumeCommand: {
-      auto ptr = reinterpret_cast<const CoprocessorProto::Media::VolumeCommand *>(obj);
-      return verifier.VerifyTable(ptr);
-    }
-    case Request_Media_Subscribe: {
-      auto ptr = reinterpret_cast<const CoprocessorProto::Media::Subscribe *>(obj);
-      return verifier.VerifyTable(ptr);
-    }
-    case Request_Media_UnsubscribeAll: {
-      auto ptr = reinterpret_cast<const CoprocessorProto::Media::UnsubscribeAll *>(obj);
-      return verifier.VerifyTable(ptr);
-    }
-    case Request_Media_GetTopology: {
-      auto ptr = reinterpret_cast<const CoprocessorProto::Media::GetTopology *>(obj);
-      return verifier.VerifyTable(ptr);
-    }
-    default: return true;
-  }
+inline void WifiStatus::UnPackTo(WifiStatusT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = connected(); _o->connected = _e; }
+  { auto _e = ip(); if (_e) _o->ip = _e->str(); }
+  { auto _e = ssid(); if (_e) _o->ssid = _e->str(); }
+  { auto _e = rssi(); _o->rssi = _e; }
 }
 
-template <bool B>
-inline bool VerifyRequestVector(::flatbuffers::VerifierTemplate<B> &verifier, const ::flatbuffers::Vector<::flatbuffers::Offset<void>> *values, const ::flatbuffers::Vector<uint8_t> *types) {
-  if (!values || !types) return !values && !types;
-  if (values->size() != types->size()) return false;
-  for (::flatbuffers::uoffset_t i = 0; i < values->size(); ++i) {
-    if (!VerifyRequest(
-        verifier,  values->Get(i), types->GetEnum<Request>(i))) {
-      return false;
-    }
-  }
-  return true;
+inline ::flatbuffers::Offset<WifiStatus> CreateWifiStatus(::flatbuffers::FlatBufferBuilder &_fbb, const WifiStatusT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return WifiStatus::Pack(_fbb, _o, _rehasher);
 }
 
-template <bool B>
-inline bool VerifyResponse(::flatbuffers::VerifierTemplate<B> &verifier, const void *obj, Response type) {
-  switch (type) {
-    case Response_NONE: {
-      return true;
-    }
-    case Response_Heartbeat: {
-      auto ptr = reinterpret_cast<const CoprocessorProto::Heartbeat *>(obj);
-      return verifier.VerifyTable(ptr);
-    }
-    case Response_WifiStatus: {
-      auto ptr = reinterpret_cast<const CoprocessorProto::WifiStatus *>(obj);
-      return verifier.VerifyTable(ptr);
-    }
-    case Response_ProvisioningStatus: {
-      auto ptr = reinterpret_cast<const CoprocessorProto::ProvisioningStatus *>(obj);
-      return verifier.VerifyTable(ptr);
-    }
-    case Response_StreamChunk: {
-      auto ptr = reinterpret_cast<const CoprocessorProto::StreamChunk *>(obj);
-      return verifier.VerifyTable(ptr);
-    }
-    case Response_Hello: {
-      auto ptr = reinterpret_cast<const CoprocessorProto::Hello *>(obj);
-      return verifier.VerifyTable(ptr);
-    }
-    case Response_TimeSync: {
-      auto ptr = reinterpret_cast<const CoprocessorProto::TimeSync *>(obj);
-      return verifier.VerifyTable(ptr);
-    }
-    case Response_Media_StateUpdate: {
-      auto ptr = reinterpret_cast<const CoprocessorProto::Media::StateUpdate *>(obj);
-      return verifier.VerifyTable(ptr);
-    }
-    case Response_Media_TopologyUpdate: {
-      auto ptr = reinterpret_cast<const CoprocessorProto::Media::TopologyUpdate *>(obj);
-      return verifier.VerifyTable(ptr);
-    }
-    default: return true;
-  }
+inline ::flatbuffers::Offset<WifiStatus> WifiStatus::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const WifiStatusT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const WifiStatusT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _connected = _o->connected;
+  auto _ip = _o->ip.empty() ? 0 : _fbb.CreateString(_o->ip);
+  auto _ssid = _o->ssid.empty() ? 0 : _fbb.CreateString(_o->ssid);
+  auto _rssi = _o->rssi;
+  return CoprocessorProto::CreateWifiStatus(
+      _fbb,
+      _connected,
+      _ip,
+      _ssid,
+      _rssi);
 }
 
-template <bool B>
-inline bool VerifyResponseVector(::flatbuffers::VerifierTemplate<B> &verifier, const ::flatbuffers::Vector<::flatbuffers::Offset<void>> *values, const ::flatbuffers::Vector<uint8_t> *types) {
-  if (!values || !types) return !values && !types;
-  if (values->size() != types->size()) return false;
-  for (::flatbuffers::uoffset_t i = 0; i < values->size(); ++i) {
-    if (!VerifyResponse(
-        verifier,  values->Get(i), types->GetEnum<Response>(i))) {
-      return false;
-    }
-  }
-  return true;
+inline StartProvisioningRequestT *StartProvisioningRequest::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<StartProvisioningRequestT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
 }
 
-inline const CoprocessorProto::RequestEnvelope *GetRequestEnvelope(const void *buf) {
-  return ::flatbuffers::GetRoot<CoprocessorProto::RequestEnvelope>(buf);
+inline void StartProvisioningRequest::UnPackTo(StartProvisioningRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = timeout_seconds(); _o->timeout_seconds = _e; }
 }
 
-inline const CoprocessorProto::RequestEnvelope *GetSizePrefixedRequestEnvelope(const void *buf) {
-  return ::flatbuffers::GetSizePrefixedRoot<CoprocessorProto::RequestEnvelope>(buf);
+inline ::flatbuffers::Offset<StartProvisioningRequest> CreateStartProvisioningRequest(::flatbuffers::FlatBufferBuilder &_fbb, const StartProvisioningRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return StartProvisioningRequest::Pack(_fbb, _o, _rehasher);
 }
 
-template <bool B = false>
-inline bool VerifyRequestEnvelopeBuffer(
-    ::flatbuffers::VerifierTemplate<B> &verifier) {
-  return verifier.template VerifyBuffer<CoprocessorProto::RequestEnvelope>(nullptr);
+inline ::flatbuffers::Offset<StartProvisioningRequest> StartProvisioningRequest::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const StartProvisioningRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const StartProvisioningRequestT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _timeout_seconds = _o->timeout_seconds;
+  return CoprocessorProto::CreateStartProvisioningRequest(
+      _fbb,
+      _timeout_seconds);
 }
 
-template <bool B = false>
-inline bool VerifySizePrefixedRequestEnvelopeBuffer(
-    ::flatbuffers::VerifierTemplate<B> &verifier) {
-  return verifier.template VerifySizePrefixedBuffer<CoprocessorProto::RequestEnvelope>(nullptr);
+inline ProvisioningStatusT *ProvisioningStatus::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<ProvisioningStatusT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
 }
 
-inline void FinishRequestEnvelopeBuffer(
-    ::flatbuffers::FlatBufferBuilder &fbb,
-    ::flatbuffers::Offset<CoprocessorProto::RequestEnvelope> root) {
-  fbb.Finish(root);
+inline void ProvisioningStatus::UnPackTo(ProvisioningStatusT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = state(); _o->state = _e; }
 }
 
-inline void FinishSizePrefixedRequestEnvelopeBuffer(
-    ::flatbuffers::FlatBufferBuilder &fbb,
-    ::flatbuffers::Offset<CoprocessorProto::RequestEnvelope> root) {
-  fbb.FinishSizePrefixed(root);
+inline ::flatbuffers::Offset<ProvisioningStatus> CreateProvisioningStatus(::flatbuffers::FlatBufferBuilder &_fbb, const ProvisioningStatusT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return ProvisioningStatus::Pack(_fbb, _o, _rehasher);
+}
+
+inline ::flatbuffers::Offset<ProvisioningStatus> ProvisioningStatus::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const ProvisioningStatusT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const ProvisioningStatusT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _state = _o->state;
+  return CoprocessorProto::CreateProvisioningStatus(
+      _fbb,
+      _state);
+}
+
+inline TimeSyncT *TimeSync::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<TimeSyncT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void TimeSync::UnPackTo(TimeSyncT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = epoch_seconds(); _o->epoch_seconds = _e; }
+  { auto _e = subsec_micros(); _o->subsec_micros = _e; }
+}
+
+inline ::flatbuffers::Offset<TimeSync> CreateTimeSync(::flatbuffers::FlatBufferBuilder &_fbb, const TimeSyncT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return TimeSync::Pack(_fbb, _o, _rehasher);
+}
+
+inline ::flatbuffers::Offset<TimeSync> TimeSync::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const TimeSyncT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const TimeSyncT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _epoch_seconds = _o->epoch_seconds;
+  auto _subsec_micros = _o->subsec_micros;
+  return CoprocessorProto::CreateTimeSync(
+      _fbb,
+      _epoch_seconds,
+      _subsec_micros);
+}
+
+inline BatteryStatusT *BatteryStatus::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<BatteryStatusT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void BatteryStatus::UnPackTo(BatteryStatusT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = millivolts(); _o->millivolts = _e; }
+  { auto _e = percent(); _o->percent = _e; }
+  { auto _e = is_plugged(); _o->is_plugged = _e; }
+}
+
+inline ::flatbuffers::Offset<BatteryStatus> CreateBatteryStatus(::flatbuffers::FlatBufferBuilder &_fbb, const BatteryStatusT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return BatteryStatus::Pack(_fbb, _o, _rehasher);
+}
+
+inline ::flatbuffers::Offset<BatteryStatus> BatteryStatus::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const BatteryStatusT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const BatteryStatusT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _millivolts = _o->millivolts;
+  auto _percent = _o->percent;
+  auto _is_plugged = _o->is_plugged;
+  return CoprocessorProto::CreateBatteryStatus(
+      _fbb,
+      _millivolts,
+      _percent,
+      _is_plugged);
+}
+
+inline ActionRequestT *ActionRequest::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<ActionRequestT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void ActionRequest::UnPackTo(ActionRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = endpoint_ip(); if (_e) _o->endpoint_ip = _e->str(); }
+  { auto _e = endpoint_port(); _o->endpoint_port = _e; }
+  { auto _e = action(); _o->action = _e; }
+}
+
+inline ::flatbuffers::Offset<ActionRequest> CreateActionRequest(::flatbuffers::FlatBufferBuilder &_fbb, const ActionRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return ActionRequest::Pack(_fbb, _o, _rehasher);
+}
+
+inline ::flatbuffers::Offset<ActionRequest> ActionRequest::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const ActionRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const ActionRequestT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _endpoint_ip = _o->endpoint_ip.empty() ? 0 : _fbb.CreateString(_o->endpoint_ip);
+  auto _endpoint_port = _o->endpoint_port;
+  auto _action = _o->action;
+  return CoprocessorProto::CreateActionRequest(
+      _fbb,
+      _endpoint_ip,
+      _endpoint_port,
+      _action);
+}
+
+inline VolumeRequestT *VolumeRequest::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<VolumeRequestT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void VolumeRequest::UnPackTo(VolumeRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = endpoint_ip(); if (_e) _o->endpoint_ip = _e->str(); }
+  { auto _e = endpoint_port(); _o->endpoint_port = _e; }
+  { auto _e = volume(); _o->volume = _e; }
+  { auto _e = is_relative(); _o->is_relative = _e; }
+}
+
+inline ::flatbuffers::Offset<VolumeRequest> CreateVolumeRequest(::flatbuffers::FlatBufferBuilder &_fbb, const VolumeRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return VolumeRequest::Pack(_fbb, _o, _rehasher);
+}
+
+inline ::flatbuffers::Offset<VolumeRequest> VolumeRequest::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const VolumeRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const VolumeRequestT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _endpoint_ip = _o->endpoint_ip.empty() ? 0 : _fbb.CreateString(_o->endpoint_ip);
+  auto _endpoint_port = _o->endpoint_port;
+  auto _volume = _o->volume;
+  auto _is_relative = _o->is_relative;
+  return CoprocessorProto::CreateVolumeRequest(
+      _fbb,
+      _endpoint_ip,
+      _endpoint_port,
+      _volume,
+      _is_relative);
+}
+
+inline TrackMetadataT *TrackMetadata::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<TrackMetadataT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void TrackMetadata::UnPackTo(TrackMetadataT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = title(); if (_e) _o->title = _e->str(); }
+  { auto _e = artist(); if (_e) _o->artist = _e->str(); }
+  { auto _e = album(); if (_e) _o->album = _e->str(); }
+  { auto _e = duration_seconds(); _o->duration_seconds = _e; }
+  { auto _e = elapsed_seconds(); _o->elapsed_seconds = _e; }
+  { auto _e = album_art_uri(); if (_e) _o->album_art_uri = _e->str(); }
+}
+
+inline ::flatbuffers::Offset<TrackMetadata> CreateTrackMetadata(::flatbuffers::FlatBufferBuilder &_fbb, const TrackMetadataT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return TrackMetadata::Pack(_fbb, _o, _rehasher);
+}
+
+inline ::flatbuffers::Offset<TrackMetadata> TrackMetadata::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const TrackMetadataT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const TrackMetadataT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _title = _o->title.empty() ? 0 : _fbb.CreateString(_o->title);
+  auto _artist = _o->artist.empty() ? 0 : _fbb.CreateString(_o->artist);
+  auto _album = _o->album.empty() ? 0 : _fbb.CreateString(_o->album);
+  auto _duration_seconds = _o->duration_seconds;
+  auto _elapsed_seconds = _o->elapsed_seconds;
+  auto _album_art_uri = _o->album_art_uri.empty() ? 0 : _fbb.CreateString(_o->album_art_uri);
+  return CoprocessorProto::CreateTrackMetadata(
+      _fbb,
+      _title,
+      _artist,
+      _album,
+      _duration_seconds,
+      _elapsed_seconds,
+      _album_art_uri);
+}
+
+inline StateUpdateT::StateUpdateT(const StateUpdateT &o)
+      : endpoint_ip(o.endpoint_ip),
+        transport_state(o.transport_state),
+        volume(o.volume),
+        is_muted(o.is_muted),
+        track((o.track) ? new CoprocessorProto::TrackMetadataT(*o.track) : nullptr) {
+}
+
+inline StateUpdateT &StateUpdateT::operator=(StateUpdateT o) FLATBUFFERS_NOEXCEPT {
+  std::swap(endpoint_ip, o.endpoint_ip);
+  std::swap(transport_state, o.transport_state);
+  std::swap(volume, o.volume);
+  std::swap(is_muted, o.is_muted);
+  std::swap(track, o.track);
+  return *this;
+}
+
+inline StateUpdateT *StateUpdate::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<StateUpdateT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void StateUpdate::UnPackTo(StateUpdateT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = endpoint_ip(); if (_e) _o->endpoint_ip = _e->str(); }
+  { auto _e = transport_state(); _o->transport_state = _e; }
+  { auto _e = volume(); _o->volume = _e; }
+  { auto _e = is_muted(); _o->is_muted = _e; }
+  { auto _e = track(); if (_e) { if(_o->track) { _e->UnPackTo(_o->track.get(), _resolver); } else { _o->track = std::unique_ptr<CoprocessorProto::TrackMetadataT>(_e->UnPack(_resolver)); } } else if (_o->track) { _o->track.reset(); } }
+}
+
+inline ::flatbuffers::Offset<StateUpdate> CreateStateUpdate(::flatbuffers::FlatBufferBuilder &_fbb, const StateUpdateT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return StateUpdate::Pack(_fbb, _o, _rehasher);
+}
+
+inline ::flatbuffers::Offset<StateUpdate> StateUpdate::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const StateUpdateT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const StateUpdateT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _endpoint_ip = _o->endpoint_ip.empty() ? 0 : _fbb.CreateString(_o->endpoint_ip);
+  auto _transport_state = _o->transport_state;
+  auto _volume = _o->volume;
+  auto _is_muted = _o->is_muted;
+  auto _track = _o->track ? CreateTrackMetadata(_fbb, _o->track.get(), _rehasher) : 0;
+  return CoprocessorProto::CreateStateUpdate(
+      _fbb,
+      _endpoint_ip,
+      _transport_state,
+      _volume,
+      _is_muted,
+      _track);
+}
+
+inline MemberT *Member::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<MemberT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void Member::UnPackTo(MemberT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = name(); if (_e) _o->name = _e->str(); }
+  { auto _e = uuid(); if (_e) _o->uuid = _e->str(); }
+  { auto _e = ip(); if (_e) _o->ip = _e->str(); }
+}
+
+inline ::flatbuffers::Offset<Member> CreateMember(::flatbuffers::FlatBufferBuilder &_fbb, const MemberT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return Member::Pack(_fbb, _o, _rehasher);
+}
+
+inline ::flatbuffers::Offset<Member> Member::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const MemberT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const MemberT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _name = _o->name.empty() ? 0 : _fbb.CreateString(_o->name);
+  auto _uuid = _o->uuid.empty() ? 0 : _fbb.CreateString(_o->uuid);
+  auto _ip = _o->ip.empty() ? 0 : _fbb.CreateString(_o->ip);
+  return CoprocessorProto::CreateMember(
+      _fbb,
+      _name,
+      _uuid,
+      _ip);
+}
+
+inline GroupT::GroupT(const GroupT &o)
+      : id(o.id),
+        name(o.name),
+        coordinator_ip(o.coordinator_ip),
+        coordinator_port(o.coordinator_port),
+        is_playing(o.is_playing) {
+  members.reserve(o.members.size());
+  for (const auto &members_ : o.members) { members.emplace_back((members_) ? new CoprocessorProto::MemberT(*members_) : nullptr); }
+}
+
+inline GroupT &GroupT::operator=(GroupT o) FLATBUFFERS_NOEXCEPT {
+  std::swap(id, o.id);
+  std::swap(name, o.name);
+  std::swap(coordinator_ip, o.coordinator_ip);
+  std::swap(coordinator_port, o.coordinator_port);
+  std::swap(is_playing, o.is_playing);
+  std::swap(members, o.members);
+  return *this;
+}
+
+inline GroupT *Group::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<GroupT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void Group::UnPackTo(GroupT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = id(); if (_e) _o->id = _e->str(); }
+  { auto _e = name(); if (_e) _o->name = _e->str(); }
+  { auto _e = coordinator_ip(); if (_e) _o->coordinator_ip = _e->str(); }
+  { auto _e = coordinator_port(); _o->coordinator_port = _e; }
+  { auto _e = is_playing(); _o->is_playing = _e; }
+  { auto _e = members(); if (_e) { _o->members.resize(_e->size()); for (::flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { if(_o->members[_i]) { _e->Get(_i)->UnPackTo(_o->members[_i].get(), _resolver); } else { _o->members[_i] = std::unique_ptr<CoprocessorProto::MemberT>(_e->Get(_i)->UnPack(_resolver)); } } } else { _o->members.resize(0); } }
+}
+
+inline ::flatbuffers::Offset<Group> CreateGroup(::flatbuffers::FlatBufferBuilder &_fbb, const GroupT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return Group::Pack(_fbb, _o, _rehasher);
+}
+
+inline ::flatbuffers::Offset<Group> Group::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const GroupT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const GroupT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _id = _o->id.empty() ? 0 : _fbb.CreateString(_o->id);
+  auto _name = _o->name.empty() ? 0 : _fbb.CreateString(_o->name);
+  auto _coordinator_ip = _o->coordinator_ip.empty() ? 0 : _fbb.CreateString(_o->coordinator_ip);
+  auto _coordinator_port = _o->coordinator_port;
+  auto _is_playing = _o->is_playing;
+  auto _members = _o->members.size() ? _fbb.CreateVector<::flatbuffers::Offset<CoprocessorProto::Member>> (_o->members.size(), [](size_t i, _VectorArgs *__va) { return CreateMember(*__va->__fbb, __va->__o->members[i].get(), __va->__rehasher); }, &_va ) : 0;
+  return CoprocessorProto::CreateGroup(
+      _fbb,
+      _id,
+      _name,
+      _coordinator_ip,
+      _coordinator_port,
+      _is_playing,
+      _members);
+}
+
+inline TopologyUpdateT::TopologyUpdateT(const TopologyUpdateT &o)
+      : sequence(o.sequence),
+        group_index(o.group_index),
+        total_groups(o.total_groups),
+        group((o.group) ? new CoprocessorProto::GroupT(*o.group) : nullptr) {
+}
+
+inline TopologyUpdateT &TopologyUpdateT::operator=(TopologyUpdateT o) FLATBUFFERS_NOEXCEPT {
+  std::swap(sequence, o.sequence);
+  std::swap(group_index, o.group_index);
+  std::swap(total_groups, o.total_groups);
+  std::swap(group, o.group);
+  return *this;
+}
+
+inline TopologyUpdateT *TopologyUpdate::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<TopologyUpdateT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void TopologyUpdate::UnPackTo(TopologyUpdateT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = sequence(); _o->sequence = _e; }
+  { auto _e = group_index(); _o->group_index = _e; }
+  { auto _e = total_groups(); _o->total_groups = _e; }
+  { auto _e = group(); if (_e) { if(_o->group) { _e->UnPackTo(_o->group.get(), _resolver); } else { _o->group = std::unique_ptr<CoprocessorProto::GroupT>(_e->UnPack(_resolver)); } } else if (_o->group) { _o->group.reset(); } }
+}
+
+inline ::flatbuffers::Offset<TopologyUpdate> CreateTopologyUpdate(::flatbuffers::FlatBufferBuilder &_fbb, const TopologyUpdateT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return TopologyUpdate::Pack(_fbb, _o, _rehasher);
+}
+
+inline ::flatbuffers::Offset<TopologyUpdate> TopologyUpdate::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const TopologyUpdateT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const TopologyUpdateT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _sequence = _o->sequence;
+  auto _group_index = _o->group_index;
+  auto _total_groups = _o->total_groups;
+  auto _group = _o->group ? CreateGroup(_fbb, _o->group.get(), _rehasher) : 0;
+  return CoprocessorProto::CreateTopologyUpdate(
+      _fbb,
+      _sequence,
+      _group_index,
+      _total_groups,
+      _group);
+}
+
+inline TopologyRequestT *TopologyRequest::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<TopologyRequestT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void TopologyRequest::UnPackTo(TopologyRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = seed_ip(); if (_e) _o->seed_ip = _e->str(); }
+  { auto _e = seed_port(); _o->seed_port = _e; }
+}
+
+inline ::flatbuffers::Offset<TopologyRequest> CreateTopologyRequest(::flatbuffers::FlatBufferBuilder &_fbb, const TopologyRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return TopologyRequest::Pack(_fbb, _o, _rehasher);
+}
+
+inline ::flatbuffers::Offset<TopologyRequest> TopologyRequest::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const TopologyRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const TopologyRequestT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _seed_ip = _o->seed_ip.empty() ? 0 : _fbb.CreateString(_o->seed_ip);
+  auto _seed_port = _o->seed_port;
+  return CoprocessorProto::CreateTopologyRequest(
+      _fbb,
+      _seed_ip,
+      _seed_port);
+}
+
+inline PlaybackRequestT *PlaybackRequest::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<PlaybackRequestT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void PlaybackRequest::UnPackTo(PlaybackRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = endpoint_ip(); if (_e) _o->endpoint_ip = _e->str(); }
+  { auto _e = endpoint_port(); _o->endpoint_port = _e; }
+}
+
+inline ::flatbuffers::Offset<PlaybackRequest> CreatePlaybackRequest(::flatbuffers::FlatBufferBuilder &_fbb, const PlaybackRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return PlaybackRequest::Pack(_fbb, _o, _rehasher);
+}
+
+inline ::flatbuffers::Offset<PlaybackRequest> PlaybackRequest::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const PlaybackRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const PlaybackRequestT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _endpoint_ip = _o->endpoint_ip.empty() ? 0 : _fbb.CreateString(_o->endpoint_ip);
+  auto _endpoint_port = _o->endpoint_port;
+  return CoprocessorProto::CreatePlaybackRequest(
+      _fbb,
+      _endpoint_ip,
+      _endpoint_port);
+}
+
+inline GroupSummaryT *GroupSummary::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<GroupSummaryT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void GroupSummary::UnPackTo(GroupSummaryT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = id(); if (_e) _o->id = _e->str(); }
+  { auto _e = is_playing(); _o->is_playing = _e; }
+  { auto _e = title(); if (_e) _o->title = _e->str(); }
+}
+
+inline ::flatbuffers::Offset<GroupSummary> CreateGroupSummary(::flatbuffers::FlatBufferBuilder &_fbb, const GroupSummaryT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return GroupSummary::Pack(_fbb, _o, _rehasher);
+}
+
+inline ::flatbuffers::Offset<GroupSummary> GroupSummary::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const GroupSummaryT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const GroupSummaryT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _id = _o->id.empty() ? 0 : _fbb.CreateString(_o->id);
+  auto _is_playing = _o->is_playing;
+  auto _title = _o->title.empty() ? 0 : _fbb.CreateString(_o->title);
+  return CoprocessorProto::CreateGroupSummary(
+      _fbb,
+      _id,
+      _is_playing,
+      _title);
+}
+
+inline GroupsSummaryT::GroupsSummaryT(const GroupsSummaryT &o) {
+  groups.reserve(o.groups.size());
+  for (const auto &groups_ : o.groups) { groups.emplace_back((groups_) ? new CoprocessorProto::GroupSummaryT(*groups_) : nullptr); }
+}
+
+inline GroupsSummaryT &GroupsSummaryT::operator=(GroupsSummaryT o) FLATBUFFERS_NOEXCEPT {
+  std::swap(groups, o.groups);
+  return *this;
+}
+
+inline GroupsSummaryT *GroupsSummary::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<GroupsSummaryT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void GroupsSummary::UnPackTo(GroupsSummaryT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = groups(); if (_e) { _o->groups.resize(_e->size()); for (::flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { if(_o->groups[_i]) { _e->Get(_i)->UnPackTo(_o->groups[_i].get(), _resolver); } else { _o->groups[_i] = std::unique_ptr<CoprocessorProto::GroupSummaryT>(_e->Get(_i)->UnPack(_resolver)); } } } else { _o->groups.resize(0); } }
+}
+
+inline ::flatbuffers::Offset<GroupsSummary> CreateGroupsSummary(::flatbuffers::FlatBufferBuilder &_fbb, const GroupsSummaryT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return GroupsSummary::Pack(_fbb, _o, _rehasher);
+}
+
+inline ::flatbuffers::Offset<GroupsSummary> GroupsSummary::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const GroupsSummaryT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const GroupsSummaryT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _groups = _o->groups.size() ? _fbb.CreateVector<::flatbuffers::Offset<CoprocessorProto::GroupSummary>> (_o->groups.size(), [](size_t i, _VectorArgs *__va) { return CreateGroupSummary(*__va->__fbb, __va->__o->groups[i].get(), __va->__rehasher); }, &_va ) : 0;
+  return CoprocessorProto::CreateGroupsSummary(
+      _fbb,
+      _groups);
 }
 
 }  // namespace CoprocessorProto

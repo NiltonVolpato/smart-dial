@@ -1,328 +1,292 @@
 // Copyright © 2026 Nilton Volpato
 // SPDX-License-Identifier: MIT
 
-use alloc::vec;
+extern crate std;
+use std::cell::RefCell;
+use std::collections::{BTreeMap, VecDeque};
+use std::task::{Context, Poll};
+use std::vec;
+use std::vec::Vec;
+
+use tether::{MethodId, Pack, RawCall, RawChannel, Status, Table, Transport};
 
 use super::*;
 
-#[test]
-fn test_roundtrip_request_heartbeat() {
-    let mut builder = flatbuffers::FlatBufferBuilder::new();
-    let batt = proto::BatteryStatus::create(
-        &mut builder,
-        &proto::BatteryStatusArgs { millivolts: 4120, percent: 92, is_plugged: false },
-    );
-    let heartbeat = proto::Heartbeat::create(
-        &mut builder,
-        &proto::HeartbeatArgs { uptime_ms: 123456789, heap_free: 250000, battery: Some(batt) },
-    );
-    let envelope = proto::RequestEnvelope::create(
-        &mut builder,
-        &proto::RequestEnvelopeArgs {
-            message_type: proto::Request::Heartbeat,
-            message: Some(heartbeat.as_union_value()),
-        },
-    );
-    builder.finish_size_prefixed(envelope, None);
+// --- In-Memory Fake Transport for testing ---
 
-    let finished_data = builder.finished_data();
-    let wire_packet = encode_packet(finished_data);
+type Stream = (Vec<Vec<u8>>, Result<(), Status>);
 
-    assert_eq!(*wire_packet.last().unwrap(), 0x00);
-
-    let mut scratch = [0u8; 1024];
-    let decoded = decode_packet(&wire_packet, &mut scratch).expect("Decoding must succeed");
-
-    let parsed = proto::size_prefixed_root_as_request_envelope(decoded)
-        .expect("Flatbuffers parse must succeed");
-    assert_eq!(parsed.message_type(), proto::Request::Heartbeat);
-    let hb = parsed.message_as_heartbeat().expect("Must have heartbeat");
-    assert_eq!(hb.uptime_ms(), 123456789);
-    assert_eq!(hb.heap_free(), 250000);
-    let batt_parsed = hb.battery().expect("Must have battery");
-    assert_eq!(batt_parsed.millivolts(), 4120);
-    assert_eq!(batt_parsed.percent(), 92);
-    assert!(!batt_parsed.is_plugged());
+#[derive(Default)]
+struct FakeTransport {
+    requests: RefCell<Vec<(MethodId, Vec<u8>)>>,
+    responses: RefCell<BTreeMap<MethodId, Result<Vec<u8>, Status>>>,
+    channels: RefCell<BTreeMap<MethodId, Stream>>,
 }
 
-#[test]
-fn test_roundtrip_response_wifi_status() {
-    let mut builder = flatbuffers::FlatBufferBuilder::new();
-    let ip_str = builder.create_string("192.168.1.105");
-    let ssid_str = builder.create_string("SanFrancisco-Guest");
-    let wifi_status = proto::WifiStatus::create(
-        &mut builder,
-        &proto::WifiStatusArgs {
-            connected: true,
-            ip: Some(ip_str),
-            ssid: Some(ssid_str),
-            rssi: -58,
-        },
-    );
-    let envelope = proto::ResponseEnvelope::create(
-        &mut builder,
-        &proto::ResponseEnvelopeArgs {
-            message_type: proto::Response::WifiStatus,
-            message: Some(wifi_status.as_union_value()),
-        },
-    );
-    builder.finish_size_prefixed(envelope, None);
-
-    let wire_packet = encode_packet(builder.finished_data());
-    let mut scratch = [0u8; 1024];
-    let decoded = decode_packet(&wire_packet, &mut scratch).expect("Decoding must succeed");
-
-    let parsed = flatbuffers::size_prefixed_root::<proto::ResponseEnvelope>(decoded)
-        .expect("Flatbuffers parse must succeed");
-    assert_eq!(parsed.message_type(), proto::Response::WifiStatus);
-    let status = parsed.message_as_wifi_status().expect("Must have WifiStatus");
-    assert!(status.connected());
-    assert_eq!(status.ip(), Some("192.168.1.105"));
-    assert_eq!(status.ssid(), Some("SanFrancisco-Guest"));
-    assert_eq!(status.rssi(), -58);
-}
-
-#[test]
-fn test_crc_corruption_detection() {
-    let mut builder = flatbuffers::FlatBufferBuilder::new();
-    let hb = proto::Heartbeat::create(
-        &mut builder,
-        &proto::HeartbeatArgs { uptime_ms: 42, heap_free: 1000, battery: None },
-    );
-    let envelope = proto::RequestEnvelope::create(
-        &mut builder,
-        &proto::RequestEnvelopeArgs {
-            message_type: proto::Request::Heartbeat,
-            message: Some(hb.as_union_value()),
-        },
-    );
-    builder.finish_size_prefixed(envelope, None);
-
-    let mut wire_packet = encode_packet(builder.finished_data());
-
-    // Corrupt one non-delimiter byte in the encoded frame
-    if wire_packet[2] == 0xFF {
-        wire_packet[2] = 0x01;
-    } else {
-        wire_packet[2] = 0xFF;
+impl FakeTransport {
+    fn respond(&self, method: MethodId, result: Result<&impl Pack, Status>) {
+        self.responses.borrow_mut().insert(method, result.map(Pack::to_bytes));
     }
 
-    let mut scratch = [0u8; 1024];
-    let result = decode_packet(&wire_packet, &mut scratch);
-    assert!(result.is_err(), "Corrupted wire packet must be rejected by COBS or CRC");
-}
-
-#[test]
-fn test_stream_accumulator_resynchronization() {
-    let mut accumulator: FrameAccumulator<1024> = FrameAccumulator::new();
-
-    // 1. Send valid packet 1
-    let mut builder = flatbuffers::FlatBufferBuilder::new();
-    let hb1 = proto::Heartbeat::create(
-        &mut builder,
-        &proto::HeartbeatArgs { uptime_ms: 100, heap_free: 5000, battery: None },
-    );
-    let env1 = proto::RequestEnvelope::create(
-        &mut builder,
-        &proto::RequestEnvelopeArgs {
-            message_type: proto::Request::Heartbeat,
-            message: Some(hb1.as_union_value()),
-        },
-    );
-    builder.finish_size_prefixed(env1, None);
-    let packet1 = encode_packet(builder.finished_data());
-
-    let mut received1 = None;
-    for &b in &packet1 {
-        if let Some(res) = accumulator.push_byte(b) {
-            received1 = Some(res.map(|p| p.to_vec()));
-        }
+    fn stream(&self, method: MethodId, items: Vec<Vec<u8>>, end: Result<(), Status>) {
+        self.channels.borrow_mut().insert(method, (items, end));
     }
-    assert!(received1.is_some() && received1.unwrap().is_ok());
+}
 
-    // 2. Inject noisy garbage bytes followed by 0x00 delimiter
-    let garbage = vec![0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0, 0x00];
-    let mut garbage_res = None;
-    for &b in &garbage {
-        if let Some(res) = accumulator.push_byte(b) {
-            garbage_res = Some(res.map(|p| p.to_vec()));
-        }
+impl Transport for FakeTransport {
+    type Call = ReadyCall;
+    type Channel = QueuedChannel;
+
+    fn call(&self, method: MethodId, request: &[u8], _timeout_ms: u32) -> ReadyCall {
+        self.requests.borrow_mut().push((method, request.to_vec()));
+        let result = self.responses.borrow().get(&method).cloned();
+        ReadyCall(Some(result.unwrap_or(Err(Status::Unimplemented))))
     }
-    // Must fail decoding gracefully
-    assert!(garbage_res.is_some() && garbage_res.unwrap().is_err());
 
-    // 3. Immediately send valid packet 2 — accumulator must recover completely!
-    let mut builder2 = flatbuffers::FlatBufferBuilder::new();
-    let hb2 = proto::Heartbeat::create(
-        &mut builder2,
-        &proto::HeartbeatArgs { uptime_ms: 200, heap_free: 6000, battery: None },
-    );
-    let env2 = proto::RequestEnvelope::create(
-        &mut builder2,
-        &proto::RequestEnvelopeArgs {
-            message_type: proto::Request::Heartbeat,
-            message: Some(hb2.as_union_value()),
-        },
-    );
-    builder2.finish_size_prefixed(env2, None);
-    let packet2 = encode_packet(builder2.finished_data());
-
-    let mut received2 = None;
-    for &b in &packet2 {
-        if let Some(res) = accumulator.push_byte(b) {
-            received2 = Some(res.map(|p| p.to_vec()));
-        }
+    fn open(&self, method: MethodId, request: &[u8], _capacity: u16) -> QueuedChannel {
+        self.requests.borrow_mut().push((method, request.to_vec()));
+        let (items, end) = self
+            .channels
+            .borrow()
+            .get(&method)
+            .cloned()
+            .unwrap_or((vec![], Err(Status::Unimplemented)));
+        QueuedChannel { items: items.into(), end }
     }
-    assert!(
-        received2.is_some() && received2.as_ref().unwrap().is_ok(),
-        "Accumulator must successfully lock onto the valid frame after garbage"
-    );
-    let payload = received2.unwrap().unwrap();
-    let parsed = proto::size_prefixed_root_as_request_envelope(&payload).unwrap();
-    let hb = parsed.message_as_heartbeat().unwrap();
-    assert_eq!(hb.uptime_ms(), 200);
-    assert_eq!(hb.heap_free(), 6000);
+}
+
+struct ReadyCall(Option<Result<Vec<u8>, Status>>);
+
+impl RawCall for ReadyCall {
+    type Buf = Vec<u8>;
+
+    fn poll_result(&mut self, _: &mut Context<'_>) -> Poll<Result<Vec<u8>, Status>> {
+        Poll::Ready(self.0.take().expect("polled after completion"))
+    }
+}
+
+struct QueuedChannel {
+    items: VecDeque<Vec<u8>>,
+    end: Result<(), Status>,
+}
+
+impl RawChannel for QueuedChannel {
+    type Buf = Vec<u8>;
+
+    fn poll_recv(&mut self, _: &mut Context<'_>) -> Poll<Option<Vec<u8>>> {
+        Poll::Ready(self.items.pop_front())
+    }
+
+    fn end(&self) -> Option<Result<(), Status>> {
+        self.items.is_empty().then_some(self.end)
+    }
+}
+
+// --- Tests ---
+
+#[test]
+fn test_wifi_status_pack_verify() {
+    let status_obj = proto::WifiStatusT {
+        connected: true,
+        ip: Some("192.168.1.50".into()),
+        ssid: Some("HomeWiFi".into()),
+        rssi: -62,
+    };
+    let bytes = status_obj.to_bytes();
+    let view = proto::WifiStatus::verify(&bytes).expect("Verification must succeed");
+    assert!(view.connected());
+    assert_eq!(view.ip(), Some("192.168.1.50"));
+    assert_eq!(view.ssid(), Some("HomeWiFi"));
+    assert_eq!(view.rssi(), -62);
 }
 
 #[test]
-fn test_roundtrip_provisioning_messages() {
-    // 1. Test StartProvisioning request
-    let mut builder = flatbuffers::FlatBufferBuilder::new();
-    let start_req = proto::StartProvisioning::create(
-        &mut builder,
-        &proto::StartProvisioningArgs { timeout_seconds: 180 },
-    );
-    let env = proto::RequestEnvelope::create(
-        &mut builder,
-        &proto::RequestEnvelopeArgs {
-            message_type: proto::Request::StartProvisioning,
-            message: Some(start_req.as_union_value()),
-        },
-    );
-    builder.finish_size_prefixed(env, None);
-    let packet = encode_packet(builder.finished_data());
-
-    let mut decoded = [0u8; 256];
-    let payload = decode_packet(&packet, &mut decoded).unwrap();
-    let parsed = proto::size_prefixed_root_as_request_envelope(payload).unwrap();
-    assert_eq!(parsed.message_type(), proto::Request::StartProvisioning);
-    let start = parsed.message_as_start_provisioning().unwrap();
-    assert_eq!(start.timeout_seconds(), 180);
-
-    // 2. Test ProvisioningStatus response
-    let mut resp_builder = flatbuffers::FlatBufferBuilder::new();
-    let prov_status = proto::ProvisioningStatus::create(
-        &mut resp_builder,
-        &proto::ProvisioningStatusArgs { state: proto::ProvisioningState::Active },
-    );
-    let resp_env = proto::ResponseEnvelope::create(
-        &mut resp_builder,
-        &proto::ResponseEnvelopeArgs {
-            message_type: proto::Response::ProvisioningStatus,
-            message: Some(prov_status.as_union_value()),
-        },
-    );
-    resp_builder.finish_size_prefixed(resp_env, None);
-    let resp_packet = encode_packet(resp_builder.finished_data());
-
-    let mut resp_decoded = [0u8; 256];
-    let resp_payload = decode_packet(&resp_packet, &mut resp_decoded).unwrap();
-    let parsed_resp = crate::parse_response_envelope(resp_payload).unwrap();
-    assert_eq!(parsed_resp.message_type(), proto::Response::ProvisioningStatus);
-    let status = parsed_resp.message_as_provisioning_status().unwrap();
-    assert_eq!(status.state(), proto::ProvisioningState::Active);
+fn test_time_sync_pack_verify() {
+    let sync_obj = proto::TimeSyncT { epoch_seconds: 1775215000, subsec_micros: 987654 };
+    let bytes = sync_obj.to_bytes();
+    let view = proto::TimeSync::verify(&bytes).expect("Verification must succeed");
+    assert_eq!(view.epoch_seconds(), 1775215000);
+    assert_eq!(view.subsec_micros(), 987654);
 }
 
 #[test]
-fn test_roundtrip_hello() {
-    // 1. Request::Hello
-    let mut builder = flatbuffers::FlatBufferBuilder::new();
-    let hello = proto::Hello::create(&mut builder, &proto::HelloArgs {});
-    let env = proto::RequestEnvelope::create(
-        &mut builder,
-        &proto::RequestEnvelopeArgs {
-            message_type: proto::Request::Hello,
-            message: Some(hello.as_union_value()),
-        },
-    );
-    builder.finish_size_prefixed(env, None);
-    let packet = encode_packet(builder.finished_data());
-
-    let mut decoded = [0u8; 128];
-    let payload = decode_packet(&packet, &mut decoded).unwrap();
-    let parsed = proto::size_prefixed_root_as_request_envelope(payload).unwrap();
-    assert_eq!(parsed.message_type(), proto::Request::Hello);
-    assert!(parsed.message_as_hello().is_some());
-
-    // 2. Response::Hello
-    let mut resp_builder = flatbuffers::FlatBufferBuilder::new();
-    let resp_hello = proto::Hello::create(&mut resp_builder, &proto::HelloArgs {});
-    let resp_env = proto::ResponseEnvelope::create(
-        &mut resp_builder,
-        &proto::ResponseEnvelopeArgs {
-            message_type: proto::Response::Hello,
-            message: Some(resp_hello.as_union_value()),
-        },
-    );
-    resp_builder.finish_size_prefixed(resp_env, None);
-    let resp_packet = encode_packet(resp_builder.finished_data());
-
-    let mut resp_decoded = [0u8; 128];
-    let resp_payload = decode_packet(&resp_packet, &mut resp_decoded).unwrap();
-    let parsed_resp = crate::parse_response_envelope(resp_payload).unwrap();
-    assert_eq!(parsed_resp.message_type(), proto::Response::Hello);
-    assert!(parsed_resp.message_as_hello().is_some());
+fn test_battery_status_pack_verify() {
+    let batt_obj = proto::BatteryStatusT { millivolts: 4180, percent: 95, is_plugged: true };
+    let bytes = batt_obj.to_bytes();
+    let view = proto::BatteryStatus::verify(&bytes).expect("Verification must succeed");
+    assert_eq!(view.millivolts(), 4180);
+    assert_eq!(view.percent(), 95);
+    assert!(view.is_plugged());
 }
 
 #[test]
-fn test_roundtrip_time_sync() {
-    let mut builder = flatbuffers::FlatBufferBuilder::new();
-    let time_sync = proto::TimeSync::create(
-        &mut builder,
-        &proto::TimeSyncArgs { epoch_seconds: 1790596867, subsec_micros: 123456 },
-    );
-    let env = proto::ResponseEnvelope::create(
-        &mut builder,
-        &proto::ResponseEnvelopeArgs {
-            message_type: proto::Response::TimeSync,
-            message: Some(time_sync.as_union_value()),
-        },
-    );
-    builder.finish_size_prefixed(env, None);
-    let packet = encode_packet(builder.finished_data());
+fn test_wifi_client_connect_rpc() {
+    let transport = FakeTransport::default();
+    transport.respond(wifi::CONNECT, Ok(&proto::EmptyT {}));
 
-    let mut decoded = [0u8; 128];
-    let payload = decode_packet(&packet, &mut decoded).unwrap();
-    let parsed = crate::parse_response_envelope(payload).unwrap();
-    assert_eq!(parsed.message_type(), proto::Response::TimeSync);
-    let sync = parsed.message_as_time_sync().unwrap();
-    assert_eq!(sync.epoch_seconds(), 1790596867);
-    assert_eq!(sync.subsec_micros(), 123456);
+    let client = wifi::Client(&transport);
+    let mut call = client.connect(&proto::WifiConnectRequestT {
+        ssid: Some("OfficeNet".into()),
+        password: Some("secret123".into()),
+    });
+
+    let res = call.try_result();
+    assert!(res.is_some());
+    assert!(res.unwrap().is_ok());
+
+    let reqs = transport.requests.borrow();
+    assert_eq!(reqs.len(), 1);
+    assert_eq!(reqs[0].0, wifi::CONNECT);
+    let req_view = proto::WifiConnectRequest::verify(&reqs[0].1).unwrap();
+    assert_eq!(req_view.ssid(), Some("OfficeNet"));
+    assert_eq!(req_view.password(), Some("secret123"));
 }
 
 #[test]
-fn test_roundtrip_battery_status() {
-    let mut builder = flatbuffers::FlatBufferBuilder::new();
-    let batt = proto::BatteryStatus::create(
-        &mut builder,
-        &proto::BatteryStatusArgs { millivolts: 4120, percent: 88, is_plugged: false },
-    );
-    let env = proto::RequestEnvelope::create(
-        &mut builder,
-        &proto::RequestEnvelopeArgs {
-            message_type: proto::Request::BatteryStatus,
-            message: Some(batt.as_union_value()),
-        },
-    );
-    builder.finish_size_prefixed(env, None);
-    let packet = encode_packet(builder.finished_data());
+fn test_wifi_client_watch_stream() {
+    let transport = FakeTransport::default();
+    let item1 = proto::WifiStatusT { connected: false, ip: None, ssid: None, rssi: 0 }.to_bytes();
+    let item2 = proto::WifiStatusT {
+        connected: true,
+        ip: Some("10.0.0.42".into()),
+        ssid: Some("OfficeNet".into()),
+        rssi: -50,
+    }
+    .to_bytes();
 
-    let mut decoded = [0u8; 128];
-    let payload = decode_packet(&packet, &mut decoded).unwrap();
-    let parsed = proto::size_prefixed_root_as_request_envelope(payload).unwrap();
-    assert_eq!(parsed.message_type(), proto::Request::BatteryStatus);
-    let batt_parsed = parsed.message_as_battery_status().unwrap();
-    assert_eq!(batt_parsed.millivolts(), 4120);
-    assert_eq!(batt_parsed.percent(), 88);
-    assert!(!batt_parsed.is_plugged());
+    transport.stream(wifi::WATCH, vec![item1, item2], Ok(()));
+
+    let client = wifi::Client(&transport);
+    let mut stream = client.watch(&proto::EmptyT {}, 4);
+
+    let first = stream.try_recv().expect("first item present");
+    assert!(!first.get().connected());
+
+    let second = stream.try_recv().expect("second item present");
+    assert!(second.get().connected());
+    assert_eq!(second.get().ip(), Some("10.0.0.42"));
+    assert_eq!(second.get().ssid(), Some("OfficeNet"));
+
+    assert!(stream.try_recv().is_none());
+    assert_eq!(stream.end(), Some(Ok(())));
+}
+
+#[test]
+fn test_system_client_report_battery() {
+    let transport = FakeTransport::default();
+    transport.respond(system::REPORT_BATTERY, Ok(&proto::EmptyT {}));
+
+    let client = system::Client(&transport);
+    let mut call = client.report_battery(&proto::BatteryStatusT {
+        millivolts: 3950,
+        percent: 78,
+        is_plugged: false,
+    });
+
+    let res = call.try_result();
+    assert!(res.is_some());
+    assert!(res.unwrap().is_ok());
+
+    let reqs = transport.requests.borrow();
+    assert_eq!(reqs.len(), 1);
+    assert_eq!(reqs[0].0, system::REPORT_BATTERY);
+    let req_view = proto::BatteryStatus::verify(&reqs[0].1).unwrap();
+    assert_eq!(req_view.millivolts(), 3950);
+    assert_eq!(req_view.percent(), 78);
+    assert!(!req_view.is_plugged());
+}
+
+#[test]
+fn test_sonos_topology_pack_verify() {
+    let member = proto::MemberT {
+        name: Some("Living Room".into()),
+        uuid: Some("RINCON_123".into()),
+        ip: Some("192.168.1.100".into()),
+    };
+    let group = proto::GroupT {
+        id: Some("RINCON_123:456".into()),
+        name: Some("Living Room".into()),
+        coordinator_ip: Some("192.168.1.100".into()),
+        coordinator_port: 1400,
+        is_playing: true,
+        members: Some(alloc::vec![member]),
+    };
+    let topo = proto::TopologyUpdateT {
+        sequence: 1,
+        group_index: 0,
+        total_groups: 1,
+        group: Some(alloc::boxed::Box::new(group)),
+    };
+
+    let bytes = topo.to_bytes();
+    let view = proto::TopologyUpdate::verify(&bytes).expect("Verification must succeed");
+    assert_eq!(view.sequence(), 1);
+    assert_eq!(view.group_index(), 0);
+    assert_eq!(view.total_groups(), 1);
+    let g = view.group().expect("group present");
+    assert_eq!(g.name(), Some("Living Room"));
+    assert_eq!(g.coordinator_ip(), Some("192.168.1.100"));
+    assert!(g.is_playing());
+}
+
+#[test]
+fn test_sonos_state_update_pack_verify() {
+    let track = proto::TrackMetadataT {
+        title: Some("The Rope (feat. POLIÇA)".into()),
+        artist: Some("Lane 8".into()),
+        album: Some("Brightest Lights".into()),
+        duration_seconds: Some(295),
+        elapsed_seconds: Some(42),
+        album_art_uri: Some("/getaa?s=1&u=x-sonos-http%3a...".into()),
+    };
+    let state = proto::StateUpdateT {
+        endpoint_ip: Some("192.168.1.105".into()),
+        transport_state: Some(proto::TransportState::Playing),
+        volume: Some(15),
+        is_muted: Some(false),
+        track: Some(alloc::boxed::Box::new(track)),
+    };
+
+    let bytes = state.to_bytes();
+    let view = proto::StateUpdate::verify(&bytes).expect("Verification must succeed");
+    assert_eq!(view.endpoint_ip(), Some("192.168.1.105"));
+    assert_eq!(view.transport_state(), Some(proto::TransportState::Playing));
+    assert_eq!(view.volume(), Some(15));
+    assert_eq!(view.is_muted(), Some(false));
+    let t = view.track().expect("track present");
+    assert_eq!(t.title(), Some("The Rope (feat. POLIÇA)"));
+    assert_eq!(t.artist(), Some("Lane 8"));
+    assert_eq!(t.album(), Some("Brightest Lights"));
+    assert_eq!(t.duration_seconds(), Some(295));
+    assert_eq!(t.elapsed_seconds(), Some(42));
+}
+
+#[test]
+fn test_sonos_client_action_and_volume() {
+    let transport = FakeTransport::default();
+    transport.respond(sonos::ACTION, Ok(&proto::EmptyT {}));
+    transport.respond(sonos::SET_VOLUME, Ok(&proto::EmptyT {}));
+
+    let client = sonos::Client(&transport);
+    let action_req = proto::ActionRequestT {
+        endpoint_ip: Some("192.168.1.100".into()),
+        endpoint_port: 1400,
+        action: proto::ActionType::TogglePlayPause,
+    };
+    let mut action_call = client.action(&action_req);
+    assert!(action_call.try_result().unwrap().is_ok());
+
+    let vol_req = proto::VolumeRequestT {
+        endpoint_ip: Some("192.168.1.100".into()),
+        endpoint_port: 1400,
+        volume: 5,
+        is_relative: true,
+    };
+    let mut vol_call = client.set_volume(&vol_req);
+    assert!(vol_call.try_result().unwrap().is_ok());
+
+    let reqs = transport.requests.borrow();
+    assert_eq!(reqs.len(), 2);
+    assert_eq!(reqs[0].0, sonos::ACTION);
+    assert_eq!(reqs[1].0, sonos::SET_VOLUME);
 }
