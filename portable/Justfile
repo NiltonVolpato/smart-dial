@@ -26,6 +26,11 @@ fmt:
 fmt-check:
     make fmt-check
 
+[doc("Remove build artifacts and formatting stamps.")]
+[group("maintenance")]
+clean:
+    cargo clean
+
 # -----------------------------------------------------------------------------
 # Apps & Simulators (portable apps with Slint MCP)
 # -----------------------------------------------------------------------------

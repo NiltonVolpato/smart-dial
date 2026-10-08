@@ -34,6 +34,11 @@ fmt:
 fmt-check:
     make fmt-check
 
+[doc("Remove build artifacts and formatting stamps.")]
+[group("maintenance")]
+clean:
+    cargo clean
+
 [doc("Typecheck device firmware crates.")]
 [group("verification")]
 check TARGET=DEVICE *ARGS:

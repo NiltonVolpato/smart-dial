@@ -25,8 +25,34 @@ fmt-check *ARGS:
 tidy *ARGS:
     make tidy
 
-[doc("Run all verification steps for co-processor: formatting, lint, and build.")]
-verify: fmt tidy build
+[doc("Run host GoogleTest unit tests for co-processor.")]
+test *ARGS:
+    make test {{ARGS}}
+
+[doc("Remove PlatformIO build artifacts and formatting/lint stamps.")]
+[group("maintenance")]
+clean:
+    make clean
+
+[doc("Run all verification steps for co-processor: formatting, lint, test, and build.")]
+verify: fmt tidy test build
+
+[doc("Build co-processor QEMU virtual test app using ESP-IDF.")]
+qemu-build *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -f "/Users/nilton/.espressif/v6.1/esp-idf/export.sh" ]; then
+        . /Users/nilton/.espressif/v6.1/esp-idf/export.sh >/dev/null 2>&1
+    fi
+    idf.py -C qemu_app -B .cache/coprocessor/qemu build {{ARGS}}
+
+[doc("Run co-processor inside QEMU with OpenEth virtual NIC and Tether UART1 on a pty.")]
+qemu-run UART=".cache/coprocessor/qemu/uart1":
+    qemu_app/run-qemu.sh {{UART}}
+
+[doc("Run automated QEMU integration test suite.")]
+qemu-test *ARGS:
+    qemu_app/test-qemu.sh {{ARGS}}
 
 [doc("Flash co-processor firmware via CH340 and monitor output (interactive, or automated via INTERACTIVE=false).")]
 flash PORT="/dev/cu.usbserial-10" *ARGS:

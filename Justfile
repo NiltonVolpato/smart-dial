@@ -12,8 +12,16 @@ set dotenv-load := true
 set dotenv-filename := [".env", ".env.local"]
 set dotenv-override := true
 
+# Portable workspace. Including app simulator with MCP. Aliased as `host`.
+[group("sub-modules")]
 mod portable
+
+# ESP32 device-specific workspace. Aliased as `device`.
+[group("sub-modules")]
 mod esp32-devices
+
+# Co-processor C++ PlatformIO workspace.
+[group("sub-modules")]
 mod coprocessor
 
 alias device := esp32-devices
@@ -45,6 +53,11 @@ fmt: portable::fmt esp32-devices::fmt coprocessor::fmt
 [parallel]
 fmt-check: portable::fmt-check esp32-devices::fmt-check coprocessor::fmt-check
 
+[doc("Remove build artifacts and formatting/lint stamps from all subprojects.")]
+[group("maintenance")]
+[parallel]
+clean: portable::clean esp32-devices::clean coprocessor::clean
+
 [doc("Typecheck both portable workspace crates and device firmware in parallel.")]
 [group("verification")]
 [parallel]
@@ -55,10 +68,11 @@ check: portable::check esp32-devices::check
 [parallel]
 lint: portable::lint esp32-devices::lint coprocessor::tidy
 
-[doc("Run host unit tests.")]
+[doc("Run host unit tests across portable crates and co-processor.")]
 [group("verification")]
 test *ARGS:
     just portable::test {{ARGS}}
+    just coprocessor::test {{ARGS}}
 
 # -----------------------------------------------------------------------------
 # Verification Suite
