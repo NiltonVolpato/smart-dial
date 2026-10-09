@@ -81,6 +81,60 @@ bool any_failed(const Tuple& sinks) {
 
 }  // namespace detail
 
+// ----------------------------------------------------------------------------
+// Element matchers, for Select(...).with(...)
+// ----------------------------------------------------------------------------
+
+/// An element's attributes as Expat hands them: name, value, ..., null.
+class Attributes {
+ public:
+  explicit Attributes(const char** attrs) : attrs_(attrs) {}
+
+  [[nodiscard]] std::optional<std::string_view> get(
+      std::string_view name) const {
+    for (const char** a = attrs_; *a != nullptr; a += 2) {
+      if (local_name(a[0]) == name) {
+        return std::string_view(a[1]);
+      }
+    }
+    return std::nullopt;
+  }
+
+ private:
+  const char** attrs_;
+};
+
+/// Matches every element: Select() without with().
+struct MatchAll {
+  bool operator()(const Attributes& /*attrs*/) const { return true; }
+};
+
+/// Matches elements whose attribute `name` is `value`: Attr(name, value).
+struct AttrEquals {
+  std::string_view name;
+  std::string_view value;
+  bool operator()(const Attributes& attrs) const {
+    return attrs.get(name) == value;
+  }
+};
+
+/// Matches by custom logic: Predicate([](const Attributes&) { ... }).
+template <typename Fn>
+struct PredicateMatcher {
+  Fn fn;
+  bool operator()(const Attributes& attrs) const { return fn(attrs); }
+};
+
+/// Both must match: what chained with() calls build.
+template <typename A, typename B>
+struct AllOf {
+  A a;
+  B b;
+  bool operator()(const Attributes& attrs) const {
+    return a(attrs) && b(attrs);
+  }
+};
+
 struct NullSink {
   void receive(const auto&) {}
   void done() {}
@@ -91,19 +145,22 @@ struct NullSink {
 // SAX sinks
 // ----------------------------------------------------------------------------
 
-template <typename Downstream>
+template <typename Downstream, typename Matcher = MatchAll>
 class SelectSink {
   std::string_view name_;
+  Matcher matcher_;
   Downstream downstream_;
   int depth_ = 0;
 
  public:
-  SelectSink(std::string_view name, Downstream downstream)
-      : name_(name), downstream_(std::move(downstream)) {}
+  SelectSink(std::string_view name, Matcher matcher, Downstream&& downstream)
+      : name_(name),
+        matcher_(std::move(matcher)),
+        downstream_(std::move(downstream)) {}
 
   void on_start(std::string_view name, const char** attrs) {
     if (depth_ == 0) {
-      if (name == name_) {
+      if (name == name_ && matcher_(Attributes(attrs))) {
         depth_ = 1;
         downstream_.on_start(name, attrs);
       }
@@ -136,7 +193,7 @@ class TextSink {
   int depth_ = 0;
 
  public:
-  explicit TextSink(Downstream downstream)
+  explicit TextSink(Downstream&& downstream)
       : downstream_(std::move(downstream)) {}
 
   void on_start(std::string_view /*name*/, const char** /*attrs*/) {
@@ -174,7 +231,7 @@ class AttrSink {
   bool emitted_ = false;
 
  public:
-  AttrSink(std::string_view name, Downstream downstream)
+  AttrSink(std::string_view name, Downstream&& downstream)
       : name_(name), downstream_(std::move(downstream)) {}
 
   void on_start(std::string_view /*name*/, const char** attrs) {
@@ -242,7 +299,7 @@ class ParseXmlSink {
   }
 
  public:
-  explicit ParseXmlSink(Downstream downstream)
+  explicit ParseXmlSink(Downstream&& downstream)
       : downstream_(std::move(downstream)) {
     init_parser();
   }
@@ -329,7 +386,7 @@ class ConstructSink {
   int depth_ = 0;
 
  public:
-  ConstructSink(Downstream downstream, CollectorsTuple collectors)
+  ConstructSink(Downstream&& downstream, CollectorsTuple&& collectors)
       : downstream_(std::move(downstream)),
         collectors_(std::move(collectors)) {}
 
@@ -381,7 +438,7 @@ class FanoutSink {
   SinksTuple sinks_;
 
  public:
-  FanoutSink(Downstream downstream, SinksTuple sinks)
+  FanoutSink(Downstream&& downstream, SinksTuple&& sinks)
       : downstream_(std::move(downstream)), sinks_(std::move(sinks)) {}
 
   void on_start(std::string_view name, const char** attrs) {
@@ -411,18 +468,34 @@ class FanoutSink {
 // Factories
 // ----------------------------------------------------------------------------
 
+template <typename Matcher = MatchAll>
 struct SelectFactory {
   std::string_view name;
+  Matcher matcher{};
+
+  /// Narrows the selection to elements `m` matches, e.g. Attr("channel",
+  /// "Master") or Predicate(...). Chained calls must all match.
+  template <typename M>
+  [[nodiscard]] auto with(M m) const {
+    if constexpr (std::is_same_v<Matcher, MatchAll>) {
+      return SelectFactory<M>{name, std::move(m)};
+    } else {
+      return SelectFactory<AllOf<Matcher, M>>{name, {matcher, std::move(m)}};
+    }
+  }
 
   template <typename Downstream>
-  auto operator()(Downstream downstream) const {
-    return SelectSink<Downstream>(name, std::move(downstream));
+    requires(!std::is_lvalue_reference_v<Downstream>)
+  auto operator()(Downstream&& downstream) const {
+    return SelectSink<Downstream, Matcher>(name, matcher,
+                                           std::move(downstream));
   }
 };
 
 struct TextFactory {
   template <typename Downstream>
-  auto operator()(Downstream downstream) const {
+    requires(!std::is_lvalue_reference_v<Downstream>)
+  auto operator()(Downstream&& downstream) const {
     return TextSink<Downstream>(std::move(downstream));
   }
 };
@@ -444,12 +517,13 @@ class AttrExpr {
   AttrExpr(std::string_view name) : name_(name) {}
 
   template <typename Downstream>
-  auto operator()(Downstream downstream) const {
+    requires(!std::is_lvalue_reference_v<Downstream>)
+  auto operator()(Downstream&& downstream) const {
     return AttrSink<Downstream>(name_, std::move(downstream));
   }
 
   template <typename T, typename Member>
-  auto make_collector(Member T::* member) const {
+  [[nodiscard]] auto make_collector(Member T::* member) const {
     return AttrBind<T, Member>(member, name_);
   }
 
@@ -458,7 +532,8 @@ class AttrExpr {
 
 struct ParseXmlFactory {
   template <typename Downstream>
-  auto operator()(Downstream downstream) const {
+    requires(!std::is_lvalue_reference_v<Downstream>)
+  auto operator()(Downstream&& downstream) const {
     return ParseXmlSink<Downstream>(std::move(downstream));
   }
 };
@@ -468,7 +543,7 @@ struct InvokeFactory {
   Fn fn;
 
   template <typename Downstream>
-  auto operator()(Downstream /*downstream*/) const {
+  auto operator()(Downstream&& /*downstream*/) const {
     return InvokeSink<Fn>(fn);
   }
 };
@@ -478,7 +553,8 @@ struct ConstructFactory {
   std::tuple<Binds...> binds;
 
   template <typename Downstream>
-  auto operator()(Downstream downstream) const {
+    requires(!std::is_lvalue_reference_v<Downstream>)
+  auto operator()(Downstream&& downstream) const {
     auto collectors = std::apply(
         [](const auto&... b) { return std::make_tuple(b.make_collector()...); },
         binds);
@@ -492,9 +568,12 @@ struct FanoutFactory {
   std::tuple<Factories...> factories;
 
   template <typename Downstream>
-  auto operator()(Downstream downstream) const {
+    requires(!std::is_lvalue_reference_v<Downstream>)
+  auto operator()(Downstream&& downstream) const {
     auto sinks = std::apply(
-        [&](const auto&... f) { return std::make_tuple(f(downstream)...); },
+        [&](const auto&... f) {
+          return std::make_tuple(f(Downstream(downstream))...);
+        },
         factories);
     return FanoutSink<Downstream, decltype(sinks)>(std::move(downstream),
                                                    std::move(sinks));
@@ -507,7 +586,8 @@ struct PipeFactory {
   B b;
 
   template <typename Downstream>
-  auto operator()(Downstream downstream) const {
+    requires(!std::is_lvalue_reference_v<Downstream>)
+  auto operator()(Downstream&& downstream) const {
     return a(b(std::move(downstream)));
   }
 };
@@ -655,7 +735,7 @@ class BindSpec {
   BindSpec(Member T::* member, Expr expr)
       : member_(member), expr_(std::move(expr)) {}
 
-  auto make_collector() const {
+  [[nodiscard]] auto make_collector() const {
     return expr_.template make_collector<T, Member>(member_);
   }
 };
@@ -668,7 +748,7 @@ class FirstExpr {
   FirstExpr(PipelineFactory factory) : factory_(std::move(factory)) {}
 
   template <typename T, typename Member>
-  auto make_collector(Member T::* member) const {
+  [[nodiscard]] auto make_collector(Member T::* member) const {
     return FirstCollector<T, Member, PipelineFactory>(member, factory_);
   }
 };
@@ -681,7 +761,7 @@ class CollectExpr {
   CollectExpr(PipelineFactory factory) : factory_(std::move(factory)) {}
 
   template <typename T, typename Member>
-  auto make_collector(Member T::* member) const {
+  [[nodiscard]] auto make_collector(Member T::* member) const {
     return CollectCollector<T, Member, PipelineFactory>(member, factory_);
   }
 };
@@ -690,9 +770,19 @@ class CollectExpr {
 // User-facing helpers
 // ----------------------------------------------------------------------------
 
-inline auto Select(std::string_view name) { return SelectFactory{name}; }
+inline auto Select(std::string_view name) {
+  return SelectFactory<>{.name = name};
+}
 inline auto Text() { return TextFactory{}; }
 inline auto Attr(std::string_view name) { return AttrExpr{name}; }
+/// A matcher, for Select(...).with(...): attribute `name` equals `value`.
+inline auto Attr(std::string_view name, std::string_view value) {
+  return AttrEquals{.name = name, .value = value};
+}
+template <typename Fn>
+auto Predicate(Fn fn) {
+  return PredicateMatcher<Fn>{std::move(fn)};
+}
 inline auto ParseXml() { return ParseXmlFactory{}; }
 
 template <typename Fn>
@@ -707,7 +797,8 @@ auto Construct(Binds... binds) {
 
 template <typename... Factories>
 auto Fanout(Factories... factories) {
-  return FanoutFactory<Factories...>{std::move(factories)...};
+  // One tuple member: the branches go in through make_tuple, not braces.
+  return FanoutFactory<Factories...>{std::make_tuple(std::move(factories)...)};
 }
 
 template <typename Member, typename T, typename Expr>
