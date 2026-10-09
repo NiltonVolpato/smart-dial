@@ -33,7 +33,7 @@
 #include "services/sonos_service.h"
 #include "services/system_service.h"
 #include "services/wifi_service.h"
-#include "sonos/controller.h"
+#include "sonos/gena.h"
 
 namespace coprocessor {
 
@@ -48,8 +48,11 @@ constexpr std::size_t kMaxStreams = 8;
 // Outgoing HTTP connections at once. lwIP has 16 sockets (sdkconfig): the
 // web server takes 6 (listening, control, 4 clients), these 6, 4 spare.
 constexpr std::size_t kMaxConnections = 6;
+// GENA subscriptions at once: WatchPlayback has two per stream.
+constexpr std::size_t kMaxSubscriptions = 2 * kMaxStreams;
+// Calls' HttpClients, and one per background UNSUBSCRIBE.
 constexpr std::size_t kMaxHttpClients =
-    kMaxCalls * SonosServiceHandler::kMaxHttpClientsPerCall;
+    kMaxCalls * SonosServiceHandler::kMaxHttpClientsPerCall + kMaxSubscriptions;
 // No latest-value buffers: nothing calls Sink::set_latest.
 constexpr std::size_t kMaxLatest = 0;
 
@@ -71,15 +74,18 @@ struct App {
     router.add(sonos_service);
   }
 
-  // First: handlers below keep references to these. Sized per live call,
-  // which tether bounds: a start in the inbox, and its HttpClients (a timer
-  // each; a socket only with a permit).
+  // First: handlers below keep references to these. Sized from what tether
+  // bounds (calls, streams):
+  // - inbox: a start per call and per UNSUBSCRIBE, and per stream a flush
+  //   and a finish;
+  // - timers: one per HttpClient, and per stream a renewal and a resend.
   Reactor reactor{{
-      .inbox = kMaxCalls,
+      .inbox = kMaxCalls + kMaxSubscriptions + 2 * kMaxStreams,
       .watches = kMaxConnections,
-      .timers = kMaxHttpClients,
+      .timers = kMaxHttpClients + 2 * kMaxStreams,
   }};
   ConnectionPermits connections{kMaxConnections, kMaxHttpClients};
+  GenaRegistry gena{kMaxSubscriptions};
   tether::idf::UartIo io;
   CoprocessorServer server{
       new_boot_id(), {.baud_rate = kBaudRate}, kMaxStreams};
@@ -89,7 +95,7 @@ struct App {
   CoprocessorProto::wifi::Service wifi_service{wifi_handler};
   SystemServiceHandler system_handler;
   CoprocessorProto::system::Service system_service{system_handler};
-  SonosServiceHandler sonos_handler{reactor, connections};
+  SonosServiceHandler sonos_handler{reactor, connections, gena};
   CoprocessorProto::sonos::Service sonos_service{sonos_handler};
 };
 
@@ -126,7 +132,6 @@ void reactor_task(void* arg) {
     ESP_LOGW(TAG, "Tether link closed, restarting with new boot id");
     app.server.restart(new_boot_id());
     app.wifi_handler.reset();
-    app.sonos_handler.reset();
   }
 }
 
@@ -151,16 +156,15 @@ void app_start(TetherPins pins) {
   ESP_ERROR_CHECK(esp_vfs_eventfd_register(&eventfd_config));
 
   network_init();
-  web_server_init();
 
   static App app{pins};
+  web_server_init(app.gena);
 
   xTaskCreate(reactor_task, "reactor", 6144, &app, 5, nullptr);
   // Above the app's tasks, so ACKs go out promptly.
   xTaskCreate(tether_io, "tether_io", 4096, &app, 10, nullptr);
 
   time_sync_init();
-  sonos_controller_init();
 
   TimerHandle_t heartbeat_timer = xTimerCreate(
       "heartbeat", pdMS_TO_TICKS(10'000), pdTRUE, nullptr, heartbeat);
