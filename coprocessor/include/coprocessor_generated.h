@@ -35,9 +35,15 @@ struct ProvisioningStatus;
 struct ProvisioningStatusBuilder;
 struct ProvisioningStatusT;
 
-struct TimeSync;
-struct TimeSyncBuilder;
-struct TimeSyncT;
+struct Timestamp;
+
+struct GetTimestampRequest;
+struct GetTimestampRequestBuilder;
+struct GetTimestampRequestT;
+
+struct GetTimestampResponse;
+struct GetTimestampResponseBuilder;
+struct GetTimestampResponseT;
 
 struct BatteryStatus;
 struct BatteryStatusBuilder;
@@ -78,6 +84,10 @@ struct TopologyRequestT;
 struct PlaybackRequest;
 struct PlaybackRequestBuilder;
 struct PlaybackRequestT;
+
+struct GroupsSummaryRequest;
+struct GroupsSummaryRequestBuilder;
+struct GroupsSummaryRequestT;
 
 struct GroupSummary;
 struct GroupSummaryBuilder;
@@ -235,6 +245,39 @@ inline const char *EnumNameServer(Server e) {
   return EnumNamesServer()[index];
 }
 
+FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(8) Timestamp FLATBUFFERS_FINAL_CLASS {
+ private:
+  uint64_t epoch_seconds_;
+  uint32_t subsec_micros_;
+  int32_t padding0__;
+
+ public:
+  struct Traits;
+  Timestamp()
+      : epoch_seconds_(0),
+        subsec_micros_(0),
+        padding0__(0) {
+    (void)padding0__;
+  }
+  Timestamp(uint64_t _epoch_seconds, uint32_t _subsec_micros)
+      : epoch_seconds_(::flatbuffers::EndianScalar(_epoch_seconds)),
+        subsec_micros_(::flatbuffers::EndianScalar(_subsec_micros)),
+        padding0__(0) {
+    (void)padding0__;
+  }
+  uint64_t epoch_seconds() const {
+    return ::flatbuffers::EndianScalar(epoch_seconds_);
+  }
+  uint32_t subsec_micros() const {
+    return ::flatbuffers::EndianScalar(subsec_micros_);
+  }
+};
+FLATBUFFERS_STRUCT_END(Timestamp, 16);
+
+struct Timestamp::Traits {
+  using type = Timestamp;
+};
+
 struct EmptyT : public ::flatbuffers::NativeTable {
   typedef Empty TableType;
 };
@@ -368,7 +411,7 @@ inline ::flatbuffers::Offset<WifiConnectRequest> CreateWifiConnectRequestDirect(
 struct WifiStatusT : public ::flatbuffers::NativeTable {
   typedef WifiStatus TableType;
   bool connected = false;
-  std::string ip{};
+  uint32_t ip = 0;
   std::string ssid{};
   int16_t rssi = 0;
 };
@@ -386,8 +429,8 @@ struct WifiStatus FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   bool connected() const {
     return GetField<uint8_t>(VT_CONNECTED, 0) != 0;
   }
-  const ::flatbuffers::String *ip() const {
-    return GetPointer<const ::flatbuffers::String *>(VT_IP);
+  uint32_t ip() const {
+    return GetField<uint32_t>(VT_IP, 0);
   }
   const ::flatbuffers::String *ssid() const {
     return GetPointer<const ::flatbuffers::String *>(VT_SSID);
@@ -399,8 +442,7 @@ struct WifiStatus FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<uint8_t>(verifier, VT_CONNECTED, 1) &&
-           VerifyOffset(verifier, VT_IP) &&
-           verifier.VerifyString(ip()) &&
+           VerifyField<uint32_t>(verifier, VT_IP, 4) &&
            VerifyOffset(verifier, VT_SSID) &&
            verifier.VerifyString(ssid()) &&
            VerifyField<int16_t>(verifier, VT_RSSI, 2) &&
@@ -418,8 +460,8 @@ struct WifiStatusBuilder {
   void add_connected(bool connected) {
     fbb_.AddElement<uint8_t>(WifiStatus::VT_CONNECTED, static_cast<uint8_t>(connected), 0);
   }
-  void add_ip(::flatbuffers::Offset<::flatbuffers::String> ip) {
-    fbb_.AddOffset(WifiStatus::VT_IP, ip);
+  void add_ip(uint32_t ip) {
+    fbb_.AddElement<uint32_t>(WifiStatus::VT_IP, ip, 0);
   }
   void add_ssid(::flatbuffers::Offset<::flatbuffers::String> ssid) {
     fbb_.AddOffset(WifiStatus::VT_SSID, ssid);
@@ -441,7 +483,7 @@ struct WifiStatusBuilder {
 inline ::flatbuffers::Offset<WifiStatus> CreateWifiStatus(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     bool connected = false,
-    ::flatbuffers::Offset<::flatbuffers::String> ip = 0,
+    uint32_t ip = 0,
     ::flatbuffers::Offset<::flatbuffers::String> ssid = 0,
     int16_t rssi = 0) {
   WifiStatusBuilder builder_(_fbb);
@@ -460,15 +502,14 @@ struct WifiStatus::Traits {
 inline ::flatbuffers::Offset<WifiStatus> CreateWifiStatusDirect(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     bool connected = false,
-    const char *ip = nullptr,
+    uint32_t ip = 0,
     const char *ssid = nullptr,
     int16_t rssi = 0) {
-  auto ip__ = ip ? _fbb.CreateString(ip) : 0;
   auto ssid__ = ssid ? _fbb.CreateString(ssid) : 0;
   return CoprocessorProto::CreateWifiStatus(
       _fbb,
       connected,
-      ip__,
+      ip,
       ssid__,
       rssi);
 }
@@ -593,75 +634,114 @@ struct ProvisioningStatus::Traits {
 
 ::flatbuffers::Offset<ProvisioningStatus> CreateProvisioningStatus(::flatbuffers::FlatBufferBuilder &_fbb, const ProvisioningStatusT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
-struct TimeSyncT : public ::flatbuffers::NativeTable {
-  typedef TimeSync TableType;
-  uint64_t epoch_seconds = 0;
-  uint32_t subsec_micros = 0;
+struct GetTimestampRequestT : public ::flatbuffers::NativeTable {
+  typedef GetTimestampRequest TableType;
 };
 
-struct TimeSync FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef TimeSyncT NativeTableType;
-  typedef TimeSyncBuilder Builder;
+struct GetTimestampRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef GetTimestampRequestT NativeTableType;
+  typedef GetTimestampRequestBuilder Builder;
   struct Traits;
-  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_EPOCH_SECONDS = 4,
-    VT_SUBSEC_MICROS = 6
-  };
-  uint64_t epoch_seconds() const {
-    return GetField<uint64_t>(VT_EPOCH_SECONDS, 0);
-  }
-  uint32_t subsec_micros() const {
-    return GetField<uint32_t>(VT_SUBSEC_MICROS, 0);
-  }
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyField<uint64_t>(verifier, VT_EPOCH_SECONDS, 8) &&
-           VerifyField<uint32_t>(verifier, VT_SUBSEC_MICROS, 4) &&
            verifier.EndTable();
   }
-  TimeSyncT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
-  void UnPackTo(TimeSyncT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
-  static ::flatbuffers::Offset<TimeSync> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const TimeSyncT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+  GetTimestampRequestT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(GetTimestampRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<GetTimestampRequest> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const GetTimestampRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 };
 
-struct TimeSyncBuilder {
-  typedef TimeSync Table;
+struct GetTimestampRequestBuilder {
+  typedef GetTimestampRequest Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
-  void add_epoch_seconds(uint64_t epoch_seconds) {
-    fbb_.AddElement<uint64_t>(TimeSync::VT_EPOCH_SECONDS, epoch_seconds, 0);
-  }
-  void add_subsec_micros(uint32_t subsec_micros) {
-    fbb_.AddElement<uint32_t>(TimeSync::VT_SUBSEC_MICROS, subsec_micros, 0);
-  }
-  explicit TimeSyncBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+  explicit GetTimestampRequestBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  ::flatbuffers::Offset<TimeSync> Finish() {
+  ::flatbuffers::Offset<GetTimestampRequest> Finish() {
     const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<TimeSync>(end);
+    auto o = ::flatbuffers::Offset<GetTimestampRequest>(end);
     return o;
   }
 };
 
-inline ::flatbuffers::Offset<TimeSync> CreateTimeSync(
-    ::flatbuffers::FlatBufferBuilder &_fbb,
-    uint64_t epoch_seconds = 0,
-    uint32_t subsec_micros = 0) {
-  TimeSyncBuilder builder_(_fbb);
-  builder_.add_epoch_seconds(epoch_seconds);
-  builder_.add_subsec_micros(subsec_micros);
+inline ::flatbuffers::Offset<GetTimestampRequest> CreateGetTimestampRequest(
+    ::flatbuffers::FlatBufferBuilder &_fbb) {
+  GetTimestampRequestBuilder builder_(_fbb);
   return builder_.Finish();
 }
 
-struct TimeSync::Traits {
-  using type = TimeSync;
-  static auto constexpr Create = CreateTimeSync;
+struct GetTimestampRequest::Traits {
+  using type = GetTimestampRequest;
+  static auto constexpr Create = CreateGetTimestampRequest;
 };
 
-::flatbuffers::Offset<TimeSync> CreateTimeSync(::flatbuffers::FlatBufferBuilder &_fbb, const TimeSyncT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+::flatbuffers::Offset<GetTimestampRequest> CreateGetTimestampRequest(::flatbuffers::FlatBufferBuilder &_fbb, const GetTimestampRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct GetTimestampResponseT : public ::flatbuffers::NativeTable {
+  typedef GetTimestampResponse TableType;
+  std::unique_ptr<CoprocessorProto::Timestamp> timestamp{};
+  GetTimestampResponseT() = default;
+  GetTimestampResponseT(const GetTimestampResponseT &o);
+  GetTimestampResponseT(GetTimestampResponseT&&) FLATBUFFERS_NOEXCEPT = default;
+  GetTimestampResponseT &operator=(GetTimestampResponseT o) FLATBUFFERS_NOEXCEPT;
+};
+
+struct GetTimestampResponse FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef GetTimestampResponseT NativeTableType;
+  typedef GetTimestampResponseBuilder Builder;
+  struct Traits;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_TIMESTAMP = 4
+  };
+  const CoprocessorProto::Timestamp *timestamp() const {
+    return GetStruct<const CoprocessorProto::Timestamp *>(VT_TIMESTAMP);
+  }
+  template <bool B = false>
+  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<CoprocessorProto::Timestamp>(verifier, VT_TIMESTAMP, 8) &&
+           verifier.EndTable();
+  }
+  GetTimestampResponseT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(GetTimestampResponseT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<GetTimestampResponse> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const GetTimestampResponseT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct GetTimestampResponseBuilder {
+  typedef GetTimestampResponse Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_timestamp(const CoprocessorProto::Timestamp *timestamp) {
+    fbb_.AddStruct(GetTimestampResponse::VT_TIMESTAMP, timestamp);
+  }
+  explicit GetTimestampResponseBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<GetTimestampResponse> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<GetTimestampResponse>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<GetTimestampResponse> CreateGetTimestampResponse(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    const CoprocessorProto::Timestamp *timestamp = nullptr) {
+  GetTimestampResponseBuilder builder_(_fbb);
+  builder_.add_timestamp(timestamp);
+  return builder_.Finish();
+}
+
+struct GetTimestampResponse::Traits {
+  using type = GetTimestampResponse;
+  static auto constexpr Create = CreateGetTimestampResponse;
+};
+
+::flatbuffers::Offset<GetTimestampResponse> CreateGetTimestampResponse(::flatbuffers::FlatBufferBuilder &_fbb, const GetTimestampResponseT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
 struct BatteryStatusT : public ::flatbuffers::NativeTable {
   typedef BatteryStatus TableType;
@@ -746,8 +826,7 @@ struct BatteryStatus::Traits {
 
 struct ActionRequestT : public ::flatbuffers::NativeTable {
   typedef ActionRequest TableType;
-  std::string endpoint_ip{};
-  uint16_t endpoint_port = 1400;
+  uint32_t endpoint_ip = 0;
   CoprocessorProto::ActionType action = CoprocessorProto::ActionType::Play;
 };
 
@@ -757,14 +836,10 @@ struct ActionRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   struct Traits;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_ENDPOINT_IP = 4,
-    VT_ENDPOINT_PORT = 6,
-    VT_ACTION = 8
+    VT_ACTION = 6
   };
-  const ::flatbuffers::String *endpoint_ip() const {
-    return GetPointer<const ::flatbuffers::String *>(VT_ENDPOINT_IP);
-  }
-  uint16_t endpoint_port() const {
-    return GetField<uint16_t>(VT_ENDPOINT_PORT, 1400);
+  uint32_t endpoint_ip() const {
+    return GetField<uint32_t>(VT_ENDPOINT_IP, 0);
   }
   CoprocessorProto::ActionType action() const {
     return static_cast<CoprocessorProto::ActionType>(GetField<uint8_t>(VT_ACTION, 0));
@@ -772,9 +847,7 @@ struct ActionRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyOffset(verifier, VT_ENDPOINT_IP) &&
-           verifier.VerifyString(endpoint_ip()) &&
-           VerifyField<uint16_t>(verifier, VT_ENDPOINT_PORT, 2) &&
+           VerifyField<uint32_t>(verifier, VT_ENDPOINT_IP, 4) &&
            VerifyField<uint8_t>(verifier, VT_ACTION, 1) &&
            verifier.EndTable();
   }
@@ -787,11 +860,8 @@ struct ActionRequestBuilder {
   typedef ActionRequest Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
-  void add_endpoint_ip(::flatbuffers::Offset<::flatbuffers::String> endpoint_ip) {
-    fbb_.AddOffset(ActionRequest::VT_ENDPOINT_IP, endpoint_ip);
-  }
-  void add_endpoint_port(uint16_t endpoint_port) {
-    fbb_.AddElement<uint16_t>(ActionRequest::VT_ENDPOINT_PORT, endpoint_port, 1400);
+  void add_endpoint_ip(uint32_t endpoint_ip) {
+    fbb_.AddElement<uint32_t>(ActionRequest::VT_ENDPOINT_IP, endpoint_ip, 0);
   }
   void add_action(CoprocessorProto::ActionType action) {
     fbb_.AddElement<uint8_t>(ActionRequest::VT_ACTION, static_cast<uint8_t>(action), 0);
@@ -809,12 +879,10 @@ struct ActionRequestBuilder {
 
 inline ::flatbuffers::Offset<ActionRequest> CreateActionRequest(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    ::flatbuffers::Offset<::flatbuffers::String> endpoint_ip = 0,
-    uint16_t endpoint_port = 1400,
+    uint32_t endpoint_ip = 0,
     CoprocessorProto::ActionType action = CoprocessorProto::ActionType::Play) {
   ActionRequestBuilder builder_(_fbb);
   builder_.add_endpoint_ip(endpoint_ip);
-  builder_.add_endpoint_port(endpoint_port);
   builder_.add_action(action);
   return builder_.Finish();
 }
@@ -824,25 +892,11 @@ struct ActionRequest::Traits {
   static auto constexpr Create = CreateActionRequest;
 };
 
-inline ::flatbuffers::Offset<ActionRequest> CreateActionRequestDirect(
-    ::flatbuffers::FlatBufferBuilder &_fbb,
-    const char *endpoint_ip = nullptr,
-    uint16_t endpoint_port = 1400,
-    CoprocessorProto::ActionType action = CoprocessorProto::ActionType::Play) {
-  auto endpoint_ip__ = endpoint_ip ? _fbb.CreateString(endpoint_ip) : 0;
-  return CoprocessorProto::CreateActionRequest(
-      _fbb,
-      endpoint_ip__,
-      endpoint_port,
-      action);
-}
-
 ::flatbuffers::Offset<ActionRequest> CreateActionRequest(::flatbuffers::FlatBufferBuilder &_fbb, const ActionRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
 struct VolumeRequestT : public ::flatbuffers::NativeTable {
   typedef VolumeRequest TableType;
-  std::string endpoint_ip{};
-  uint16_t endpoint_port = 1400;
+  uint32_t endpoint_ip = 0;
   int16_t volume = 0;
   bool is_relative = false;
 };
@@ -853,15 +907,11 @@ struct VolumeRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   struct Traits;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_ENDPOINT_IP = 4,
-    VT_ENDPOINT_PORT = 6,
-    VT_VOLUME = 8,
-    VT_IS_RELATIVE = 10
+    VT_VOLUME = 6,
+    VT_IS_RELATIVE = 8
   };
-  const ::flatbuffers::String *endpoint_ip() const {
-    return GetPointer<const ::flatbuffers::String *>(VT_ENDPOINT_IP);
-  }
-  uint16_t endpoint_port() const {
-    return GetField<uint16_t>(VT_ENDPOINT_PORT, 1400);
+  uint32_t endpoint_ip() const {
+    return GetField<uint32_t>(VT_ENDPOINT_IP, 0);
   }
   int16_t volume() const {
     return GetField<int16_t>(VT_VOLUME, 0);
@@ -872,9 +922,7 @@ struct VolumeRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyOffset(verifier, VT_ENDPOINT_IP) &&
-           verifier.VerifyString(endpoint_ip()) &&
-           VerifyField<uint16_t>(verifier, VT_ENDPOINT_PORT, 2) &&
+           VerifyField<uint32_t>(verifier, VT_ENDPOINT_IP, 4) &&
            VerifyField<int16_t>(verifier, VT_VOLUME, 2) &&
            VerifyField<uint8_t>(verifier, VT_IS_RELATIVE, 1) &&
            verifier.EndTable();
@@ -888,11 +936,8 @@ struct VolumeRequestBuilder {
   typedef VolumeRequest Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
-  void add_endpoint_ip(::flatbuffers::Offset<::flatbuffers::String> endpoint_ip) {
-    fbb_.AddOffset(VolumeRequest::VT_ENDPOINT_IP, endpoint_ip);
-  }
-  void add_endpoint_port(uint16_t endpoint_port) {
-    fbb_.AddElement<uint16_t>(VolumeRequest::VT_ENDPOINT_PORT, endpoint_port, 1400);
+  void add_endpoint_ip(uint32_t endpoint_ip) {
+    fbb_.AddElement<uint32_t>(VolumeRequest::VT_ENDPOINT_IP, endpoint_ip, 0);
   }
   void add_volume(int16_t volume) {
     fbb_.AddElement<int16_t>(VolumeRequest::VT_VOLUME, volume, 0);
@@ -913,14 +958,12 @@ struct VolumeRequestBuilder {
 
 inline ::flatbuffers::Offset<VolumeRequest> CreateVolumeRequest(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    ::flatbuffers::Offset<::flatbuffers::String> endpoint_ip = 0,
-    uint16_t endpoint_port = 1400,
+    uint32_t endpoint_ip = 0,
     int16_t volume = 0,
     bool is_relative = false) {
   VolumeRequestBuilder builder_(_fbb);
   builder_.add_endpoint_ip(endpoint_ip);
   builder_.add_volume(volume);
-  builder_.add_endpoint_port(endpoint_port);
   builder_.add_is_relative(is_relative);
   return builder_.Finish();
 }
@@ -929,21 +972,6 @@ struct VolumeRequest::Traits {
   using type = VolumeRequest;
   static auto constexpr Create = CreateVolumeRequest;
 };
-
-inline ::flatbuffers::Offset<VolumeRequest> CreateVolumeRequestDirect(
-    ::flatbuffers::FlatBufferBuilder &_fbb,
-    const char *endpoint_ip = nullptr,
-    uint16_t endpoint_port = 1400,
-    int16_t volume = 0,
-    bool is_relative = false) {
-  auto endpoint_ip__ = endpoint_ip ? _fbb.CreateString(endpoint_ip) : 0;
-  return CoprocessorProto::CreateVolumeRequest(
-      _fbb,
-      endpoint_ip__,
-      endpoint_port,
-      volume,
-      is_relative);
-}
 
 ::flatbuffers::Offset<VolumeRequest> CreateVolumeRequest(::flatbuffers::FlatBufferBuilder &_fbb, const VolumeRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
@@ -1089,7 +1117,7 @@ inline ::flatbuffers::Offset<TrackMetadata> CreateTrackMetadataDirect(
 
 struct StateUpdateT : public ::flatbuffers::NativeTable {
   typedef StateUpdate TableType;
-  std::string endpoint_ip{};
+  uint32_t endpoint_ip = 0;
   ::flatbuffers::Optional<CoprocessorProto::TransportState> transport_state = ::flatbuffers::nullopt;
   ::flatbuffers::Optional<uint8_t> volume = ::flatbuffers::nullopt;
   ::flatbuffers::Optional<bool> is_muted = ::flatbuffers::nullopt;
@@ -1111,8 +1139,8 @@ struct StateUpdate FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
     VT_IS_MUTED = 10,
     VT_TRACK = 12
   };
-  const ::flatbuffers::String *endpoint_ip() const {
-    return GetPointer<const ::flatbuffers::String *>(VT_ENDPOINT_IP);
+  uint32_t endpoint_ip() const {
+    return GetField<uint32_t>(VT_ENDPOINT_IP, 0);
   }
   ::flatbuffers::Optional<CoprocessorProto::TransportState> transport_state() const {
     return GetOptional<uint8_t, CoprocessorProto::TransportState>(VT_TRANSPORT_STATE);
@@ -1129,8 +1157,7 @@ struct StateUpdate FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyOffset(verifier, VT_ENDPOINT_IP) &&
-           verifier.VerifyString(endpoint_ip()) &&
+           VerifyField<uint32_t>(verifier, VT_ENDPOINT_IP, 4) &&
            VerifyField<uint8_t>(verifier, VT_TRANSPORT_STATE, 1) &&
            VerifyField<uint8_t>(verifier, VT_VOLUME, 1) &&
            VerifyField<uint8_t>(verifier, VT_IS_MUTED, 1) &&
@@ -1147,8 +1174,8 @@ struct StateUpdateBuilder {
   typedef StateUpdate Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
-  void add_endpoint_ip(::flatbuffers::Offset<::flatbuffers::String> endpoint_ip) {
-    fbb_.AddOffset(StateUpdate::VT_ENDPOINT_IP, endpoint_ip);
+  void add_endpoint_ip(uint32_t endpoint_ip) {
+    fbb_.AddElement<uint32_t>(StateUpdate::VT_ENDPOINT_IP, endpoint_ip, 0);
   }
   void add_transport_state(CoprocessorProto::TransportState transport_state) {
     fbb_.AddElement<uint8_t>(StateUpdate::VT_TRANSPORT_STATE, static_cast<uint8_t>(transport_state));
@@ -1175,7 +1202,7 @@ struct StateUpdateBuilder {
 
 inline ::flatbuffers::Offset<StateUpdate> CreateStateUpdate(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    ::flatbuffers::Offset<::flatbuffers::String> endpoint_ip = 0,
+    uint32_t endpoint_ip = 0,
     ::flatbuffers::Optional<CoprocessorProto::TransportState> transport_state = ::flatbuffers::nullopt,
     ::flatbuffers::Optional<uint8_t> volume = ::flatbuffers::nullopt,
     ::flatbuffers::Optional<bool> is_muted = ::flatbuffers::nullopt,
@@ -1194,30 +1221,13 @@ struct StateUpdate::Traits {
   static auto constexpr Create = CreateStateUpdate;
 };
 
-inline ::flatbuffers::Offset<StateUpdate> CreateStateUpdateDirect(
-    ::flatbuffers::FlatBufferBuilder &_fbb,
-    const char *endpoint_ip = nullptr,
-    ::flatbuffers::Optional<CoprocessorProto::TransportState> transport_state = ::flatbuffers::nullopt,
-    ::flatbuffers::Optional<uint8_t> volume = ::flatbuffers::nullopt,
-    ::flatbuffers::Optional<bool> is_muted = ::flatbuffers::nullopt,
-    ::flatbuffers::Offset<CoprocessorProto::TrackMetadata> track = 0) {
-  auto endpoint_ip__ = endpoint_ip ? _fbb.CreateString(endpoint_ip) : 0;
-  return CoprocessorProto::CreateStateUpdate(
-      _fbb,
-      endpoint_ip__,
-      transport_state,
-      volume,
-      is_muted,
-      track);
-}
-
 ::flatbuffers::Offset<StateUpdate> CreateStateUpdate(::flatbuffers::FlatBufferBuilder &_fbb, const StateUpdateT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
 struct MemberT : public ::flatbuffers::NativeTable {
   typedef Member TableType;
   std::string name{};
   std::string uuid{};
-  std::string ip{};
+  uint32_t ip = 0;
 };
 
 struct Member FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
@@ -1235,8 +1245,8 @@ struct Member FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   const ::flatbuffers::String *uuid() const {
     return GetPointer<const ::flatbuffers::String *>(VT_UUID);
   }
-  const ::flatbuffers::String *ip() const {
-    return GetPointer<const ::flatbuffers::String *>(VT_IP);
+  uint32_t ip() const {
+    return GetField<uint32_t>(VT_IP, 0);
   }
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
@@ -1245,8 +1255,7 @@ struct Member FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
            verifier.VerifyString(name()) &&
            VerifyOffset(verifier, VT_UUID) &&
            verifier.VerifyString(uuid()) &&
-           VerifyOffset(verifier, VT_IP) &&
-           verifier.VerifyString(ip()) &&
+           VerifyField<uint32_t>(verifier, VT_IP, 4) &&
            verifier.EndTable();
   }
   MemberT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
@@ -1264,8 +1273,8 @@ struct MemberBuilder {
   void add_uuid(::flatbuffers::Offset<::flatbuffers::String> uuid) {
     fbb_.AddOffset(Member::VT_UUID, uuid);
   }
-  void add_ip(::flatbuffers::Offset<::flatbuffers::String> ip) {
-    fbb_.AddOffset(Member::VT_IP, ip);
+  void add_ip(uint32_t ip) {
+    fbb_.AddElement<uint32_t>(Member::VT_IP, ip, 0);
   }
   explicit MemberBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
@@ -1282,7 +1291,7 @@ inline ::flatbuffers::Offset<Member> CreateMember(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     ::flatbuffers::Offset<::flatbuffers::String> name = 0,
     ::flatbuffers::Offset<::flatbuffers::String> uuid = 0,
-    ::flatbuffers::Offset<::flatbuffers::String> ip = 0) {
+    uint32_t ip = 0) {
   MemberBuilder builder_(_fbb);
   builder_.add_ip(ip);
   builder_.add_uuid(uuid);
@@ -1299,15 +1308,14 @@ inline ::flatbuffers::Offset<Member> CreateMemberDirect(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     const char *name = nullptr,
     const char *uuid = nullptr,
-    const char *ip = nullptr) {
+    uint32_t ip = 0) {
   auto name__ = name ? _fbb.CreateString(name) : 0;
   auto uuid__ = uuid ? _fbb.CreateString(uuid) : 0;
-  auto ip__ = ip ? _fbb.CreateString(ip) : 0;
   return CoprocessorProto::CreateMember(
       _fbb,
       name__,
       uuid__,
-      ip__);
+      ip);
 }
 
 ::flatbuffers::Offset<Member> CreateMember(::flatbuffers::FlatBufferBuilder &_fbb, const MemberT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
@@ -1316,8 +1324,7 @@ struct GroupT : public ::flatbuffers::NativeTable {
   typedef Group TableType;
   std::string id{};
   std::string name{};
-  std::string coordinator_ip{};
-  uint16_t coordinator_port = 1400;
+  uint32_t coordinator_ip = 0;
   bool is_playing = false;
   std::vector<std::unique_ptr<CoprocessorProto::MemberT>> members{};
   GroupT() = default;
@@ -1334,9 +1341,8 @@ struct Group FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
     VT_ID = 4,
     VT_NAME = 6,
     VT_COORDINATOR_IP = 8,
-    VT_COORDINATOR_PORT = 10,
-    VT_IS_PLAYING = 12,
-    VT_MEMBERS = 14
+    VT_IS_PLAYING = 10,
+    VT_MEMBERS = 12
   };
   const ::flatbuffers::String *id() const {
     return GetPointer<const ::flatbuffers::String *>(VT_ID);
@@ -1344,11 +1350,8 @@ struct Group FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   const ::flatbuffers::String *name() const {
     return GetPointer<const ::flatbuffers::String *>(VT_NAME);
   }
-  const ::flatbuffers::String *coordinator_ip() const {
-    return GetPointer<const ::flatbuffers::String *>(VT_COORDINATOR_IP);
-  }
-  uint16_t coordinator_port() const {
-    return GetField<uint16_t>(VT_COORDINATOR_PORT, 1400);
+  uint32_t coordinator_ip() const {
+    return GetField<uint32_t>(VT_COORDINATOR_IP, 0);
   }
   bool is_playing() const {
     return GetField<uint8_t>(VT_IS_PLAYING, 0) != 0;
@@ -1363,9 +1366,7 @@ struct Group FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
            verifier.VerifyString(id()) &&
            VerifyOffset(verifier, VT_NAME) &&
            verifier.VerifyString(name()) &&
-           VerifyOffset(verifier, VT_COORDINATOR_IP) &&
-           verifier.VerifyString(coordinator_ip()) &&
-           VerifyField<uint16_t>(verifier, VT_COORDINATOR_PORT, 2) &&
+           VerifyField<uint32_t>(verifier, VT_COORDINATOR_IP, 4) &&
            VerifyField<uint8_t>(verifier, VT_IS_PLAYING, 1) &&
            VerifyOffset(verifier, VT_MEMBERS) &&
            verifier.VerifyVector(members()) &&
@@ -1387,11 +1388,8 @@ struct GroupBuilder {
   void add_name(::flatbuffers::Offset<::flatbuffers::String> name) {
     fbb_.AddOffset(Group::VT_NAME, name);
   }
-  void add_coordinator_ip(::flatbuffers::Offset<::flatbuffers::String> coordinator_ip) {
-    fbb_.AddOffset(Group::VT_COORDINATOR_IP, coordinator_ip);
-  }
-  void add_coordinator_port(uint16_t coordinator_port) {
-    fbb_.AddElement<uint16_t>(Group::VT_COORDINATOR_PORT, coordinator_port, 1400);
+  void add_coordinator_ip(uint32_t coordinator_ip) {
+    fbb_.AddElement<uint32_t>(Group::VT_COORDINATOR_IP, coordinator_ip, 0);
   }
   void add_is_playing(bool is_playing) {
     fbb_.AddElement<uint8_t>(Group::VT_IS_PLAYING, static_cast<uint8_t>(is_playing), 0);
@@ -1414,8 +1412,7 @@ inline ::flatbuffers::Offset<Group> CreateGroup(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     ::flatbuffers::Offset<::flatbuffers::String> id = 0,
     ::flatbuffers::Offset<::flatbuffers::String> name = 0,
-    ::flatbuffers::Offset<::flatbuffers::String> coordinator_ip = 0,
-    uint16_t coordinator_port = 1400,
+    uint32_t coordinator_ip = 0,
     bool is_playing = false,
     ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<CoprocessorProto::Member>>> members = 0) {
   GroupBuilder builder_(_fbb);
@@ -1423,7 +1420,6 @@ inline ::flatbuffers::Offset<Group> CreateGroup(
   builder_.add_coordinator_ip(coordinator_ip);
   builder_.add_name(name);
   builder_.add_id(id);
-  builder_.add_coordinator_port(coordinator_port);
   builder_.add_is_playing(is_playing);
   return builder_.Finish();
 }
@@ -1437,20 +1433,17 @@ inline ::flatbuffers::Offset<Group> CreateGroupDirect(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     const char *id = nullptr,
     const char *name = nullptr,
-    const char *coordinator_ip = nullptr,
-    uint16_t coordinator_port = 1400,
+    uint32_t coordinator_ip = 0,
     bool is_playing = false,
     const std::vector<::flatbuffers::Offset<CoprocessorProto::Member>> *members = nullptr) {
   auto id__ = id ? _fbb.CreateString(id) : 0;
   auto name__ = name ? _fbb.CreateString(name) : 0;
-  auto coordinator_ip__ = coordinator_ip ? _fbb.CreateString(coordinator_ip) : 0;
   auto members__ = members ? _fbb.CreateVector<::flatbuffers::Offset<CoprocessorProto::Member>>(*members) : 0;
   return CoprocessorProto::CreateGroup(
       _fbb,
       id__,
       name__,
-      coordinator_ip__,
-      coordinator_port,
+      coordinator_ip,
       is_playing,
       members__);
 }
@@ -1556,8 +1549,7 @@ struct TopologyUpdate::Traits {
 
 struct TopologyRequestT : public ::flatbuffers::NativeTable {
   typedef TopologyRequest TableType;
-  std::string seed_ip{};
-  uint16_t seed_port = 1400;
+  uint32_t seed_ip = 0;
 };
 
 struct TopologyRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
@@ -1565,21 +1557,15 @@ struct TopologyRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   typedef TopologyRequestBuilder Builder;
   struct Traits;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_SEED_IP = 4,
-    VT_SEED_PORT = 6
+    VT_SEED_IP = 4
   };
-  const ::flatbuffers::String *seed_ip() const {
-    return GetPointer<const ::flatbuffers::String *>(VT_SEED_IP);
-  }
-  uint16_t seed_port() const {
-    return GetField<uint16_t>(VT_SEED_PORT, 1400);
+  uint32_t seed_ip() const {
+    return GetField<uint32_t>(VT_SEED_IP, 0);
   }
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyOffset(verifier, VT_SEED_IP) &&
-           verifier.VerifyString(seed_ip()) &&
-           VerifyField<uint16_t>(verifier, VT_SEED_PORT, 2) &&
+           VerifyField<uint32_t>(verifier, VT_SEED_IP, 4) &&
            verifier.EndTable();
   }
   TopologyRequestT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
@@ -1591,11 +1577,8 @@ struct TopologyRequestBuilder {
   typedef TopologyRequest Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
-  void add_seed_ip(::flatbuffers::Offset<::flatbuffers::String> seed_ip) {
-    fbb_.AddOffset(TopologyRequest::VT_SEED_IP, seed_ip);
-  }
-  void add_seed_port(uint16_t seed_port) {
-    fbb_.AddElement<uint16_t>(TopologyRequest::VT_SEED_PORT, seed_port, 1400);
+  void add_seed_ip(uint32_t seed_ip) {
+    fbb_.AddElement<uint32_t>(TopologyRequest::VT_SEED_IP, seed_ip, 0);
   }
   explicit TopologyRequestBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
@@ -1610,11 +1593,9 @@ struct TopologyRequestBuilder {
 
 inline ::flatbuffers::Offset<TopologyRequest> CreateTopologyRequest(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    ::flatbuffers::Offset<::flatbuffers::String> seed_ip = 0,
-    uint16_t seed_port = 1400) {
+    uint32_t seed_ip = 0) {
   TopologyRequestBuilder builder_(_fbb);
   builder_.add_seed_ip(seed_ip);
-  builder_.add_seed_port(seed_port);
   return builder_.Finish();
 }
 
@@ -1623,23 +1604,11 @@ struct TopologyRequest::Traits {
   static auto constexpr Create = CreateTopologyRequest;
 };
 
-inline ::flatbuffers::Offset<TopologyRequest> CreateTopologyRequestDirect(
-    ::flatbuffers::FlatBufferBuilder &_fbb,
-    const char *seed_ip = nullptr,
-    uint16_t seed_port = 1400) {
-  auto seed_ip__ = seed_ip ? _fbb.CreateString(seed_ip) : 0;
-  return CoprocessorProto::CreateTopologyRequest(
-      _fbb,
-      seed_ip__,
-      seed_port);
-}
-
 ::flatbuffers::Offset<TopologyRequest> CreateTopologyRequest(::flatbuffers::FlatBufferBuilder &_fbb, const TopologyRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
 struct PlaybackRequestT : public ::flatbuffers::NativeTable {
   typedef PlaybackRequest TableType;
-  std::string endpoint_ip{};
-  uint16_t endpoint_port = 1400;
+  uint32_t endpoint_ip = 0;
 };
 
 struct PlaybackRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
@@ -1647,21 +1616,15 @@ struct PlaybackRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   typedef PlaybackRequestBuilder Builder;
   struct Traits;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_ENDPOINT_IP = 4,
-    VT_ENDPOINT_PORT = 6
+    VT_ENDPOINT_IP = 4
   };
-  const ::flatbuffers::String *endpoint_ip() const {
-    return GetPointer<const ::flatbuffers::String *>(VT_ENDPOINT_IP);
-  }
-  uint16_t endpoint_port() const {
-    return GetField<uint16_t>(VT_ENDPOINT_PORT, 1400);
+  uint32_t endpoint_ip() const {
+    return GetField<uint32_t>(VT_ENDPOINT_IP, 0);
   }
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyOffset(verifier, VT_ENDPOINT_IP) &&
-           verifier.VerifyString(endpoint_ip()) &&
-           VerifyField<uint16_t>(verifier, VT_ENDPOINT_PORT, 2) &&
+           VerifyField<uint32_t>(verifier, VT_ENDPOINT_IP, 4) &&
            verifier.EndTable();
   }
   PlaybackRequestT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
@@ -1673,11 +1636,8 @@ struct PlaybackRequestBuilder {
   typedef PlaybackRequest Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
-  void add_endpoint_ip(::flatbuffers::Offset<::flatbuffers::String> endpoint_ip) {
-    fbb_.AddOffset(PlaybackRequest::VT_ENDPOINT_IP, endpoint_ip);
-  }
-  void add_endpoint_port(uint16_t endpoint_port) {
-    fbb_.AddElement<uint16_t>(PlaybackRequest::VT_ENDPOINT_PORT, endpoint_port, 1400);
+  void add_endpoint_ip(uint32_t endpoint_ip) {
+    fbb_.AddElement<uint32_t>(PlaybackRequest::VT_ENDPOINT_IP, endpoint_ip, 0);
   }
   explicit PlaybackRequestBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
@@ -1692,11 +1652,9 @@ struct PlaybackRequestBuilder {
 
 inline ::flatbuffers::Offset<PlaybackRequest> CreatePlaybackRequest(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    ::flatbuffers::Offset<::flatbuffers::String> endpoint_ip = 0,
-    uint16_t endpoint_port = 1400) {
+    uint32_t endpoint_ip = 0) {
   PlaybackRequestBuilder builder_(_fbb);
   builder_.add_endpoint_ip(endpoint_ip);
-  builder_.add_endpoint_port(endpoint_port);
   return builder_.Finish();
 }
 
@@ -1705,22 +1663,80 @@ struct PlaybackRequest::Traits {
   static auto constexpr Create = CreatePlaybackRequest;
 };
 
-inline ::flatbuffers::Offset<PlaybackRequest> CreatePlaybackRequestDirect(
+::flatbuffers::Offset<PlaybackRequest> CreatePlaybackRequest(::flatbuffers::FlatBufferBuilder &_fbb, const PlaybackRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct GroupsSummaryRequestT : public ::flatbuffers::NativeTable {
+  typedef GroupsSummaryRequest TableType;
+  std::vector<uint32_t> coordinator_ips{};
+};
+
+struct GroupsSummaryRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef GroupsSummaryRequestT NativeTableType;
+  typedef GroupsSummaryRequestBuilder Builder;
+  struct Traits;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_COORDINATOR_IPS = 4
+  };
+  const ::flatbuffers::Vector<uint32_t> *coordinator_ips() const {
+    return GetPointer<const ::flatbuffers::Vector<uint32_t> *>(VT_COORDINATOR_IPS);
+  }
+  template <bool B = false>
+  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyOffset(verifier, VT_COORDINATOR_IPS) &&
+           verifier.VerifyVector(coordinator_ips()) &&
+           verifier.EndTable();
+  }
+  GroupsSummaryRequestT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(GroupsSummaryRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<GroupsSummaryRequest> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const GroupsSummaryRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct GroupsSummaryRequestBuilder {
+  typedef GroupsSummaryRequest Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_coordinator_ips(::flatbuffers::Offset<::flatbuffers::Vector<uint32_t>> coordinator_ips) {
+    fbb_.AddOffset(GroupsSummaryRequest::VT_COORDINATOR_IPS, coordinator_ips);
+  }
+  explicit GroupsSummaryRequestBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<GroupsSummaryRequest> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<GroupsSummaryRequest>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<GroupsSummaryRequest> CreateGroupsSummaryRequest(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    const char *endpoint_ip = nullptr,
-    uint16_t endpoint_port = 1400) {
-  auto endpoint_ip__ = endpoint_ip ? _fbb.CreateString(endpoint_ip) : 0;
-  return CoprocessorProto::CreatePlaybackRequest(
-      _fbb,
-      endpoint_ip__,
-      endpoint_port);
+    ::flatbuffers::Offset<::flatbuffers::Vector<uint32_t>> coordinator_ips = 0) {
+  GroupsSummaryRequestBuilder builder_(_fbb);
+  builder_.add_coordinator_ips(coordinator_ips);
+  return builder_.Finish();
 }
 
-::flatbuffers::Offset<PlaybackRequest> CreatePlaybackRequest(::flatbuffers::FlatBufferBuilder &_fbb, const PlaybackRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+struct GroupsSummaryRequest::Traits {
+  using type = GroupsSummaryRequest;
+  static auto constexpr Create = CreateGroupsSummaryRequest;
+};
+
+inline ::flatbuffers::Offset<GroupsSummaryRequest> CreateGroupsSummaryRequestDirect(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    const std::vector<uint32_t> *coordinator_ips = nullptr) {
+  auto coordinator_ips__ = coordinator_ips ? _fbb.CreateVector<uint32_t>(*coordinator_ips) : 0;
+  return CoprocessorProto::CreateGroupsSummaryRequest(
+      _fbb,
+      coordinator_ips__);
+}
+
+::flatbuffers::Offset<GroupsSummaryRequest> CreateGroupsSummaryRequest(::flatbuffers::FlatBufferBuilder &_fbb, const GroupsSummaryRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
 struct GroupSummaryT : public ::flatbuffers::NativeTable {
   typedef GroupSummary TableType;
-  std::string id{};
+  uint32_t coordinator_ip = 0;
   bool is_playing = false;
   std::string title{};
 };
@@ -1730,12 +1746,12 @@ struct GroupSummary FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   typedef GroupSummaryBuilder Builder;
   struct Traits;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_ID = 4,
+    VT_COORDINATOR_IP = 4,
     VT_IS_PLAYING = 6,
     VT_TITLE = 8
   };
-  const ::flatbuffers::String *id() const {
-    return GetPointer<const ::flatbuffers::String *>(VT_ID);
+  uint32_t coordinator_ip() const {
+    return GetField<uint32_t>(VT_COORDINATOR_IP, 0);
   }
   bool is_playing() const {
     return GetField<uint8_t>(VT_IS_PLAYING, 0) != 0;
@@ -1746,8 +1762,7 @@ struct GroupSummary FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   template <bool B = false>
   bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyOffset(verifier, VT_ID) &&
-           verifier.VerifyString(id()) &&
+           VerifyField<uint32_t>(verifier, VT_COORDINATOR_IP, 4) &&
            VerifyField<uint8_t>(verifier, VT_IS_PLAYING, 1) &&
            VerifyOffset(verifier, VT_TITLE) &&
            verifier.VerifyString(title()) &&
@@ -1762,8 +1777,8 @@ struct GroupSummaryBuilder {
   typedef GroupSummary Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
-  void add_id(::flatbuffers::Offset<::flatbuffers::String> id) {
-    fbb_.AddOffset(GroupSummary::VT_ID, id);
+  void add_coordinator_ip(uint32_t coordinator_ip) {
+    fbb_.AddElement<uint32_t>(GroupSummary::VT_COORDINATOR_IP, coordinator_ip, 0);
   }
   void add_is_playing(bool is_playing) {
     fbb_.AddElement<uint8_t>(GroupSummary::VT_IS_PLAYING, static_cast<uint8_t>(is_playing), 0);
@@ -1784,12 +1799,12 @@ struct GroupSummaryBuilder {
 
 inline ::flatbuffers::Offset<GroupSummary> CreateGroupSummary(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    ::flatbuffers::Offset<::flatbuffers::String> id = 0,
+    uint32_t coordinator_ip = 0,
     bool is_playing = false,
     ::flatbuffers::Offset<::flatbuffers::String> title = 0) {
   GroupSummaryBuilder builder_(_fbb);
   builder_.add_title(title);
-  builder_.add_id(id);
+  builder_.add_coordinator_ip(coordinator_ip);
   builder_.add_is_playing(is_playing);
   return builder_.Finish();
 }
@@ -1801,14 +1816,13 @@ struct GroupSummary::Traits {
 
 inline ::flatbuffers::Offset<GroupSummary> CreateGroupSummaryDirect(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    const char *id = nullptr,
+    uint32_t coordinator_ip = 0,
     bool is_playing = false,
     const char *title = nullptr) {
-  auto id__ = id ? _fbb.CreateString(id) : 0;
   auto title__ = title ? _fbb.CreateString(title) : 0;
   return CoprocessorProto::CreateGroupSummary(
       _fbb,
-      id__,
+      coordinator_ip,
       is_playing,
       title__);
 }
@@ -1951,7 +1965,7 @@ inline void WifiStatus::UnPackTo(WifiStatusT *_o, const ::flatbuffers::resolver_
   (void)_o;
   (void)_resolver;
   { auto _e = connected(); _o->connected = _e; }
-  { auto _e = ip(); if (_e) _o->ip = _e->str(); }
+  { auto _e = ip(); _o->ip = _e; }
   { auto _e = ssid(); if (_e) _o->ssid = _e->str(); }
   { auto _e = rssi(); _o->rssi = _e; }
 }
@@ -1965,7 +1979,7 @@ inline ::flatbuffers::Offset<WifiStatus> WifiStatus::Pack(::flatbuffers::FlatBuf
   (void)_o;
   struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const WifiStatusT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
   auto _connected = _o->connected;
-  auto _ip = _o->ip.empty() ? 0 : _fbb.CreateString(_o->ip);
+  auto _ip = _o->ip;
   auto _ssid = _o->ssid.empty() ? 0 : _fbb.CreateString(_o->ssid);
   auto _rssi = _o->rssi;
   return CoprocessorProto::CreateWifiStatus(
@@ -2028,33 +2042,62 @@ inline ::flatbuffers::Offset<ProvisioningStatus> ProvisioningStatus::Pack(::flat
       _state);
 }
 
-inline TimeSyncT *TimeSync::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
-  auto _o = std::make_unique<TimeSyncT>();
+inline GetTimestampRequestT *GetTimestampRequest::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<GetTimestampRequestT>();
   UnPackTo(_o.get(), _resolver);
   return _o.release();
 }
 
-inline void TimeSync::UnPackTo(TimeSyncT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+inline void GetTimestampRequest::UnPackTo(GetTimestampRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
   (void)_o;
   (void)_resolver;
-  { auto _e = epoch_seconds(); _o->epoch_seconds = _e; }
-  { auto _e = subsec_micros(); _o->subsec_micros = _e; }
 }
 
-inline ::flatbuffers::Offset<TimeSync> CreateTimeSync(::flatbuffers::FlatBufferBuilder &_fbb, const TimeSyncT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
-  return TimeSync::Pack(_fbb, _o, _rehasher);
+inline ::flatbuffers::Offset<GetTimestampRequest> CreateGetTimestampRequest(::flatbuffers::FlatBufferBuilder &_fbb, const GetTimestampRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return GetTimestampRequest::Pack(_fbb, _o, _rehasher);
 }
 
-inline ::flatbuffers::Offset<TimeSync> TimeSync::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const TimeSyncT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+inline ::flatbuffers::Offset<GetTimestampRequest> GetTimestampRequest::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const GetTimestampRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
   (void)_rehasher;
   (void)_o;
-  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const TimeSyncT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
-  auto _epoch_seconds = _o->epoch_seconds;
-  auto _subsec_micros = _o->subsec_micros;
-  return CoprocessorProto::CreateTimeSync(
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const GetTimestampRequestT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  return CoprocessorProto::CreateGetTimestampRequest(
+      _fbb);
+}
+
+inline GetTimestampResponseT::GetTimestampResponseT(const GetTimestampResponseT &o)
+      : timestamp((o.timestamp) ? new CoprocessorProto::Timestamp(*o.timestamp) : nullptr) {
+}
+
+inline GetTimestampResponseT &GetTimestampResponseT::operator=(GetTimestampResponseT o) FLATBUFFERS_NOEXCEPT {
+  std::swap(timestamp, o.timestamp);
+  return *this;
+}
+
+inline GetTimestampResponseT *GetTimestampResponse::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<GetTimestampResponseT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void GetTimestampResponse::UnPackTo(GetTimestampResponseT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = timestamp(); if (_e) _o->timestamp = std::unique_ptr<CoprocessorProto::Timestamp>(new CoprocessorProto::Timestamp(*_e)); }
+}
+
+inline ::flatbuffers::Offset<GetTimestampResponse> CreateGetTimestampResponse(::flatbuffers::FlatBufferBuilder &_fbb, const GetTimestampResponseT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return GetTimestampResponse::Pack(_fbb, _o, _rehasher);
+}
+
+inline ::flatbuffers::Offset<GetTimestampResponse> GetTimestampResponse::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const GetTimestampResponseT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const GetTimestampResponseT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _timestamp = _o->timestamp ? _o->timestamp.get() : nullptr;
+  return CoprocessorProto::CreateGetTimestampResponse(
       _fbb,
-      _epoch_seconds,
-      _subsec_micros);
+      _timestamp);
 }
 
 inline BatteryStatusT *BatteryStatus::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
@@ -2098,8 +2141,7 @@ inline ActionRequestT *ActionRequest::UnPack(const ::flatbuffers::resolver_funct
 inline void ActionRequest::UnPackTo(ActionRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
   (void)_o;
   (void)_resolver;
-  { auto _e = endpoint_ip(); if (_e) _o->endpoint_ip = _e->str(); }
-  { auto _e = endpoint_port(); _o->endpoint_port = _e; }
+  { auto _e = endpoint_ip(); _o->endpoint_ip = _e; }
   { auto _e = action(); _o->action = _e; }
 }
 
@@ -2111,13 +2153,11 @@ inline ::flatbuffers::Offset<ActionRequest> ActionRequest::Pack(::flatbuffers::F
   (void)_rehasher;
   (void)_o;
   struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const ActionRequestT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
-  auto _endpoint_ip = _o->endpoint_ip.empty() ? 0 : _fbb.CreateString(_o->endpoint_ip);
-  auto _endpoint_port = _o->endpoint_port;
+  auto _endpoint_ip = _o->endpoint_ip;
   auto _action = _o->action;
   return CoprocessorProto::CreateActionRequest(
       _fbb,
       _endpoint_ip,
-      _endpoint_port,
       _action);
 }
 
@@ -2130,8 +2170,7 @@ inline VolumeRequestT *VolumeRequest::UnPack(const ::flatbuffers::resolver_funct
 inline void VolumeRequest::UnPackTo(VolumeRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
   (void)_o;
   (void)_resolver;
-  { auto _e = endpoint_ip(); if (_e) _o->endpoint_ip = _e->str(); }
-  { auto _e = endpoint_port(); _o->endpoint_port = _e; }
+  { auto _e = endpoint_ip(); _o->endpoint_ip = _e; }
   { auto _e = volume(); _o->volume = _e; }
   { auto _e = is_relative(); _o->is_relative = _e; }
 }
@@ -2144,14 +2183,12 @@ inline ::flatbuffers::Offset<VolumeRequest> VolumeRequest::Pack(::flatbuffers::F
   (void)_rehasher;
   (void)_o;
   struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const VolumeRequestT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
-  auto _endpoint_ip = _o->endpoint_ip.empty() ? 0 : _fbb.CreateString(_o->endpoint_ip);
-  auto _endpoint_port = _o->endpoint_port;
+  auto _endpoint_ip = _o->endpoint_ip;
   auto _volume = _o->volume;
   auto _is_relative = _o->is_relative;
   return CoprocessorProto::CreateVolumeRequest(
       _fbb,
       _endpoint_ip,
-      _endpoint_port,
       _volume,
       _is_relative);
 }
@@ -2223,7 +2260,7 @@ inline StateUpdateT *StateUpdate::UnPack(const ::flatbuffers::resolver_function_
 inline void StateUpdate::UnPackTo(StateUpdateT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
   (void)_o;
   (void)_resolver;
-  { auto _e = endpoint_ip(); if (_e) _o->endpoint_ip = _e->str(); }
+  { auto _e = endpoint_ip(); _o->endpoint_ip = _e; }
   { auto _e = transport_state(); _o->transport_state = _e; }
   { auto _e = volume(); _o->volume = _e; }
   { auto _e = is_muted(); _o->is_muted = _e; }
@@ -2238,7 +2275,7 @@ inline ::flatbuffers::Offset<StateUpdate> StateUpdate::Pack(::flatbuffers::FlatB
   (void)_rehasher;
   (void)_o;
   struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const StateUpdateT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
-  auto _endpoint_ip = _o->endpoint_ip.empty() ? 0 : _fbb.CreateString(_o->endpoint_ip);
+  auto _endpoint_ip = _o->endpoint_ip;
   auto _transport_state = _o->transport_state;
   auto _volume = _o->volume;
   auto _is_muted = _o->is_muted;
@@ -2263,7 +2300,7 @@ inline void Member::UnPackTo(MemberT *_o, const ::flatbuffers::resolver_function
   (void)_resolver;
   { auto _e = name(); if (_e) _o->name = _e->str(); }
   { auto _e = uuid(); if (_e) _o->uuid = _e->str(); }
-  { auto _e = ip(); if (_e) _o->ip = _e->str(); }
+  { auto _e = ip(); _o->ip = _e; }
 }
 
 inline ::flatbuffers::Offset<Member> CreateMember(::flatbuffers::FlatBufferBuilder &_fbb, const MemberT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
@@ -2276,7 +2313,7 @@ inline ::flatbuffers::Offset<Member> Member::Pack(::flatbuffers::FlatBufferBuild
   struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const MemberT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
   auto _name = _o->name.empty() ? 0 : _fbb.CreateString(_o->name);
   auto _uuid = _o->uuid.empty() ? 0 : _fbb.CreateString(_o->uuid);
-  auto _ip = _o->ip.empty() ? 0 : _fbb.CreateString(_o->ip);
+  auto _ip = _o->ip;
   return CoprocessorProto::CreateMember(
       _fbb,
       _name,
@@ -2288,7 +2325,6 @@ inline GroupT::GroupT(const GroupT &o)
       : id(o.id),
         name(o.name),
         coordinator_ip(o.coordinator_ip),
-        coordinator_port(o.coordinator_port),
         is_playing(o.is_playing) {
   members.reserve(o.members.size());
   for (const auto &members_ : o.members) { members.emplace_back((members_) ? new CoprocessorProto::MemberT(*members_) : nullptr); }
@@ -2298,7 +2334,6 @@ inline GroupT &GroupT::operator=(GroupT o) FLATBUFFERS_NOEXCEPT {
   std::swap(id, o.id);
   std::swap(name, o.name);
   std::swap(coordinator_ip, o.coordinator_ip);
-  std::swap(coordinator_port, o.coordinator_port);
   std::swap(is_playing, o.is_playing);
   std::swap(members, o.members);
   return *this;
@@ -2315,8 +2350,7 @@ inline void Group::UnPackTo(GroupT *_o, const ::flatbuffers::resolver_function_t
   (void)_resolver;
   { auto _e = id(); if (_e) _o->id = _e->str(); }
   { auto _e = name(); if (_e) _o->name = _e->str(); }
-  { auto _e = coordinator_ip(); if (_e) _o->coordinator_ip = _e->str(); }
-  { auto _e = coordinator_port(); _o->coordinator_port = _e; }
+  { auto _e = coordinator_ip(); _o->coordinator_ip = _e; }
   { auto _e = is_playing(); _o->is_playing = _e; }
   { auto _e = members(); if (_e) { _o->members.resize(_e->size()); for (::flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { if(_o->members[_i]) { _e->Get(_i)->UnPackTo(_o->members[_i].get(), _resolver); } else { _o->members[_i] = std::unique_ptr<CoprocessorProto::MemberT>(_e->Get(_i)->UnPack(_resolver)); } } } else { _o->members.resize(0); } }
 }
@@ -2331,8 +2365,7 @@ inline ::flatbuffers::Offset<Group> Group::Pack(::flatbuffers::FlatBufferBuilder
   struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const GroupT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
   auto _id = _o->id.empty() ? 0 : _fbb.CreateString(_o->id);
   auto _name = _o->name.empty() ? 0 : _fbb.CreateString(_o->name);
-  auto _coordinator_ip = _o->coordinator_ip.empty() ? 0 : _fbb.CreateString(_o->coordinator_ip);
-  auto _coordinator_port = _o->coordinator_port;
+  auto _coordinator_ip = _o->coordinator_ip;
   auto _is_playing = _o->is_playing;
   auto _members = _o->members.size() ? _fbb.CreateVector<::flatbuffers::Offset<CoprocessorProto::Member>> (_o->members.size(), [](size_t i, _VectorArgs *__va) { return CreateMember(*__va->__fbb, __va->__o->members[i].get(), __va->__rehasher); }, &_va ) : 0;
   return CoprocessorProto::CreateGroup(
@@ -2340,7 +2373,6 @@ inline ::flatbuffers::Offset<Group> Group::Pack(::flatbuffers::FlatBufferBuilder
       _id,
       _name,
       _coordinator_ip,
-      _coordinator_port,
       _is_playing,
       _members);
 }
@@ -2404,8 +2436,7 @@ inline TopologyRequestT *TopologyRequest::UnPack(const ::flatbuffers::resolver_f
 inline void TopologyRequest::UnPackTo(TopologyRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
   (void)_o;
   (void)_resolver;
-  { auto _e = seed_ip(); if (_e) _o->seed_ip = _e->str(); }
-  { auto _e = seed_port(); _o->seed_port = _e; }
+  { auto _e = seed_ip(); _o->seed_ip = _e; }
 }
 
 inline ::flatbuffers::Offset<TopologyRequest> CreateTopologyRequest(::flatbuffers::FlatBufferBuilder &_fbb, const TopologyRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
@@ -2416,12 +2447,10 @@ inline ::flatbuffers::Offset<TopologyRequest> TopologyRequest::Pack(::flatbuffer
   (void)_rehasher;
   (void)_o;
   struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const TopologyRequestT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
-  auto _seed_ip = _o->seed_ip.empty() ? 0 : _fbb.CreateString(_o->seed_ip);
-  auto _seed_port = _o->seed_port;
+  auto _seed_ip = _o->seed_ip;
   return CoprocessorProto::CreateTopologyRequest(
       _fbb,
-      _seed_ip,
-      _seed_port);
+      _seed_ip);
 }
 
 inline PlaybackRequestT *PlaybackRequest::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
@@ -2433,8 +2462,7 @@ inline PlaybackRequestT *PlaybackRequest::UnPack(const ::flatbuffers::resolver_f
 inline void PlaybackRequest::UnPackTo(PlaybackRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
   (void)_o;
   (void)_resolver;
-  { auto _e = endpoint_ip(); if (_e) _o->endpoint_ip = _e->str(); }
-  { auto _e = endpoint_port(); _o->endpoint_port = _e; }
+  { auto _e = endpoint_ip(); _o->endpoint_ip = _e; }
 }
 
 inline ::flatbuffers::Offset<PlaybackRequest> CreatePlaybackRequest(::flatbuffers::FlatBufferBuilder &_fbb, const PlaybackRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
@@ -2445,12 +2473,36 @@ inline ::flatbuffers::Offset<PlaybackRequest> PlaybackRequest::Pack(::flatbuffer
   (void)_rehasher;
   (void)_o;
   struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const PlaybackRequestT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
-  auto _endpoint_ip = _o->endpoint_ip.empty() ? 0 : _fbb.CreateString(_o->endpoint_ip);
-  auto _endpoint_port = _o->endpoint_port;
+  auto _endpoint_ip = _o->endpoint_ip;
   return CoprocessorProto::CreatePlaybackRequest(
       _fbb,
-      _endpoint_ip,
-      _endpoint_port);
+      _endpoint_ip);
+}
+
+inline GroupsSummaryRequestT *GroupsSummaryRequest::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<GroupsSummaryRequestT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void GroupsSummaryRequest::UnPackTo(GroupsSummaryRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = coordinator_ips(); if (_e) { _o->coordinator_ips.resize(_e->size()); for (::flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->coordinator_ips[_i] = _e->Get(_i); } } else { _o->coordinator_ips.resize(0); } }
+}
+
+inline ::flatbuffers::Offset<GroupsSummaryRequest> CreateGroupsSummaryRequest(::flatbuffers::FlatBufferBuilder &_fbb, const GroupsSummaryRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return GroupsSummaryRequest::Pack(_fbb, _o, _rehasher);
+}
+
+inline ::flatbuffers::Offset<GroupsSummaryRequest> GroupsSummaryRequest::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const GroupsSummaryRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const GroupsSummaryRequestT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _coordinator_ips = _o->coordinator_ips.size() ? _fbb.CreateVector(_o->coordinator_ips) : 0;
+  return CoprocessorProto::CreateGroupsSummaryRequest(
+      _fbb,
+      _coordinator_ips);
 }
 
 inline GroupSummaryT *GroupSummary::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
@@ -2462,7 +2514,7 @@ inline GroupSummaryT *GroupSummary::UnPack(const ::flatbuffers::resolver_functio
 inline void GroupSummary::UnPackTo(GroupSummaryT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
   (void)_o;
   (void)_resolver;
-  { auto _e = id(); if (_e) _o->id = _e->str(); }
+  { auto _e = coordinator_ip(); _o->coordinator_ip = _e; }
   { auto _e = is_playing(); _o->is_playing = _e; }
   { auto _e = title(); if (_e) _o->title = _e->str(); }
 }
@@ -2475,12 +2527,12 @@ inline ::flatbuffers::Offset<GroupSummary> GroupSummary::Pack(::flatbuffers::Fla
   (void)_rehasher;
   (void)_o;
   struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const GroupSummaryT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
-  auto _id = _o->id.empty() ? 0 : _fbb.CreateString(_o->id);
+  auto _coordinator_ip = _o->coordinator_ip;
   auto _is_playing = _o->is_playing;
   auto _title = _o->title.empty() ? 0 : _fbb.CreateString(_o->title);
   return CoprocessorProto::CreateGroupSummary(
       _fbb,
-      _id,
+      _coordinator_ip,
       _is_playing,
       _title);
 }

@@ -6,6 +6,9 @@ include "common.fbs";
 
 namespace CoprocessorProto;
 
+// Speakers are addressed by IPv4 (see common.fbs). Sonos serves UPnP on port
+// 1400, always, so no message carries a port.
+
 // Playback state of a media renderer
 enum TransportState : ubyte {
     Stopped = 0,
@@ -26,15 +29,13 @@ enum ActionType : ubyte {
 
 // Command from Host to Co-processor to perform a media transport action.
 table ActionRequest {
-    endpoint_ip: string;
-    endpoint_port: uint16 = 1400;
+    endpoint_ip: uint32;
     action: ActionType;
 }
 
 // Command to set or adjust volume on a renderer.
 table VolumeRequest {
-    endpoint_ip: string;
-    endpoint_port: uint16 = 1400;
+    endpoint_ip: uint32;
     volume: int16;        // 0..100 for absolute, or signed delta if is_relative
     is_relative: bool;    // If true, volume is treated as signed delta
 }
@@ -51,7 +52,7 @@ table TrackMetadata {
 
 // Current media state update pushed from Co-processor to Host.
 table StateUpdate {
-    endpoint_ip: string;
+    endpoint_ip: uint32;
     transport_state: TransportState = null;
     volume: uint8 = null;
     is_muted: bool = null;
@@ -62,15 +63,14 @@ table StateUpdate {
 table Member {
     name: string;
     uuid: string;
-    ip: string;
+    ip: uint32;
 }
 
 // Discovered group/room in the household.
 table Group {
     id: string;
     name: string;
-    coordinator_ip: string;
-    coordinator_port: uint16 = 1400;
+    coordinator_ip: uint32;
     is_playing: bool;
     members: [Member];
 }
@@ -85,19 +85,23 @@ table TopologyUpdate {
 
 // Request to watch household topology using a seed speaker IP.
 table TopologyRequest {
-    seed_ip: string;
-    seed_port: uint16 = 1400;
+    seed_ip: uint32;
 }
 
 // Request to watch playback state on a group coordinator endpoint.
 table PlaybackRequest {
-    endpoint_ip: string;
-    endpoint_port: uint16 = 1400;
+    endpoint_ip: uint32;
+}
+
+// The groups to summarize, by coordinator: the client knows them from its
+// topology stream.
+table GroupsSummaryRequest {
+    coordinator_ips: [uint32];
 }
 
 // Summarized state of a single speaker group for the carousel
 table GroupSummary {
-    id: string;
+    coordinator_ip: uint32;  // As in the request.
     is_playing: bool;
     title: string;
 }
@@ -112,5 +116,5 @@ rpc_service Sonos {
     WatchPlayback(PlaybackRequest): StateUpdate (streaming: "server");
     Action(ActionRequest): CoprocessorProto.Empty (timeout_ms: "2000");
     SetVolume(VolumeRequest): CoprocessorProto.Empty (timeout_ms: "1000");
-    GetGroupsSummary(CoprocessorProto.Empty): GroupsSummary (timeout_ms: "2000");
+    GetGroupsSummary(GroupsSummaryRequest): GroupsSummary (timeout_ms: "5000");
 }

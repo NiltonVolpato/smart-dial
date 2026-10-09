@@ -1,12 +1,14 @@
 .PHONY: all build clean fmt fmt-check tidy test _check_managed_components
 .DEFAULT_GOAL := all
 
+rwildcard = $(foreach d,$(wildcard $(1:=/*)),$(call rwildcard,$d,$2) $(filter $(subst *,%,$2),$d))
+
 _check_managed_components:
 	@# PlatformIO only fetches ESP-IDF managed components during a fresh CMake configure.
 	@# If the source directory is missing, force a reconfigure so the component manager runs.
-	@if [ ! -d managed_components ] && [ -d .pio/build/esp32dev ]; then \
+	@if [ ! -d managed_components ] && [ -d .pio/build/$(ENV) ]; then \
 		echo "managed_components/ missing; forcing PlatformIO reconfigure"; \
-		rm -rf .pio/build/esp32dev; \
+		rm -rf .pio/build/$(ENV); \
 	fi
 
 LLVM_BIN := /opt/homebrew/opt/llvm@22/bin
@@ -16,7 +18,9 @@ CACHE_DIR := .cache/coprocessor
 STAMP_DIR := $(CACHE_DIR)/stamps
 QEMU_BUILD_DIR := $(CACHE_DIR)/qemu
 
-ELF := .pio/build/esp32dev/firmware.elf
+# PlatformIO env to build: esp32dev (-Og) or esp32dev-release (platformio.ini).
+ENV ?= esp32dev
+ELF := .pio/build/$(ENV)/firmware.elf
 COMPILE_DB := compile_commands.json
 FILELIST_SHA_FILE := $(STAMP_DIR)/.filelist.sha256
 TIDY_STAMP := $(STAMP_DIR)/.tidy.stamp
@@ -42,23 +46,24 @@ $(COMPILE_DB): $(COMPILE_DB_DEPS)
 	pio run -t compiledb
 	@touch $(COMPILE_DB)
 
-FMT_SRCS := $(wildcard src/*.cpp) $(wildcard src/*.h)
-SRCS := $(FMT_SRCS) $(wildcard src/CMakeLists.txt) $(wildcard src/idf_component.yml) $(wildcard src/web/*) \
-        $(wildcard include/*.h) platformio.ini CMakeLists.txt sdkconfig.defaults
+FMT_SRCS := $(call rwildcard,src,*.cpp *.h)
+SRCS := $(FMT_SRCS) src/CMakeLists.txt src/idf_component.yml \
+        $(wildcard include/*.h) platformio.ini CMakeLists.txt sdkconfig.defaults \
+        sdkconfig.release.defaults
 
 all: build
 
 build: $(ELF)
 
 $(ELF): _check_managed_components $(SRCS) $(FILELIST_SHA_FILE)
-	pio run
+	pio run -e $(ENV)
 	@mkdir -p $(STAMP_DIR)
 	@echo "$(CURRENT_FILELIST_SHA)" > $(FILELIST_SHA_FILE)
 	@touch $(ELF)
 
 tidy: $(TIDY_STAMP)
 
-$(TIDY_STAMP): $(COMPILE_DB) $(SRCS)
+$(TIDY_STAMP): $(COMPILE_DB) $(SRCS) .clang-tidy
 	@PATH="$(LLVM_BIN):$$PATH" $(LLVM_BIN)/run-clang-tidy \
 		-clang-tidy-binary=$(LLVM_BIN)/clang-tidy \
 		-clang-apply-replacements-binary=$(LLVM_BIN)/clang-apply-replacements \
@@ -85,13 +90,13 @@ $(TIDY_STAMP): $(COMPILE_DB) $(SRCS)
 
 fmt: $(FMT_STAMP)
 
-$(FMT_STAMP): $(FMT_SRCS)
+$(FMT_STAMP): $(FMT_SRCS) .clang-format
 	$(LLVM_BIN)/clang-format -i $(FMT_SRCS)
 	@mkdir -p $(STAMP_DIR) && touch $(FMT_STAMP) $(FMT_CHECK_STAMP)
 
 fmt-check: $(FMT_CHECK_STAMP)
 
-$(FMT_CHECK_STAMP): $(FMT_SRCS)
+$(FMT_CHECK_STAMP): $(FMT_SRCS) .clang-format
 	$(LLVM_BIN)/clang-format --dry-run --Werror $(FMT_SRCS)
 	@mkdir -p $(STAMP_DIR) && touch $(FMT_CHECK_STAMP)
 
@@ -99,5 +104,5 @@ test:
 	pio test -e native
 
 clean:
-	pio run -t clean
-	rm -rf $(STAMP_DIR) $(QEMU_BUILD_DIR) qemu_app/build
+	pio run -t clean -e esp32dev -e esp32dev-release
+	rm -rf $(STAMP_DIR) $(QEMU_BUILD_DIR)

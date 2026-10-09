@@ -6,9 +6,14 @@ include "common.fbs";
 
 namespace CoprocessorProto;
 
-table TimeSync {
+struct Timestamp {
     epoch_seconds: uint64;
     subsec_micros: uint32;
+}
+
+table GetTimestampRequest {}
+table GetTimestampResponse {
+    timestamp: Timestamp;
 }
 
 table BatteryStatus {
@@ -19,8 +24,9 @@ table BatteryStatus {
 
 /// System telemetry and network clock synchronization service.
 rpc_service System {
-    /// Streams network time updates whenever SNTP synchronizes.
-    WatchTime(Empty): TimeSync (streaming: "server");
+    /// Requests the current time from the coprocessor. The coprocessor will
+    /// already sync the time via SNTP when WiFi is connected.
+    GetTimestamp(GetTimestampRequest): GetTimestampResponse;
     /// Reports battery state from the host ADC to the co-processor.
     ReportBattery(BatteryStatus): Empty;
 }

@@ -5,9 +5,13 @@ export INTERACTIVE := env('INTERACTIVE', "true")
 _default:
     @just --list
 
-[doc("Build co-processor firmware with PlatformIO (make-backed incremental check).")]
+[doc("Build co-processor firmware with PlatformIO at -Og (make-backed incremental check).")]
 build *ARGS:
     make {{ARGS}}
+
+[doc("Build the optimized co-processor firmware that `flash` uploads (-O2, src/ at -O3).")]
+build-release *ARGS:
+    make ENV=esp32dev-release {{ARGS}}
 
 [doc("Generate compile_commands.json for clangd and Zed IDE integration.")]
 compiledb:
@@ -54,9 +58,15 @@ qemu-run UART=".cache/coprocessor/qemu/uart1":
 qemu-test *ARGS:
     qemu_app/test-qemu.sh {{ARGS}}
 
-[doc("Flash co-processor firmware via CH340 and monitor output (interactive, or automated via INTERACTIVE=false).")]
-flash PORT="/dev/cu.usbserial-10" *ARGS:
-    pio run -t upload --upload-port {{PORT}} {{ARGS}}
+[doc("Flash optimized co-processor firmware via CH340 and monitor output (interactive, or automated via INTERACTIVE=false).")]
+flash PORT="/dev/cu.usbserial-10" *ARGS: (_flash "esp32dev-release" PORT ARGS)
+
+[doc("Flash -Og co-processor firmware, for debugging on the device; otherwise as `flash`.")]
+flash-debug PORT="/dev/cu.usbserial-10" *ARGS: (_flash "esp32dev" PORT ARGS)
+
+[private]
+_flash ENV PORT *ARGS:
+    pio run -e {{ENV}} -t upload --upload-port {{PORT}} {{ARGS}}
     if [ "$INTERACTIVE" = "true" ]; then \
         pio device monitor --port {{PORT}} --baud 115200; \
     else \

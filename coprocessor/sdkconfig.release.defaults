@@ -1,0 +1,2 @@
+# Layered over sdkconfig.defaults by [env:esp32dev-release] (platformio.ini).
+CONFIG_COMPILER_OPTIMIZATION_PERF=y

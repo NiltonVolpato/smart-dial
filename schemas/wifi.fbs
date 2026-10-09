@@ -13,7 +13,7 @@ table WifiConnectRequest {
 
 table WifiStatus {
     connected: bool;
-    ip: string;
+    ip: uint32;  // IPv4 (see common.fbs); 0 while disconnected.
     ssid: string;
     rssi: int16;
 }

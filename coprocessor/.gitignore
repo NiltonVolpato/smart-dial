@@ -5,6 +5,7 @@
 .vscode/ipch
 sdkconfig.*
 !sdkconfig.defaults
+!sdkconfig.release.defaults
 compile_commands.json
 .cache
 managed_components/

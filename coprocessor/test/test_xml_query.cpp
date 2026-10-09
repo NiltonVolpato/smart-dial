@@ -15,18 +15,20 @@ struct Item {
   std::string id;
 };
 
-auto embedded_items(std::vector<Item>& out) {
-  return xq::Select("Embedded") | xq::Text() | xq::ParseXml() |
-         xq::Select("Item") |
-         xq::Construct<Item>(xq::Bind(&Item::id, xq::Attr("id"))) |
-         xq::Invoke([&out](const Item& item) { out.push_back(item); });
+constexpr auto kEmbeddedItems =
+    xq::Select("Embedded") | xq::Text() | xq::ParseXml() | xq::Select("Item") |
+    xq::Construct<Item>(xq::Bind(&Item::id, xq::Attr("id")));
+
+auto embedded_items_parser(std::vector<Item>& out) {
+  return xq::XmlParser(kEmbeddedItems,
+                       [&out](const Item& item) { out.push_back(item); });
 }
 
 TEST(XmlQueryTest, NestedDocumentIsParsed) {
   constexpr std::string_view kXml =
       R"(<root><Embedded>&lt;Item id="1"/&gt;</Embedded></root>)";
   std::vector<Item> items;
-  xq::XmlParser parser(embedded_items(items)(xq::NullSink{}));
+  auto parser = embedded_items_parser(items);
 
   EXPECT_EQ(parser.feed(kXml, true), xq::ParseStatus::Ok);
   ASSERT_EQ(items.size(), 1U);
@@ -38,7 +40,7 @@ TEST(XmlQueryTest, MalformedNestedDocumentFailsOuterParse) {
   constexpr std::string_view kXml =
       R"(<root><Embedded>&lt;Item id="1"&gt;&lt;/Wrong&gt;</Embedded></root>)";
   std::vector<Item> items;
-  xq::XmlParser parser(embedded_items(items)(xq::NullSink{}));
+  auto parser = embedded_items_parser(items);
 
   EXPECT_EQ(parser.feed(kXml, true), xq::ParseStatus::Error);
 }
@@ -48,7 +50,7 @@ TEST(XmlQueryTest, TruncatedNestedDocumentFailsOuterParse) {
   constexpr std::string_view kXml =
       R"(<root><Embedded>&lt;Item id="1"&gt;</Embedded></root>)";
   std::vector<Item> items;
-  xq::XmlParser parser(embedded_items(items)(xq::NullSink{}));
+  auto parser = embedded_items_parser(items);
 
   EXPECT_EQ(parser.feed(kXml, true), xq::ParseStatus::Error);
 }
@@ -61,9 +63,9 @@ constexpr std::string_view kVolumes =
 
 std::vector<std::string> volumes(auto select) {
   std::vector<std::string> out;
-  auto query = select | xq::Attr("val") |
-               xq::Invoke([&out](std::string_view v) { out.emplace_back(v); });
-  xq::XmlParser parser(query(xq::NullSink{}));
+  xq::XmlParser parser(select | xq::Attr("val"), [&out](std::string_view v) {
+    out.emplace_back(v);
+  });
   EXPECT_EQ(parser.feed(kVolumes, true), xq::ParseStatus::Ok);
   return out;
 }
@@ -110,11 +112,10 @@ TEST(XmlQueryTest, FanoutRunsEveryBranch) {
     void operator()(const A& a) const { seen->push_back("a" + a.id); }
     void operator()(const B& b) const { seen->push_back("b" + b.id); }
   };
-  auto query =
-      xq::Fanout(xq::Select("a") | xq::Construct<A>(xq::Bind(&A::id, xq::Attr("id"))),
-                 xq::Select("b") | xq::Construct<B>(xq::Bind(&B::id, xq::Attr("id")))) |
-      xq::Invoke(Record{&seen});
-  xq::XmlParser parser(query(xq::NullSink{}));
+  constexpr auto kQuery = xq::Fanout(
+      xq::Select("a") | xq::Construct<A>(xq::Bind(&A::id, xq::Attr("id"))),
+      xq::Select("b") | xq::Construct<B>(xq::Bind(&B::id, xq::Attr("id"))));
+  xq::XmlParser parser(kQuery, Record{&seen});
   ASSERT_EQ(parser.feed(R"(<r><a id="1"/><b id="2"/><a id="3"/></r>)", true),
             xq::ParseStatus::Ok);
   EXPECT_EQ(seen, (std::vector<std::string>{"a1", "b2", "a3"}));

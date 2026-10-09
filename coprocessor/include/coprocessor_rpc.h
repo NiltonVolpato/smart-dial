@@ -23,7 +23,7 @@ inline constexpr std::array<std::optional<tether::MethodInfo>, 5> kCoprocessorPr
 };
 
 inline constexpr std::array<std::optional<tether::MethodInfo>, 2> kCoprocessorProto_SystemMethods{
-    tether::MethodInfo{.name = "WatchTime", .streaming = true},
+    tether::MethodInfo{.name = "GetTimestamp", .streaming = false},
     tether::MethodInfo{.name = "ReportBattery", .streaming = false},
 };
 
@@ -64,7 +64,7 @@ class Handler {
   virtual void watch_playback(tether::Sink<::CoprocessorProto::StateUpdate> sink, const ::CoprocessorProto::PlaybackRequest& request) = 0;
   virtual void action(tether::Reply<::CoprocessorProto::Empty> reply, const ::CoprocessorProto::ActionRequest& request) = 0;
   virtual void set_volume(tether::Reply<::CoprocessorProto::Empty> reply, const ::CoprocessorProto::VolumeRequest& request) = 0;
-  virtual void get_groups_summary(tether::Reply<::CoprocessorProto::GroupsSummary> reply, const ::CoprocessorProto::Empty& request) = 0;
+  virtual void get_groups_summary(tether::Reply<::CoprocessorProto::GroupsSummary> reply, const ::CoprocessorProto::GroupsSummaryRequest& request) = 0;
   // The client dropped `call` before it finished.
   virtual void cancelled(tether::CallId /*call*/) {}
 
@@ -101,7 +101,7 @@ class Service final : public tether::Service {
         return;
       }
       case 4: {
-        const auto* message = tether::verify<::CoprocessorProto::Empty>(request);
+        const auto* message = tether::verify<::CoprocessorProto::GroupsSummaryRequest>(request);
         if (message == nullptr) {
           (void)reply.fail(tether::WireStatus::INVALID_ARGUMENT);
           return;
@@ -157,15 +157,16 @@ namespace system {
 // This service's id in its server's table.
 inline constexpr uint8_t kId = 1;
 
-// `CoprocessorProto.System/WatchTime`
-inline constexpr tether::MethodId kWatchTime{kId, 0};
+// `CoprocessorProto.System/GetTimestamp`
+inline constexpr tether::MethodId kGetTimestamp{kId, 0};
 // `CoprocessorProto.System/ReportBattery`
 inline constexpr tether::MethodId kReportBattery{kId, 1};
 
 class Handler {
  public:
-  // Streams network time updates whenever SNTP synchronizes.
-  virtual void watch_time(tether::Sink<::CoprocessorProto::TimeSync> sink, const ::CoprocessorProto::Empty& request) = 0;
+  // Requests the current time from the coprocessor. The coprocessor will
+  // already sync the time via SNTP when WiFi is connected.
+  virtual void get_timestamp(tether::Reply<::CoprocessorProto::GetTimestampResponse> reply, const ::CoprocessorProto::GetTimestampRequest& request) = 0;
   // Reports battery state from the host ADC to the co-processor.
   virtual void report_battery(tether::Reply<::CoprocessorProto::Empty> reply, const ::CoprocessorProto::BatteryStatus& request) = 0;
   // The client dropped `call` before it finished.
@@ -185,6 +186,15 @@ class Service final : public tether::Service {
             [[maybe_unused]] std::span<const std::byte> request,
             [[maybe_unused]] tether::RawReply reply) override {
     switch (method) {
+      case 0: {
+        const auto* message = tether::verify<::CoprocessorProto::GetTimestampRequest>(request);
+        if (message == nullptr) {
+          (void)reply.fail(tether::WireStatus::INVALID_ARGUMENT);
+          return;
+        }
+        handler_->get_timestamp(tether::Reply<::CoprocessorProto::GetTimestampResponse>(reply), *message);
+        return;
+      }
       case 1: {
         const auto* message = tether::verify<::CoprocessorProto::BatteryStatus>(request);
         if (message == nullptr) {
@@ -204,15 +214,6 @@ class Service final : public tether::Service {
             [[maybe_unused]] std::span<const std::byte> request,
             [[maybe_unused]] tether::RawSink sink) override {
     switch (method) {
-      case 0: {
-        const auto* message = tether::verify<::CoprocessorProto::Empty>(request);
-        if (message == nullptr) {
-          (void)sink.end(tether::WireStatus::INVALID_ARGUMENT);
-          return;
-        }
-        handler_->watch_time(tether::Sink<::CoprocessorProto::TimeSync>(sink), *message);
-        return;
-      }
       default:
         (void)sink.end(tether::WireStatus::UNIMPLEMENTED);
         return;

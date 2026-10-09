@@ -1,1 +1,17 @@
 BasedOnStyle: Google
+IncludeBlocks: Regroup
+IncludeCategories:
+  # C system headers.
+  - Regex: '^<.*\.h>'
+    Priority: 1
+  # C++ standard library.
+  - Regex: '^<.*'
+    Priority: 2
+  # Project headers: src/ subdirectories and generated bindings.
+  - Regex: '^"((async|net|provisioning|services|sonos|xml_query)/|log\.h")'
+    Priority: 4
+  - Regex: '^"coprocessor_(generated|rpc)\.h"'
+    Priority: 4
+  # Libraries: ESP-IDF, FreeRTOS, tether, expat, ...
+  - Regex: '.*'
+    Priority: 3

@@ -3,4 +3,8 @@
 
 namespace CoprocessorProto;
 
+// IPv4 addresses are uint32 numbers: a.b.c.d is
+// (a << 24) | (b << 16) | (c << 8) | d, as Rust's Ipv4Addr::from(u32) and C's
+// ntohl(sin_addr.s_addr). 0 means none.
+
 table Empty {}

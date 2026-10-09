@@ -1,0 +1,12 @@
+{
+    "version": 3,
+    "configurePresets": [
+        {
+            "name": "default",
+            "displayName": "Default Development Build",
+            "description": "Standard build that targets a custom folder",
+            "generator": "Ninja",
+            "binaryDir": "my_custom_build_dir"
+        }
+    ]
+}
