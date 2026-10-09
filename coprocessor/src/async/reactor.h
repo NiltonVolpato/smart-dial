@@ -11,22 +11,19 @@
 #include <mutex>
 #include <vector>
 
-#include "tether/descriptor.h"
-
 #include "async/callback.h"
 
 namespace coprocessor {
 
 class BaseHandler;
 
-/// Single-threaded event loop running callbacks: work handed over by other
-/// tasks, timers and socket readiness, all on the one task that calls run().
-/// start(), post(), cancel() and stop() may be called from any task;
-/// everything else only from the reactor task, i.e. from a callback.
+/// Single-threaded event loop running callbacks: ready ones (handed over by
+/// any task), timers and socket readiness, all on the one task that calls
+/// run(). start(), post() and stop() may be called from any task; everything
+/// else only from the reactor task, i.e. from a callback.
 ///
-/// The reactor doesn't track handlers. Every pending callback knows its owner,
-/// so cancel() finds a call's handler by scanning what's pending, and a
-/// handler's destructor drops what it owned via forget(owner).
+/// It knows nothing of handlers or calls: whoever registers a callback
+/// unregisters it (cancel_timer(), forget(fd)) before its object goes away.
 class Reactor {
  public:
   using Clock = std::chrono::steady_clock;
@@ -36,8 +33,7 @@ class Reactor {
   /// Everything the reactor will ever hold, allocated once at construction.
   /// Exceeding any of these aborts: size them from the workload.
   struct Capacity {
-    /// Handed over by other tasks and not run yet (e.g. a start and a cancel
-    /// per concurrent call).
+    /// Ready callbacks not run yet (e.g. a start per concurrent call).
     std::size_t inbox;
     /// Fds watched at once (e.g. a socket per concurrent call).
     std::size_t watches;
@@ -55,11 +51,9 @@ class Reactor {
 
   /// Runs `handler`'s start() on the reactor, which then owns it.
   void start(BaseHandler* handler);
-  /// Runs `callback` on the reactor, in posting order.
+  /// Runs `callback` on the reactor, in posting order. It can't be taken
+  /// back: its object must live until it runs.
   void post(Callback callback);
-  /// Deletes `call`'s handler, wherever it's waiting. A no-op if it already
-  /// finished.
-  void cancel(tether::CallId call);
   /// Makes run() return after its current iteration.
   void stop();
 
@@ -85,15 +79,7 @@ class Reactor {
   /// fire spuriously for a reused fd number, so I/O must tolerate EAGAIN.
   void forget(int fd);
 
-  /// Drops every pending callback `owner` owns: inbox, timers and fds.
-  void forget(BaseHandler* owner);
-
  private:
-  // A callback to run or, when empty, a call to cancel.
-  struct Message {
-    Callback callback;
-    tether::CallId cancel{};
-  };
   struct Watch {
     int fd = -1;  // -1: a free slot.
     Callback readable;
@@ -107,11 +93,8 @@ class Reactor {
     Callback callback;
   };
 
-  void push(Message message);
-  bool pop(Message* message);
+  bool pop(Callback* callback);
   void run_inbox();
-  void cancel_now(tether::CallId call);
-  BaseHandler* find_owner(tether::CallId call);
   void wake();
   void drain_wake();
   void dispatch_fds(const fd_set& readable, const fd_set& writable);
@@ -136,10 +119,10 @@ class Reactor {
   // Handed over and not run yet, in order: a ring allocated once, at
   // construction. Each iteration runs only what was there when it began, so
   // work posting more work can't starve the loop.
-  std::vector<Message> inbox_;  // Guarded by mutex_.
-  std::size_t inbox_head_ = 0;  // Guarded by mutex_.
-  std::size_t inbox_size_ = 0;  // Guarded by mutex_.
-  bool stopped_ = false;        // Guarded by mutex_.
+  std::vector<Callback> inbox_;  // Guarded by mutex_.
+  std::size_t inbox_head_ = 0;   // Guarded by mutex_.
+  std::size_t inbox_size_ = 0;   // Guarded by mutex_.
+  bool stopped_ = false;         // Guarded by mutex_.
 
   // Reactor task only from here on.
 

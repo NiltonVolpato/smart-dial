@@ -18,7 +18,6 @@
 #include <vector>
 
 #include "async/callback.h"
-#include "async/handler.h"
 #include "async/reactor.h"
 #include "net/http_client.h"
 #include "net/http_request.h"
@@ -92,15 +91,12 @@ class ScriptedServer {
   std::string received_;
 };
 
-// Owns a client and records what it reports. Never started: a stack-allocated
-// handler is enough to own the client's callbacks.
-class Exchange final : public BaseHandler, public HttpResponseSink {
+// Owns a client and records what it reports.
+class Exchange final : public HttpResponseSink {
  public:
   explicit Exchange(Reactor& reactor, bool abort_on_body = false,
                     HttpClient::Timeouts timeouts = {})
-      : BaseHandler(reactor, tether::CallId{}),
-        client_(reactor, *this, timeouts),
-        abort_on_body_(abort_on_body) {}
+      : client_(reactor, timeouts), abort_on_body_(abort_on_body) {}
 
   void send(const Endpoint& endpoint, std::string_view request) {
     client_.send(endpoint, request, Callback(this, &Exchange::done), this);
@@ -112,7 +108,6 @@ class Exchange final : public BaseHandler, public HttpResponseSink {
   std::vector<std::pair<std::string, std::string>> headers;
 
  private:
-  void start() override {}
   void done() { result = client_.result(); }
 
   void on_header(std::string_view name, std::string_view value) override {
@@ -305,11 +300,10 @@ TEST(HttpClientTest, BadAddressCompletesAsynchronously) {
 }
 
 // Owns its client through a pointer, so a test can destroy the client alone.
-class ClientOwner final : public BaseHandler {
+class ClientOwner {
  public:
   explicit ClientOwner(Reactor& reactor)
-      : BaseHandler(reactor, tether::CallId{}),
-        client(std::make_unique<HttpClient>(reactor, *this)) {}
+      : client(std::make_unique<HttpClient>(reactor)) {}
 
   void send(const Endpoint& endpoint, bool destroy_in_done) {
     destroy_in_done_ = destroy_in_done;
@@ -320,7 +314,6 @@ class ClientOwner final : public BaseHandler {
   bool done_ran = false;
 
  private:
-  void start() override {}
   void done() {
     done_ran = true;
     if (destroy_in_done_) {

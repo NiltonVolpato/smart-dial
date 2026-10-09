@@ -35,14 +35,12 @@ class SocketPair {
   int fds_[2] = {-1, -1};
 };
 
-// Records which of its methods ran, in order. Callbacks without an owner.
+// Records which of its methods ran, in order.
 struct Recorder {
   std::vector<int> log;
   void one() { log.push_back(1); }
   void two() { log.push_back(2); }
-  Callback callback(void (Recorder::*method)()) {
-    return {this, method, nullptr};
-  }
+  Callback callback(void (Recorder::*method)()) { return {this, method}; }
 };
 
 TEST(ReactorTest, PostedCallbacksRunInOrder) {
@@ -60,13 +58,13 @@ TEST(ReactorTest, CallbackPostedByCallbackRunsNextIteration) {
     int runs = 0;
     void run() {
       if (++runs == 1) {
-        reactor.post({this, &Reposter::run, nullptr});
+        reactor.post({this, &Reposter::run});
       }
     }
   };
   Reactor reactor(kCapacity);
   Reposter reposter{reactor};
-  reactor.post({&reposter, &Reposter::run, nullptr});
+  reactor.post({&reposter, &Reposter::run});
   reactor.run_once(milliseconds(0));
   EXPECT_EQ(reposter.runs, 1);
   reactor.run_once(milliseconds(0));
@@ -86,7 +84,7 @@ TEST(ReactorTest, PostFromAnotherThreadWakesRun) {
   Stopper stopper{reactor};
   std::thread poster([&] {
     std::this_thread::sleep_for(milliseconds(20));
-    reactor.post({&stopper, &Stopper::run, nullptr});
+    reactor.post({&stopper, &Stopper::run});
   });
   reactor.run();  // Blocks until the posted callback stops it.
   poster.join();
@@ -174,7 +172,7 @@ TEST(ReactorTest, HeapKeepsDeadlineOrderThroughCancels) {
     int deadline_ms = static_cast<int>((seed >> 16) % 60);
     probes.push_back({&fired, deadline_ms});
     ids.push_back(reactor.after(milliseconds(deadline_ms),
-                                {&probes.back(), &Probe::fire, nullptr}));
+                                {&probes.back(), &Probe::fire}));
   }
   // Cancel every third, from the middle of the heap as much as the ends.
   for (int i = 0; i < kTimers; ++i) {
@@ -198,12 +196,12 @@ TEST(ReactorTest, ZeroDelayTimerArmedByTimerWaitsForNextIteration) {
     int fires = 0;
     void fire() {
       ++fires;
-      reactor.after(milliseconds(0), {this, &Rearmer::fire, nullptr});
+      reactor.after(milliseconds(0), {this, &Rearmer::fire});
     }
   };
   Reactor reactor(kCapacity);
   Rearmer rearmer{reactor};
-  reactor.after(milliseconds(0), {&rearmer, &Rearmer::fire, nullptr});
+  reactor.after(milliseconds(0), {&rearmer, &Rearmer::fire});
   reactor.run_once(milliseconds(0));
   EXPECT_EQ(rearmer.fires, 1);
 }
@@ -276,8 +274,8 @@ TEST(ReactorTest, CallbackMayForgetAnotherReadyFd) {
   int fires = 0;
   Forgetter forget_second{reactor, second.a(), &fires};
   Forgetter forget_first{reactor, first.a(), &fires};
-  reactor.when_readable(first.a(), {&forget_second, &Forgetter::run, nullptr});
-  reactor.when_readable(second.a(), {&forget_first, &Forgetter::run, nullptr});
+  reactor.when_readable(first.a(), {&forget_second, &Forgetter::run});
+  reactor.when_readable(second.a(), {&forget_first, &Forgetter::run});
   ASSERT_EQ(write(first.b(), "x", 1), 1);
   ASSERT_EQ(write(second.b(), "x", 1), 1);
   reactor.run_once(milliseconds(100));

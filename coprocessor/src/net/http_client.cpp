@@ -58,8 +58,8 @@ bool parse_number(std::string_view s, T* out) {
 
 }  // namespace
 
-HttpClient::HttpClient(Reactor& reactor, BaseHandler& owner, Timeouts timeouts)
-    : reactor_(reactor), owner_(owner), timeouts_(timeouts) {}
+HttpClient::HttpClient(Reactor& reactor, Timeouts timeouts)
+    : reactor_(reactor), timeouts_(timeouts) {}
 
 HttpClient::~HttpClient() { release(); }
 

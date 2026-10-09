@@ -15,11 +15,12 @@ namespace coprocessor {
 /// A handler answering one unary call. The reply is private, and answering
 /// is the only way to finish: a handler that forgets to finish has also never
 /// answered, so the client notices (it times out) instead of a silent leak.
+/// A cancelled call needs nothing special: the answer finds it Closed.
 template <class Response>
 class UnaryHandler : public BaseHandler {
  protected:
   UnaryHandler(Reactor& reactor, tether::Reply<Response> reply)
-      : BaseHandler(reactor, reply.call_id()), reply_(reply) {}
+      : BaseHandler(reactor), reply_(reply) {}
 
   /// Answers the call, then deletes this handler: touch nothing of it after.
   template <class Build>

@@ -35,10 +35,6 @@ constexpr unsigned kSlotBits = 8;
 constexpr uint32_t kSlotMask = (1U << kSlotBits) - 1;
 constexpr uint32_t kGenerationMask = (1U << (32 - kSlotBits)) - 1;
 
-bool owned_by(const Callback& callback, const BaseHandler* owner) {
-  return callback && callback.owner() == owner;
-}
-
 }  // namespace
 
 Reactor::Reactor(Capacity capacity)
@@ -88,10 +84,6 @@ void Reactor::start(BaseHandler* handler) {
   post(Callback(handler, &BaseHandler::start));
 }
 
-void Reactor::post(Callback callback) { push({.callback = callback}); }
-
-void Reactor::cancel(tether::CallId call) { push({.cancel = call}); }
-
 void Reactor::stop() {
   {
     std::scoped_lock lock(mutex_);
@@ -100,16 +92,16 @@ void Reactor::stop() {
   wake();
 }
 
-void Reactor::push(Message message) {
+void Reactor::post(Callback callback) {
   bool was_empty = false;
   {
     std::scoped_lock lock(mutex_);
     if (inbox_size_ == inbox_.size()) {
-      ESP_LOGE(TAG, "Inbox full (%u messages)",
+      ESP_LOGE(TAG, "Inbox full (%u callbacks)",
                static_cast<unsigned>(inbox_.size()));
       std::abort();
     }
-    inbox_[(inbox_head_ + inbox_size_) % inbox_.size()] = message;
+    inbox_[(inbox_head_ + inbox_size_) % inbox_.size()] = callback;
     was_empty = inbox_size_++ == 0;
   }
   // A non-empty inbox already has a wake-up pending.
@@ -118,12 +110,12 @@ void Reactor::push(Message message) {
   }
 }
 
-bool Reactor::pop(Message* message) {
+bool Reactor::pop(Callback* callback) {
   std::scoped_lock lock(mutex_);
   if (inbox_size_ == 0) {
     return false;
   }
-  *message = inbox_[inbox_head_];
+  *callback = inbox_[inbox_head_];
   inbox_head_ = (inbox_head_ + 1) % inbox_.size();
   --inbox_size_;
   return true;
@@ -187,7 +179,7 @@ void Reactor::run_once(Clock::duration max_wait) {
   int ready = select(max_fd + 1, &readable, &writable, nullptr, timeout_ptr);
   if (ready < 0) {
     if (errno == EBADF) {
-      // An owner closed an fd without forget(): a bug, but don't spin on it.
+      // Someone closed an fd without forget(): a bug, but don't spin on it.
       drop_bad_fds();
     } else if (errno != EINTR) {
       ESP_LOGE(TAG, "select failed (errno=%d)", errno);
@@ -210,87 +202,10 @@ void Reactor::run_inbox() {
     count = inbox_size_;
   }
   // Only what was there when the iteration began; the lock is released while
-  // each message runs, so other tasks never wait on it.
-  Message message;
-  for (std::size_t i = 0; i < count && pop(&message); ++i) {
-    if (message.callback) {
-      message.callback();
-    } else {
-      cancel_now(message.cancel);
-    }
-  }
-}
-
-void Reactor::cancel_now(tether::CallId call) {
-  if (call == tether::CallId{}) {
-    return;
-  }
-  // Not running (only one callback runs at a time, and it's us), so if it
-  // still exists it's waiting on something here.
-  if (BaseHandler* handler = find_owner(call)) {
-    delete handler;  // Its destructor forgets everything else it owned.
-  }
-}
-
-BaseHandler* Reactor::find_owner(tether::CallId call) {
-  auto works_for_call = [call](const Callback& callback) {
-    return callback && callback.owner() != nullptr &&
-           callback.owner()->call_id() == call;
-  };
-  {
-    std::scoped_lock lock(mutex_);
-    for (std::size_t i = 0; i < inbox_size_; ++i) {
-      const Callback& callback =
-          inbox_[(inbox_head_ + i) % inbox_.size()].callback;
-      if (works_for_call(callback)) {
-        return callback.owner();
-      }
-    }
-  }
-  for (std::size_t slot : heap_) {
-    if (works_for_call(timers_[slot].callback)) {
-      return timers_[slot].callback.owner();
-    }
-  }
-  for (const Watch& watch : watches_) {
-    if (works_for_call(watch.readable)) {
-      return watch.readable.owner();
-    }
-    if (works_for_call(watch.writable)) {
-      return watch.writable.owner();
-    }
-  }
-  return nullptr;
-}
-
-void Reactor::forget(BaseHandler* owner) {
-  {
-    // Compact the ring in place, keeping order.
-    std::scoped_lock lock(mutex_);
-    std::size_t kept = 0;
-    for (std::size_t i = 0; i < inbox_size_; ++i) {
-      const Message& message = inbox_[(inbox_head_ + i) % inbox_.size()];
-      if (!owned_by(message.callback, owner)) {
-        inbox_[(inbox_head_ + kept++) % inbox_.size()] = message;
-      }
-    }
-    inbox_size_ = kept;
-  }
-  for (std::size_t slot = 0; slot < timers_.size(); ++slot) {
-    if (timers_[slot].id != 0 && owned_by(timers_[slot].callback, owner)) {
-      remove_timer(slot);
-    }
-  }
-  for (Watch& watch : watches_) {
-    if (owned_by(watch.readable, owner)) {
-      watch.readable = {};
-    }
-    if (owned_by(watch.writable, owner)) {
-      watch.writable = {};
-    }
-    if (!watch.readable && !watch.writable) {
-      watch = {};
-    }
+  // each callback runs, so other tasks never wait on it.
+  Callback callback;
+  for (std::size_t i = 0; i < count && pop(&callback); ++i) {
+    callback();
   }
 }
 

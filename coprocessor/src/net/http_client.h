@@ -17,8 +17,6 @@
 
 namespace coprocessor {
 
-class BaseHandler;
-
 struct Endpoint {
   std::string ip;
   uint16_t port = 0;
@@ -64,9 +62,8 @@ class HttpResponseSink {
 /// closes (requests say `Connection: close`), driven by the reactor. Only
 /// Content-Length or close-delimited bodies are supported.
 ///
-/// Lives inside a handler, its owner: the reactor callbacks it registers are
-/// the owner's, so cancelling the owner's call finds them. Reactor task only.
-/// Destroying the client aborts its exchange, without running `done`.
+/// Reactor task only. Destroying the client aborts its exchange, without
+/// running `done`, and unregisters everything it had in the reactor.
 class HttpClient {
  public:
   struct Timeouts {
@@ -75,9 +72,8 @@ class HttpClient {
     std::chrono::milliseconds idle{5000};
   };
 
-  HttpClient(Reactor& reactor, BaseHandler& owner)
-      : HttpClient(reactor, owner, Timeouts{}) {}
-  HttpClient(Reactor& reactor, BaseHandler& owner, Timeouts timeouts);
+  explicit HttpClient(Reactor& reactor) : HttpClient(reactor, Timeouts{}) {}
+  HttpClient(Reactor& reactor, Timeouts timeouts);
   ~HttpClient();
   HttpClient(const HttpClient&) = delete;
   HttpClient& operator=(const HttpClient&) = delete;
@@ -107,13 +103,9 @@ class HttpClient {
   void complete(HttpResult result);
   void release();
 
-  // A callback of this client's, owned by its owner.
-  Callback callback(void (HttpClient::*method)()) {
-    return {this, method, &owner_};
-  }
+  Callback callback(void (HttpClient::*method)()) { return {this, method}; }
 
   Reactor& reactor_;
-  BaseHandler& owner_;
   Timeouts timeouts_;
   int fd_ = -1;
   // One timer for the whole exchange. Progress only moves deadline_; the
