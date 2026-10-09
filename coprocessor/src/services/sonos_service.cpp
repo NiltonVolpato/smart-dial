@@ -102,14 +102,17 @@ class SoapCommandHandler : public UnaryHandler<Empty> {
   std::string_view action_;  // A literal: for logs.
 };
 
-// The parser of a GetTransportInfo response, appending CurrentTransportState's
-// text to `out`.
-auto transport_state_parser(std::string* out) {
-  auto query =
-      xq::Select("CurrentTransportState") | xq::Text() |
-      xq::Invoke([out](std::string_view chunk) { out->append(chunk); });
-  return xq::XmlParser(query(xq::NullSink{}));
-}
+// Appends the text a query produces to a string.
+struct AppendText {
+  std::string* out;
+  void operator()(std::string_view chunk) const { out->append(chunk); }
+};
+
+// CurrentTransportState's text, in a GetTransportInfo response.
+constexpr auto kTransportState =
+    xq::Select("CurrentTransportState") | xq::Text();
+using TransportStateParser =
+    xq::XmlParser<std::remove_const_t<decltype(kTransportState)>, AppendText>;
 
 class ActionHandler final : public SoapCommandHandler, HttpResponseSink {
  public:
@@ -128,7 +131,7 @@ class ActionHandler final : public SoapCommandHandler, HttpResponseSink {
       // Toggling needs the current state first.
       request_ = soap_request(endpoint_, kAvTransport, "GetTransportInfo",
                               InstanceArgs{});
-      parser_.emplace(transport_state_parser(&state_));
+      parser_.emplace(kTransportState, AppendText{&state_});
       http_.send(endpoint_, request_.bytes(),
                  Callback(this, &ActionHandler::state_known), this);
     } else {
@@ -178,7 +181,7 @@ class ActionHandler final : public SoapCommandHandler, HttpResponseSink {
 
   ActionType action_type_;
   std::string state_;
-  std::optional<decltype(transport_state_parser(nullptr))> parser_;
+  std::optional<TransportStateParser> parser_;
 };
 
 class SetVolumeHandler final : public SoapCommandHandler {
@@ -210,14 +213,11 @@ class SetVolumeHandler final : public SoapCommandHandler {
 };
 
 // The title in a GetPositionInfo response: the DIDL-Lite document nested, as
-// text, in TrackMetaData. Appends it to `out`.
-auto track_title_parser(std::string* out) {
-  auto query =
-      xq::Select("TrackMetaData") | xq::Text() | xq::ParseXml() |
-      xq::Select("title") | xq::Text() |
-      xq::Invoke([out](std::string_view chunk) { out->append(chunk); });
-  return xq::XmlParser(query(xq::NullSink{}));
-}
+// text, in TrackMetaData.
+constexpr auto kTrackTitle = xq::Select("TrackMetaData") | xq::Text() |
+                             xq::ParseXml() | xq::Select("title") | xq::Text();
+using TrackTitleParser =
+    xq::XmlParser<std::remove_const_t<decltype(kTrackTitle)>, AppendText>;
 
 // Cuts `text` to at most `size` bytes, on a UTF-8 character boundary.
 void truncate_utf8(std::string& text, std::size_t size) {
@@ -271,16 +271,19 @@ class GroupsSummaryHandler final : public UnaryHandler<GroupsSummary> {
     void start(Group& group) {
       group_ = &group;
       state_.clear();
-      send("GetTransportInfo", transport_state_parser(&state_),
-           &Query::state_known);
+      send("GetTransportInfo", kTransportState, &state_, &Query::state_known);
     }
 
    private:
-    template <class Parser>
-    void send(std::string_view action, Parser parser, void (Query::*next)()) {
+    // Sends `action`, appending the text `query` finds in the response to
+    // `out`, then calls `next`.
+    template <class XmlQuery>
+    void send(std::string_view action, const XmlQuery& query, std::string* out,
+              void (Query::*next)()) {
       endpoint_ = {.ip = group_->coordinator, .port = kSonosPort};
       request_ = soap_request(endpoint_, kAvTransport, action, InstanceArgs{});
-      parser_.emplace<Parser>(std::move(parser));
+      parser_.emplace<xq::XmlParser<XmlQuery, AppendText>>(query,
+                                                           AppendText{out});
       http_.send(endpoint_, request_.bytes(), Callback(this, next), this);
     }
 
@@ -310,8 +313,7 @@ class GroupsSummaryHandler final : public UnaryHandler<GroupsSummary> {
         handler_.query_done(*this);  // Last: it may delete us all.
         return;
       }
-      send("GetPositionInfo", track_title_parser(&group_->title),
-           &Query::title_known);
+      send("GetPositionInfo", kTrackTitle, &group_->title, &Query::title_known);
     }
 
     void title_known() {
@@ -329,8 +331,7 @@ class GroupsSummaryHandler final : public UnaryHandler<GroupsSummary> {
     SoapRequest request_;
     Group* group_ = nullptr;
     std::string state_;
-    std::variant<std::monostate, decltype(transport_state_parser(nullptr)),
-                 decltype(track_title_parser(nullptr))>
+    std::variant<std::monostate, TransportStateParser, TrackTitleParser>
         parser_;
   };
 

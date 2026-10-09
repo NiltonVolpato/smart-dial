@@ -15,7 +15,6 @@
 #include <tuple>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 namespace xq {
 
@@ -173,20 +172,6 @@ struct AllOf {
     return a(attrs) && b(attrs);
   }
 };
-
-struct NullSink {
-  void receive(const auto&) {}
-  void done() {}
-  void reset_target(auto&) {}
-};
-
-namespace detail {
-
-struct MakeNullSink {
-  NullSink operator()() const { return {}; }
-};
-
-}  // namespace detail
 
 // ----------------------------------------------------------------------------
 // SAX sinks
@@ -383,6 +368,8 @@ class ParseXmlSink {
   }
 };
 
+// The end of every pipeline: hands each item the query produces to the
+// function XmlParser was given.
 template <typename Fn>
 class InvokeSink {
   Fn fn_;
@@ -394,6 +381,17 @@ class InvokeSink {
   void done() {}
   void reset_target(auto&) {}
 };
+
+namespace detail {
+
+// Each Fanout branch gets a sink, and so a copy of the function, of its own.
+template <typename Fn>
+struct MakeInvokeSink {
+  const Fn* fn;
+  InvokeSink<Fn> operator()() const { return InvokeSink<Fn>(*fn); }
+};
+
+}  // namespace detail
 
 template <typename T, typename Downstream, typename... Collectors>
 class ConstructSink {
@@ -497,7 +495,7 @@ struct SelectFactory {
   /// Narrows the selection to elements `m` matches, e.g. Attr("channel",
   /// "Master") or Predicate(...). Chained calls must all match.
   template <typename M>
-  [[nodiscard]] auto with(M m) const {
+  [[nodiscard]] constexpr auto with(M m) const {
     if constexpr (std::is_same_v<Matcher, MatchAll>) {
       return SelectFactory<M>{name, std::move(m)};
     } else {
@@ -526,7 +524,7 @@ class AttrExpr {
   std::string_view name_;
 
  public:
-  AttrExpr(std::string_view name) : name_(name) {}
+  constexpr AttrExpr(std::string_view name) : name_(name) {}
 
   template <typename Make>
   [[nodiscard]] auto build(const Make& make) const {
@@ -545,16 +543,6 @@ struct ParseXmlFactory {
   template <typename Make>
   [[nodiscard]] auto build(const Make& make) const {
     return ParseXmlSink<detail::Built<Make>>(make);
-  }
-};
-
-template <typename Fn>
-struct InvokeFactory {
-  Fn fn;
-
-  template <typename Make>
-  [[nodiscard]] auto build(const Make& /*make*/) const {
-    return InvokeSink<Fn>(fn);
   }
 };
 
@@ -724,7 +712,7 @@ class BindSpec {
   Expr expr_;
 
  public:
-  BindSpec(Member T::* member, Expr expr)
+  constexpr BindSpec(Member T::* member, Expr expr)
       : member_(member), expr_(std::move(expr)) {}
 
   [[nodiscard]] auto make_collector() const {
@@ -737,7 +725,7 @@ class FirstExpr {
   PipelineFactory factory_;
 
  public:
-  FirstExpr(PipelineFactory factory) : factory_(std::move(factory)) {}
+  constexpr FirstExpr(PipelineFactory factory) : factory_(std::move(factory)) {}
 
   template <typename T, typename Member>
   [[nodiscard]] auto make_collector(Member T::* member) const {
@@ -751,7 +739,8 @@ class CollectExpr {
   PipelineFactory factory_;
 
  public:
-  CollectExpr(PipelineFactory factory) : factory_(std::move(factory)) {}
+  constexpr CollectExpr(PipelineFactory factory)
+      : factory_(std::move(factory)) {}
 
   template <typename T, typename Member>
   [[nodiscard]] auto make_collector(Member T::* member) const {
@@ -762,51 +751,49 @@ class CollectExpr {
 
 // ----------------------------------------------------------------------------
 // User-facing helpers
+//
+// All constexpr, so a query can be a constant in flash. Lambdas in one (e.g.
+// Predicate) must not capture: what the query produces goes to XmlParser.
 // ----------------------------------------------------------------------------
 
-inline auto Select(std::string_view name) {
+constexpr auto Select(std::string_view name) {
   return SelectFactory<>{.name = name};
 }
-inline auto Text() { return TextFactory{}; }
-inline auto Attr(std::string_view name) { return AttrExpr{name}; }
+constexpr auto Text() { return TextFactory{}; }
+constexpr auto Attr(std::string_view name) { return AttrExpr{name}; }
 /// A matcher, for Select(...).with(...): attribute `name` equals `value`.
-inline auto Attr(std::string_view name, std::string_view value) {
+constexpr auto Attr(std::string_view name, std::string_view value) {
   return AttrEquals{.name = name, .value = value};
 }
 template <typename Fn>
-auto Predicate(Fn fn) {
+constexpr auto Predicate(Fn fn) {
   return PredicateMatcher<Fn>{std::move(fn)};
 }
-inline auto ParseXml() { return ParseXmlFactory{}; }
-
-template <typename Fn>
-auto Invoke(Fn fn) {
-  return InvokeFactory<Fn>{std::move(fn)};
-}
+constexpr auto ParseXml() { return ParseXmlFactory{}; }
 
 template <typename T, typename... Binds>
-auto Construct(Binds... binds) {
+constexpr auto Construct(Binds... binds) {
   return ConstructFactory<T, Binds...>{std::make_tuple(std::move(binds)...)};
 }
 
 template <typename... Factories>
-auto Fanout(Factories... factories) {
+constexpr auto Fanout(Factories... factories) {
   // One tuple member: the branches go in through make_tuple, not braces.
   return FanoutFactory<Factories...>{std::make_tuple(std::move(factories)...)};
 }
 
 template <typename Member, typename T, typename Expr>
-auto Bind(Member T::* member, Expr expr) {
+constexpr auto Bind(Member T::* member, Expr expr) {
   return BindSpec<T, Member, Expr>{member, std::move(expr)};
 }
 
 template <typename PipelineFactory>
-auto First(PipelineFactory factory) {
+constexpr auto First(PipelineFactory factory) {
   return FirstExpr<PipelineFactory>{std::move(factory)};
 }
 
 template <typename PipelineFactory>
-auto Collect(PipelineFactory factory) {
+constexpr auto Collect(PipelineFactory factory) {
   return CollectExpr<PipelineFactory>{std::move(factory)};
 }
 
@@ -815,7 +802,7 @@ auto Collect(PipelineFactory factory) {
 // ----------------------------------------------------------------------------
 
 template <typename A, typename B>
-auto operator|(A a, B b) {
+constexpr auto operator|(A a, B b) {
   return PipeFactory<A, B>{std::move(a), std::move(b)};
 }
 
@@ -823,10 +810,10 @@ auto operator|(A a, B b) {
 // Top-level parser
 // ----------------------------------------------------------------------------
 
-template <typename Query>
+template <typename Query, typename Fn>
 class XmlParser {
   using Sink = decltype(std::declval<const Query&>().build(
-      std::declval<detail::MakeNullSink>()));
+      std::declval<detail::MakeInvokeSink<Fn>>()));
   Sink sink_;
   XML_Parser parser_ = nullptr;
 
@@ -848,10 +835,11 @@ class XmlParser {
   }
 
  public:
-  // Builds the query's sinks in place. Never moved: Expat holds `this` as its
-  // user data, so construct it where it lives (e.g. optional::emplace(query)).
-  explicit XmlParser(const Query& query)
-      : sink_(query.build(detail::MakeNullSink{})),
+  // Runs `query`, calling `fn` with each item it produces. Builds the query's
+  // sinks in place, and is never moved: Expat holds `this` as its user data,
+  // so construct it where it lives (e.g. optional::emplace(query, fn)).
+  XmlParser(const Query& query, Fn fn)
+      : sink_(query.build(detail::MakeInvokeSink<Fn>{&fn})),
         parser_(XML_ParserCreate(nullptr)) {
     XML_SetUserData(parser_, this);
     XML_SetStartElementHandler(parser_, start_cb);

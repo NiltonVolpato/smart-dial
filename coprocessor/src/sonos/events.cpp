@@ -105,25 +105,27 @@ struct TopologyRows {
   }
 };
 
+constexpr auto kTopology =
+    xq::Select("ZoneGroupState") | xq::Text() | xq::ParseXml() |
+    xq::Fanout(
+        xq::Select("ZoneGroup") |
+            xq::Construct<GroupRow>(
+                xq::Bind(&GroupRow::id, xq::Attr("ID")),
+                xq::Bind(&GroupRow::coordinator, xq::Attr("Coordinator"))),
+        xq::Select("ZoneGroupMember") |
+            xq::Construct<MemberRow>(
+                xq::Bind(&MemberRow::uuid, xq::Attr("UUID")),
+                xq::Bind(&MemberRow::name, xq::Attr("ZoneName")),
+                xq::Bind(&MemberRow::location, xq::Attr("Location")),
+                xq::Bind(&MemberRow::invisible, xq::Attr("Invisible"))));
+
 auto topology_parser(TopologyRows* rows) {
-  auto query =
-      xq::Select("ZoneGroupState") | xq::Text() | xq::ParseXml() |
-      xq::Fanout(
-          xq::Select("ZoneGroup") |
-              xq::Construct<GroupRow>(
-                  xq::Bind(&GroupRow::id, xq::Attr("ID")),
-                  xq::Bind(&GroupRow::coordinator, xq::Attr("Coordinator"))),
-          xq::Select("ZoneGroupMember") |
-              xq::Construct<MemberRow>(
-                  xq::Bind(&MemberRow::uuid, xq::Attr("UUID")),
-                  xq::Bind(&MemberRow::name, xq::Attr("ZoneName")),
-                  xq::Bind(&MemberRow::location, xq::Attr("Location")),
-                  xq::Bind(&MemberRow::invisible, xq::Attr("Invisible")))) |
-      xq::Invoke(Overloaded{
+  return xq::XmlParser(
+      kTopology,
+      Overloaded{
           [rows](const GroupRow& row) { rows->add_group(row); },
           [rows](const MemberRow& row) { rows->members.push_back(row); },
       });
-  return xq::XmlParser(query(xq::NullSink{}));
 }
 
 // --- LastChange
@@ -144,7 +146,7 @@ struct LastChangeRow {
 // An element of the DIDL-Lite document that CurrentTrackMetaData carries,
 // escaped, in its val attribute. Skips an empty or NOT_IMPLEMENTED value: it
 // isn't XML, and would fail the whole parse.
-auto track_field(std::string_view element) {
+constexpr auto track_field(std::string_view element) {
   auto has_didl = xq::Predicate([](const xq::Attributes& attrs) {
     const std::optional<std::string_view> val = attrs.get("val");
     return val && !val->empty() && *val != "NOT_IMPLEMENTED";
@@ -154,32 +156,32 @@ auto track_field(std::string_view element) {
                    xq::Text());
 }
 
+constexpr auto kMaster = xq::Attr("channel", "Master");
+
+constexpr auto kLastChange =
+    xq::Select("LastChange") | xq::Text() | xq::ParseXml() |
+    xq::Select("InstanceID") |
+    xq::Construct<LastChangeRow>(
+        xq::Bind(&LastChangeRow::transport,
+                 xq::First(xq::Select("TransportState") | xq::Attr("val"))),
+        xq::Bind(
+            &LastChangeRow::volume,
+            xq::First(xq::Select("Volume").with(kMaster) | xq::Attr("val"))),
+        xq::Bind(&LastChangeRow::mute,
+                 xq::First(xq::Select("Mute").with(kMaster) | xq::Attr("val"))),
+        xq::Bind(
+            &LastChangeRow::duration,
+            xq::First(xq::Select("CurrentTrackDuration") | xq::Attr("val"))),
+        xq::Bind(&LastChangeRow::title, track_field("title")),
+        xq::Bind(&LastChangeRow::artist, track_field("creator")),
+        xq::Bind(&LastChangeRow::album, track_field("album")),
+        xq::Bind(&LastChangeRow::album_art_uri, track_field("albumArtURI")));
+
 auto last_change_parser(LastChangeRow* row) {
-  auto master = xq::Attr("channel", "Master");
-  auto query =
-      xq::Select("LastChange") | xq::Text() | xq::ParseXml() |
-      xq::Select("InstanceID") |
-      xq::Construct<LastChangeRow>(
-          xq::Bind(&LastChangeRow::transport,
-                   xq::First(xq::Select("TransportState") | xq::Attr("val"))),
-          xq::Bind(
-              &LastChangeRow::volume,
-              xq::First(xq::Select("Volume").with(master) | xq::Attr("val"))),
-          xq::Bind(
-              &LastChangeRow::mute,
-              xq::First(xq::Select("Mute").with(master) | xq::Attr("val"))),
-          xq::Bind(
-              &LastChangeRow::duration,
-              xq::First(xq::Select("CurrentTrackDuration") | xq::Attr("val"))),
-          xq::Bind(&LastChangeRow::title, track_field("title")),
-          xq::Bind(&LastChangeRow::artist, track_field("creator")),
-          xq::Bind(&LastChangeRow::album, track_field("album")),
-          xq::Bind(&LastChangeRow::album_art_uri, track_field("albumArtURI"))) |
-      xq::Invoke([row](const LastChangeRow& parsed) {
-        *row = parsed;
-        row->seen = true;
-      });
-  return xq::XmlParser(query(xq::NullSink{}));
+  return xq::XmlParser(kLastChange, [row](const LastChangeRow& parsed) {
+    *row = parsed;
+    row->seen = true;
+  });
 }
 
 // --- GetPositionInfo
@@ -190,16 +192,17 @@ struct PositionRow {
   std::string duration;
 };
 
+constexpr auto kPosition =
+    xq::Select("GetPositionInfoResponse") |
+    xq::Construct<PositionRow>(
+        xq::Bind(&PositionRow::elapsed,
+                 xq::First(xq::Select("RelTime") | xq::Text())),
+        xq::Bind(&PositionRow::duration,
+                 xq::First(xq::Select("TrackDuration") | xq::Text())));
+
 auto position_parser(PositionRow* row) {
-  auto query =
-      xq::Select("GetPositionInfoResponse") |
-      xq::Construct<PositionRow>(
-          xq::Bind(&PositionRow::elapsed,
-                   xq::First(xq::Select("RelTime") | xq::Text())),
-          xq::Bind(&PositionRow::duration,
-                   xq::First(xq::Select("TrackDuration") | xq::Text()))) |
-      xq::Invoke([row](const PositionRow& parsed) { *row = parsed; });
-  return xq::XmlParser(query(xq::NullSink{}));
+  return xq::XmlParser(kPosition,
+                       [row](const PositionRow& parsed) { *row = parsed; });
 }
 
 }  // namespace
