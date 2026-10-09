@@ -14,17 +14,19 @@
 
 #include "async/callback.h"
 #include "async/reactor.h"
+#include "net/connection_permits.h"
+#include "net/ipv4.h"
 
 namespace coprocessor {
 
 struct Endpoint {
-  std::string ip;
+  Ipv4 ip;
   uint16_t port = 0;
 };
 
 enum class HttpError : uint8_t {
   None,
-  BadAddress,  // The endpoint's IP isn't a valid IPv4 address.
+  BadAddress,  // The endpoint has no IP (0).
   Connect,     // Connection refused, unreachable, ...
   Timeout,     // Connecting, or no progress for too long.
   Io,          // send/recv failed.
@@ -62,8 +64,12 @@ class HttpResponseSink {
 /// closes (requests say `Connection: close`), driven by the reactor. Only
 /// Content-Length or close-delimited bodies are supported.
 ///
+/// Each exchange first takes a ConnectionPermit, waiting in line if none is
+/// free; its timeouts only start once it has one.
+///
 /// Reactor task only. Destroying the client aborts its exchange, without
-/// running `done`, and unregisters everything it had in the reactor.
+/// running `done`, unregisters everything it had in the reactor, and gives
+/// back its permit (or leaves the line).
 class HttpClient {
  public:
   struct Timeouts {
@@ -72,8 +78,9 @@ class HttpClient {
     std::chrono::milliseconds idle{5000};
   };
 
-  explicit HttpClient(Reactor& reactor) : HttpClient(reactor, Timeouts{}) {}
-  HttpClient(Reactor& reactor, Timeouts timeouts);
+  HttpClient(Reactor& reactor, ConnectionPermits& permits)
+      : HttpClient(reactor, permits, Timeouts{}) {}
+  HttpClient(Reactor& reactor, ConnectionPermits& permits, Timeouts timeouts);
   ~HttpClient();
   HttpClient(const HttpClient&) = delete;
   HttpClient& operator=(const HttpClient&) = delete;
@@ -89,6 +96,13 @@ class HttpClient {
   [[nodiscard]] const HttpResult& result() const { return result_; }
 
  private:
+  friend class ConnectionPermits;
+
+  // From ConnectionPermits: our turn came. Connects from the reactor, not
+  // from inside whoever released the permit.
+  void granted();
+  void on_granted();
+  void open_connection();
   void on_connected();
   void send_some();
   void receive_head();
@@ -106,6 +120,7 @@ class HttpClient {
   Callback callback(void (HttpClient::*method)()) { return {this, method}; }
 
   Reactor& reactor_;
+  ConnectionPermits& permits_;
   Timeouts timeouts_;
   int fd_ = -1;
   // One timer for the whole exchange. Progress only moves deadline_; the
@@ -118,6 +133,9 @@ class HttpClient {
   HttpResult result_;
   HttpError pending_error_ = HttpError::None;  // For fail_soon().
 
+  Endpoint endpoint_;
+  bool waiting_ = false;  // In the permits' line.
+  bool has_permit_ = false;
   std::span<const char> request_;
   std::size_t sent_ = 0;
 

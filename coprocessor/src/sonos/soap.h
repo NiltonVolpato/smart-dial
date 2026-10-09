@@ -16,6 +16,9 @@
 
 namespace coprocessor {
 
+/// Sonos serves UPnP on this port, always: the schemas carry no port.
+inline constexpr uint16_t kSonosPort = 1400;
+
 struct SoapService {
   std::string_view urn;
   std::string_view control_path;

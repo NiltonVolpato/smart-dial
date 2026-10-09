@@ -80,7 +80,9 @@ class ScriptedServer {
     thread_.join();
   }
 
-  Endpoint endpoint() const { return {.ip = "127.0.0.1", .port = port_}; }
+  Endpoint endpoint() const {
+    return {.ip = Ipv4{INADDR_LOOPBACK}, .port = port_};
+  }
   // Valid once the exchange is done.
   const std::string& received() const { return received_; }
 
@@ -91,12 +93,21 @@ class ScriptedServer {
   std::string received_;
 };
 
+// Enough permits for every test but the ones about permits.
+ConnectionPermits& plenty_of_permits() {
+  static ConnectionPermits permits(8, 8);
+  return permits;
+}
+
 // Owns a client and records what it reports.
 class Exchange final : public HttpResponseSink {
  public:
   explicit Exchange(Reactor& reactor, bool abort_on_body = false,
-                    HttpClient::Timeouts timeouts = {})
-      : client_(reactor, timeouts), abort_on_body_(abort_on_body) {}
+                    HttpClient::Timeouts timeouts = {},
+                    ConnectionPermits& permits = plenty_of_permits())
+      : client_(reactor, permits, timeouts), abort_on_body_(abort_on_body) {}
+
+  [[nodiscard]] bool finished() const { return result.has_value(); }
 
   void send(const Endpoint& endpoint, std::string_view request) {
     client_.send(endpoint, request, Callback(this, &Exchange::done), this);
@@ -288,10 +299,10 @@ TEST(HttpClientTest, RefusedConnection) {
   EXPECT_EQ(exchange.result->error, HttpError::Connect);
 }
 
-TEST(HttpClientTest, BadAddressCompletesAsynchronously) {
+TEST(HttpClientTest, MissingAddressCompletesAsynchronously) {
   Reactor reactor(kCapacity);
   Exchange exchange(reactor);
-  exchange.send({.ip = "not-an-ip", .port = 80}, kRequest);
+  exchange.send({.ip = Ipv4{}, .port = 80}, kRequest);
   EXPECT_FALSE(exchange.result);  // Never from inside send().
   run_until_done(reactor, exchange);
 
@@ -302,8 +313,9 @@ TEST(HttpClientTest, BadAddressCompletesAsynchronously) {
 // Owns its client through a pointer, so a test can destroy the client alone.
 class ClientOwner {
  public:
-  explicit ClientOwner(Reactor& reactor)
-      : client(std::make_unique<HttpClient>(reactor)) {}
+  explicit ClientOwner(Reactor& reactor,
+                       ConnectionPermits& permits = plenty_of_permits())
+      : client(std::make_unique<HttpClient>(reactor, permits)) {}
 
   void send(const Endpoint& endpoint, bool destroy_in_done) {
     destroy_in_done_ = destroy_in_done;
@@ -347,6 +359,74 @@ TEST(HttpClientTest, DestroyingClientAbortsSilently) {
   owner.client.reset();
   reactor.run_once(milliseconds(50));  // Nothing of the client fires.
   EXPECT_FALSE(owner.done_ran);
+}
+
+// One permit, two exchanges: the second waits for the first to finish.
+TEST(ConnectionPermitsTest, SecondExchangeWaitsForThePermit) {
+  ScriptedServer first({{.bytes = "HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\n",
+                         .pause = milliseconds(100)},
+                        {.bytes = "a"}});
+  ScriptedServer second(
+      {{.bytes = "HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nb"}});
+  ConnectionPermits permits(1, 2);
+  Reactor reactor(kCapacity);
+  Exchange one(reactor, false, {}, permits);
+  Exchange two(reactor, false, {}, permits);
+  one.send(first.endpoint(), kRequest);
+  two.send(second.endpoint(), kRequest);
+
+  // While the first is still receiving, the second hasn't even connected.
+  auto deadline = Reactor::Clock::now() + milliseconds(50);
+  while (Reactor::Clock::now() < deadline) {
+    reactor.run_once(milliseconds(10));
+  }
+  EXPECT_FALSE(one.finished());
+  EXPECT_FALSE(two.finished());
+
+  run_until_done(reactor, one);
+  run_until_done(reactor, two);
+  ASSERT_TRUE(one.finished() && two.finished());
+  EXPECT_EQ(one.body, "a");
+  EXPECT_EQ(two.body, "b");
+}
+
+TEST(ConnectionPermitsTest, DestroyedHolderReleasesItsPermit) {
+  ScriptedServer silent({{.pause = milliseconds(300)}});
+  ScriptedServer second(
+      {{.bytes = "HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nb"}});
+  ConnectionPermits permits(1, 2);
+  Reactor reactor(kCapacity);
+  ClientOwner holder(reactor, permits);
+  Exchange waiter(reactor, false, {}, permits);
+  holder.send(silent.endpoint(), false);
+  waiter.send(second.endpoint(), kRequest);
+  reactor.run_once(milliseconds(10));
+
+  holder.client.reset();  // Mid-exchange: its permit passes to the waiter.
+  run_until_done(reactor, waiter);
+  ASSERT_TRUE(waiter.finished());
+  EXPECT_EQ(waiter.body, "b");
+}
+
+TEST(ConnectionPermitsTest, DestroyedWaiterLeavesTheLine) {
+  ScriptedServer first(
+      {{.bytes = "HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\na",
+        .pause = milliseconds(50)}});
+  ScriptedServer third(
+      {{.bytes = "HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nc"}});
+  ConnectionPermits permits(1, 2);
+  Reactor reactor(kCapacity);
+  Exchange one(reactor, false, {}, permits);
+  auto two = std::make_unique<ClientOwner>(reactor, permits);
+  Exchange three(reactor, false, {}, permits);
+  one.send(first.endpoint(), kRequest);
+  two->send(first.endpoint(), false);  // Waits; never connects.
+  three.send(third.endpoint(), kRequest);
+  two.reset();  // Leaves the line: the permit skips it.
+
+  run_until_done(reactor, one);
+  run_until_done(reactor, three);
+  EXPECT_EQ(three.body, "c");
 }
 
 TEST(FixedRequestTest, FormatsInPlace) {

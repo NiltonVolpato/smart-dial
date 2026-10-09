@@ -58,8 +58,9 @@ bool parse_number(std::string_view s, T* out) {
 
 }  // namespace
 
-HttpClient::HttpClient(Reactor& reactor, Timeouts timeouts)
-    : reactor_(reactor), timeouts_(timeouts) {}
+HttpClient::HttpClient(Reactor& reactor, ConnectionPermits& permits,
+                       Timeouts timeouts)
+    : reactor_(reactor), permits_(permits), timeouts_(timeouts) {}
 
 HttpClient::~HttpClient() { release(); }
 
@@ -79,13 +80,36 @@ void HttpClient::send(const Endpoint& endpoint, std::span<const char> request,
   body_received_ = 0;
   buffered_ = 0;
 
-  sockaddr_in addr{};
-  addr.sin_family = AF_INET;
-  addr.sin_port = htons(endpoint.port);
-  if (inet_pton(AF_INET, endpoint.ip.c_str(), &addr.sin_addr) != 1) {
+  if (endpoint.ip == Ipv4{}) {
     fail_soon(HttpError::BadAddress);
     return;
   }
+  endpoint_ = endpoint;
+  if (permits_.acquire(this)) {
+    has_permit_ = true;
+    open_connection();
+  } else {
+    waiting_ = true;  // Until granted().
+  }
+}
+
+void HttpClient::granted() {
+  waiting_ = false;
+  has_permit_ = true;
+  timer_ = reactor_.after(std::chrono::milliseconds(0),
+                          callback(&HttpClient::on_granted));
+}
+
+void HttpClient::on_granted() {
+  timer_ = 0;
+  open_connection();
+}
+
+void HttpClient::open_connection() {
+  sockaddr_in addr{};
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons(endpoint_.port);
+  addr.sin_addr = endpoint_.ip.to_in_addr();
 
   fd_ = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
   if (fd_ < 0) {
@@ -330,6 +354,14 @@ void HttpClient::release() {
     reactor_.forget(fd_);
     close(fd_);
     fd_ = -1;
+  }
+  if (waiting_) {
+    permits_.leave(this);
+    waiting_ = false;
+  }
+  if (has_permit_) {
+    has_permit_ = false;
+    permits_.release();  // After closing: the next in line may open one.
   }
 }
 

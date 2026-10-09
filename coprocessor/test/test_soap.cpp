@@ -27,7 +27,7 @@ std::string_view body(std::string_view request) {
 }
 
 TEST(SoapTest, SetVolumeRequest) {
-  SoapRequest request = soap_request({.ip = "192.168.1.10", .port = 1400},
+  SoapRequest request = soap_request({.ip = *Ipv4::parse("192.168.1.10"), .port = kSonosPort},
                                      kRenderingControl, "SetVolume",
                                      SetVolumeArgs{.volume = 42});
   ASSERT_TRUE(request.fits());
@@ -48,7 +48,7 @@ TEST(SoapTest, SetVolumeRequest) {
 }
 
 TEST(SoapTest, ContentLengthMatchesBody) {
-  SoapRequest request = soap_request({.ip = "10.0.0.1", .port = 1400},
+  SoapRequest request = soap_request({.ip = *Ipv4::parse("10.0.0.1"), .port = kSonosPort},
                                      kAvTransport, "Play", PlayArgs{});
   ASSERT_TRUE(request.fits());
   EXPECT_EQ(content_length(text(request)), body(text(request)).size());
@@ -56,7 +56,7 @@ TEST(SoapTest, ContentLengthMatchesBody) {
 
 TEST(SoapTest, LongestRequestFits) {
   SoapRequest request =
-      soap_request({.ip = "255.255.255.255", .port = 65535}, kRenderingControl,
+      soap_request({.ip = Ipv4{0xFFFFFFFF}, .port = 65535}, kRenderingControl,
                    "SetRelativeVolume", SetRelativeVolumeArgs{-32768});
   EXPECT_TRUE(request.fits()) << text(request).size();
 }
