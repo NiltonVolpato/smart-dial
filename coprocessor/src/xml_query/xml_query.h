@@ -74,9 +74,48 @@ bool failed(const S& sink) {
   }
 }
 
+// What a builder makes: sinks are built in place by calling a builder, a
+// callable returning the sink by value, so that no sink is ever moved.
+template <typename Make>
+using Built = std::invoke_result_t<const Make&>;
+
+template <std::size_t I, typename T>
+struct TupleLeaf {
+  T value;
+};
+
+template <typename Indices, typename... Ts>
+class InPlaceTupleImpl;
+
+// A tuple whose elements are built in place from builders, which std::tuple
+// can't do: it always moves its elements in.
+template <std::size_t... Is, typename... Ts>
+class InPlaceTupleImpl<std::index_sequence<Is...>, Ts...>
+    : TupleLeaf<Is, Ts>... {
+ public:
+  template <typename... Makes>
+    requires(std::is_invocable_v<const Makes&> && ...)
+  explicit InPlaceTupleImpl(const Makes&... makes)
+      : TupleLeaf<Is, Ts>{makes()}... {}
+
+  template <typename F>
+  decltype(auto) apply(F&& f) {
+    return std::forward<F>(f)(static_cast<TupleLeaf<Is, Ts>&>(*this).value...);
+  }
+
+  template <typename F>
+  decltype(auto) apply(F&& f) const {
+    return std::forward<F>(f)(
+        static_cast<const TupleLeaf<Is, Ts>&>(*this).value...);
+  }
+};
+
+template <typename... Ts>
+using InPlaceTuple = InPlaceTupleImpl<std::index_sequence_for<Ts...>, Ts...>;
+
 template <typename Tuple>
 bool any_failed(const Tuple& sinks) {
-  return std::apply([](const auto&... s) { return (failed(s) || ...); }, sinks);
+  return sinks.apply([](const auto&... s) { return (failed(s) || ...); });
 }
 
 }  // namespace detail
@@ -141,6 +180,14 @@ struct NullSink {
   void reset_target(auto&) {}
 };
 
+namespace detail {
+
+struct MakeNullSink {
+  NullSink operator()() const { return {}; }
+};
+
+}  // namespace detail
+
 // ----------------------------------------------------------------------------
 // SAX sinks
 // ----------------------------------------------------------------------------
@@ -153,10 +200,9 @@ class SelectSink {
   int depth_ = 0;
 
  public:
-  SelectSink(std::string_view name, Matcher matcher, Downstream&& downstream)
-      : name_(name),
-        matcher_(std::move(matcher)),
-        downstream_(std::move(downstream)) {}
+  template <typename Make>
+  SelectSink(std::string_view name, Matcher matcher, const Make& make)
+      : name_(name), matcher_(std::move(matcher)), downstream_(make()) {}
 
   void on_start(std::string_view name, const char** attrs) {
     if (depth_ == 0) {
@@ -193,8 +239,8 @@ class TextSink {
   int depth_ = 0;
 
  public:
-  explicit TextSink(Downstream&& downstream)
-      : downstream_(std::move(downstream)) {}
+  template <typename Make>
+  explicit TextSink(const Make& make) : downstream_(make()) {}
 
   void on_start(std::string_view /*name*/, const char** /*attrs*/) {
     if (depth_ == 0) {
@@ -231,8 +277,9 @@ class AttrSink {
   bool emitted_ = false;
 
  public:
-  AttrSink(std::string_view name, Downstream&& downstream)
-      : name_(name), downstream_(std::move(downstream)) {}
+  template <typename Make>
+  AttrSink(std::string_view name, const Make& make)
+      : name_(name), downstream_(make()) {}
 
   void on_start(std::string_view /*name*/, const char** attrs) {
     if (depth_ == 0) {
@@ -289,51 +336,21 @@ class ParseXmlSink {
     self->downstream_.on_end(local_name(name));
   }
 
-  void init_parser() {
-    if (parser_) return;
-    parser_ = XML_ParserCreate(nullptr);
+ public:
+  // Built in place, never moved: Expat holds `this` as its user data.
+  template <typename Make>
+  explicit ParseXmlSink(const Make& make)
+      : downstream_(make()), parser_(XML_ParserCreate(nullptr)) {
     XML_SetUserData(parser_, this);
     XML_SetStartElementHandler(parser_, start_cb);
     XML_SetCharacterDataHandler(parser_, text_cb);
     XML_SetEndElementHandler(parser_, end_cb);
   }
 
- public:
-  explicit ParseXmlSink(Downstream&& downstream)
-      : downstream_(std::move(downstream)) {
-    init_parser();
-  }
-
   ~ParseXmlSink() {
     if (parser_) {
       XML_ParserFree(parser_);
     }
-  }
-
-  ParseXmlSink(ParseXmlSink&& other) noexcept
-      : downstream_(std::move(other.downstream_)),
-        parser_(other.parser_),
-        failed_(other.failed_) {
-    other.parser_ = nullptr;
-    if (parser_) {
-      XML_SetUserData(parser_, this);
-    }
-  }
-
-  ParseXmlSink& operator=(ParseXmlSink&& other) noexcept {
-    if (this != &other) {
-      if (parser_) {
-        XML_ParserFree(parser_);
-      }
-      downstream_ = std::move(other.downstream_);
-      parser_ = other.parser_;
-      failed_ = other.failed_;
-      other.parser_ = nullptr;
-      if (parser_) {
-        XML_SetUserData(parser_, this);
-      }
-    }
-    return *this;
   }
 
   ParseXmlSink(const ParseXmlSink&) = delete;
@@ -378,43 +395,43 @@ class InvokeSink {
   void reset_target(auto&) {}
 };
 
-template <typename T, typename Downstream, typename CollectorsTuple>
+template <typename T, typename Downstream, typename... Collectors>
 class ConstructSink {
   Downstream downstream_;
-  CollectorsTuple collectors_;
+  detail::InPlaceTuple<Collectors...> collectors_;
   std::optional<T> storage_;
   int depth_ = 0;
 
  public:
-  ConstructSink(Downstream&& downstream, CollectorsTuple&& collectors)
-      : downstream_(std::move(downstream)),
-        collectors_(std::move(collectors)) {}
+  template <typename Make, typename... MakeCollectors>
+  explicit ConstructSink(const Make& make,
+                         const MakeCollectors&... make_collectors)
+      : downstream_(make()), collectors_(make_collectors...) {}
 
   void on_start(std::string_view name, const char** attrs) {
     if (depth_ == 0) {
       storage_.emplace();
       ++depth_;
-      std::apply([&](auto&... c) { (c.bind_attrs(*storage_, attrs), ...); },
-                 collectors_);
-      std::apply([&](auto&... c) { (c.reset(*storage_), ...); }, collectors_);
+      collectors_.apply(
+          [&](auto&... c) { (c.bind_attrs(*storage_, attrs), ...); });
+      collectors_.apply([&](auto&... c) { (c.reset(*storage_), ...); });
     } else {
       ++depth_;
-      std::apply([&](auto&... c) { (c.on_start(name, attrs, *storage_), ...); },
-                 collectors_);
+      collectors_.apply(
+          [&](auto&... c) { (c.on_start(name, attrs, *storage_), ...); });
     }
   }
 
   void on_text(std::string_view chunk) {
     if (depth_ > 0) {
-      std::apply([&](auto&... c) { (c.on_text(chunk, *storage_), ...); },
-                 collectors_);
+      collectors_.apply(
+          [&](auto&... c) { (c.on_text(chunk, *storage_), ...); });
     }
   }
 
   void on_end(std::string_view name) {
     if (depth_ > 0) {
-      std::apply([&](auto&... c) { (c.on_end(name, *storage_), ...); },
-                 collectors_);
+      collectors_.apply([&](auto&... c) { (c.on_end(name, *storage_), ...); });
       --depth_;
       if (depth_ == 0) {
         downstream_.receive(*storage_);
@@ -424,7 +441,7 @@ class ConstructSink {
   }
 
   void reset_target(auto& obj) {
-    std::apply([&](auto&... c) { (c.reset(obj), ...); }, collectors_);
+    collectors_.apply([&](auto&... c) { (c.reset(obj), ...); });
     downstream_.reset_target(obj);
   }
   [[nodiscard]] bool failed() const {
@@ -432,31 +449,32 @@ class ConstructSink {
   }
 };
 
-template <typename Downstream, typename SinksTuple>
+template <typename Downstream, typename... Sinks>
 class FanoutSink {
   Downstream downstream_;
-  SinksTuple sinks_;
+  detail::InPlaceTuple<Sinks...> sinks_;
 
  public:
-  FanoutSink(Downstream&& downstream, SinksTuple&& sinks)
-      : downstream_(std::move(downstream)), sinks_(std::move(sinks)) {}
+  template <typename Make, typename... MakeSinks>
+  explicit FanoutSink(const Make& make, const MakeSinks&... make_sinks)
+      : downstream_(make()), sinks_(make_sinks...) {}
 
   void on_start(std::string_view name, const char** attrs) {
-    std::apply([&](auto&... s) { (s.on_start(name, attrs), ...); }, sinks_);
+    sinks_.apply([&](auto&... s) { (s.on_start(name, attrs), ...); });
   }
 
   void on_text(std::string_view chunk) {
-    std::apply([&](auto&... s) { (s.on_text(chunk), ...); }, sinks_);
+    sinks_.apply([&](auto&... s) { (s.on_text(chunk), ...); });
   }
 
   void on_end(std::string_view name) {
-    std::apply([&](auto&... s) { (s.on_end(name), ...); }, sinks_);
+    sinks_.apply([&](auto&... s) { (s.on_end(name), ...); });
   }
 
   void receive(const auto& item) { downstream_.receive(item); }
   void done() { downstream_.done(); }
   void reset_target(auto& obj) {
-    std::apply([&](auto&... s) { (s.reset_target(obj), ...); }, sinks_);
+    sinks_.apply([&](auto&... s) { (s.reset_target(obj), ...); });
     downstream_.reset_target(obj);
   }
   [[nodiscard]] bool failed() const {
@@ -466,6 +484,9 @@ class FanoutSink {
 
 // ----------------------------------------------------------------------------
 // Factories
+//
+// build(make) returns the factory's sink by value, with its downstream built
+// in place by `make`. Every sink is built straight into its final storage.
 // ----------------------------------------------------------------------------
 
 template <typename Matcher = MatchAll>
@@ -484,31 +505,22 @@ struct SelectFactory {
     }
   }
 
-  template <typename Downstream>
-    requires(!std::is_lvalue_reference_v<Downstream>)
-  auto operator()(Downstream&& downstream) const {
-    return SelectSink<Downstream, Matcher>(name, matcher,
-                                           std::move(downstream));
+  template <typename Make>
+  [[nodiscard]] auto build(const Make& make) const {
+    return SelectSink<detail::Built<Make>, Matcher>(name, matcher, make);
   }
 };
 
 struct TextFactory {
-  template <typename Downstream>
-    requires(!std::is_lvalue_reference_v<Downstream>)
-  auto operator()(Downstream&& downstream) const {
-    return TextSink<Downstream>(std::move(downstream));
+  template <typename Make>
+  [[nodiscard]] auto build(const Make& make) const {
+    return TextSink<detail::Built<Make>>(make);
   }
 };
 
-// Forward declarations for bind expressions that produce collectors.
+// Forward declaration for the bind expression AttrExpr produces.
 template <typename T, typename Member>
 class AttrBind;
-
-template <typename T, typename Member, typename PipelineFactory>
-class FirstCollector;
-
-template <typename T, typename Member, typename PipelineFactory>
-class CollectCollector;
 
 class AttrExpr {
   std::string_view name_;
@@ -516,10 +528,9 @@ class AttrExpr {
  public:
   AttrExpr(std::string_view name) : name_(name) {}
 
-  template <typename Downstream>
-    requires(!std::is_lvalue_reference_v<Downstream>)
-  auto operator()(Downstream&& downstream) const {
-    return AttrSink<Downstream>(name_, std::move(downstream));
+  template <typename Make>
+  [[nodiscard]] auto build(const Make& make) const {
+    return AttrSink<detail::Built<Make>>(name_, make);
   }
 
   template <typename T, typename Member>
@@ -531,10 +542,9 @@ class AttrExpr {
 };
 
 struct ParseXmlFactory {
-  template <typename Downstream>
-    requires(!std::is_lvalue_reference_v<Downstream>)
-  auto operator()(Downstream&& downstream) const {
-    return ParseXmlSink<Downstream>(std::move(downstream));
+  template <typename Make>
+  [[nodiscard]] auto build(const Make& make) const {
+    return ParseXmlSink<detail::Built<Make>>(make);
   }
 };
 
@@ -542,8 +552,8 @@ template <typename Fn>
 struct InvokeFactory {
   Fn fn;
 
-  template <typename Downstream>
-  auto operator()(Downstream&& /*downstream*/) const {
+  template <typename Make>
+  [[nodiscard]] auto build(const Make& /*make*/) const {
     return InvokeSink<Fn>(fn);
   }
 };
@@ -552,14 +562,15 @@ template <typename T, typename... Binds>
 struct ConstructFactory {
   std::tuple<Binds...> binds;
 
-  template <typename Downstream>
-    requires(!std::is_lvalue_reference_v<Downstream>)
-  auto operator()(Downstream&& downstream) const {
-    auto collectors = std::apply(
-        [](const auto&... b) { return std::make_tuple(b.make_collector()...); },
+  template <typename Make>
+  [[nodiscard]] auto build(const Make& make) const {
+    return std::apply(
+        [&](const auto&... b) {
+          return ConstructSink<T, detail::Built<Make>,
+                               decltype(b.make_collector())...>(
+              make, [&b] { return b.make_collector(); }...);
+        },
         binds);
-    return ConstructSink<T, Downstream, decltype(collectors)>(
-        std::move(downstream), std::move(collectors));
   }
 };
 
@@ -567,16 +578,15 @@ template <typename... Factories>
 struct FanoutFactory {
   std::tuple<Factories...> factories;
 
-  template <typename Downstream>
-    requires(!std::is_lvalue_reference_v<Downstream>)
-  auto operator()(Downstream&& downstream) const {
-    auto sinks = std::apply(
+  // Each branch, and the fanout itself, gets a downstream of its own.
+  template <typename Make>
+  [[nodiscard]] auto build(const Make& make) const {
+    return std::apply(
         [&](const auto&... f) {
-          return std::make_tuple(f(Downstream(downstream))...);
+          return FanoutSink<detail::Built<Make>, decltype(f.build(make))...>(
+              make, [&f, &make] { return f.build(make); }...);
         },
         factories);
-    return FanoutSink<Downstream, decltype(sinks)>(std::move(downstream),
-                                                   std::move(sinks));
   }
 };
 
@@ -585,10 +595,9 @@ struct PipeFactory {
   A a;
   B b;
 
-  template <typename Downstream>
-    requires(!std::is_lvalue_reference_v<Downstream>)
-  auto operator()(Downstream&& downstream) const {
-    return a(b(std::move(downstream)));
+  template <typename Make>
+  [[nodiscard]] auto build(const Make& make) const {
+    return a.build([&] { return b.build(make); });
   }
 };
 
@@ -644,30 +653,6 @@ class FirstWriter {
   void done() { captured_ = true; }
 };
 
-template <typename T, typename Member, typename PipelineFactory>
-class FirstCollector {
-  Member T::* member_;
-  PipelineFactory factory_;
-  using Pipeline = decltype(std::declval<const PipelineFactory&>()(
-      std::declval<FirstWriter<T, Member>>()));
-  Pipeline pipeline_;
-
- public:
-  FirstCollector(Member T::* member, PipelineFactory factory)
-      : member_(member),
-        factory_(std::move(factory)),
-        pipeline_(factory_(FirstWriter<T, Member>(member))) {}
-
-  void bind_attrs(T&, const char**) {}
-  void reset(T& obj) { pipeline_.reset_target(obj); }
-  void on_start(std::string_view name, const char** attrs, T&) {
-    pipeline_.on_start(name, attrs);
-  }
-  void on_text(std::string_view chunk, T&) { pipeline_.on_text(chunk); }
-  void on_end(std::string_view name, T&) { pipeline_.on_end(name); }
-  [[nodiscard]] bool failed() const { return detail::failed(pipeline_); }
-};
-
 template <typename T, typename Member>
   requires AppendableContainer<Member> &&
            StringOrArithmetic<typename Member::value_type>
@@ -702,29 +687,36 @@ class CollectWriter {
   }
 };
 
-template <typename T, typename Member, typename PipelineFactory>
-class CollectCollector {
-  Member T::* member_;
-  PipelineFactory factory_;
-  using Pipeline = decltype(std::declval<const PipelineFactory&>()(
-      std::declval<CollectWriter<T, Member>>()));
+// First(...) and Collect(...) in a Bind: a pipeline ending in the member's
+// writer, fed the elements inside the constructed one.
+template <typename Pipeline>
+class PipelineCollector {
   Pipeline pipeline_;
 
  public:
-  CollectCollector(Member T::* member, PipelineFactory factory)
-      : member_(member),
-        factory_(std::move(factory)),
-        pipeline_(factory_(CollectWriter<T, Member>(member))) {}
+  template <typename Make>
+  explicit PipelineCollector(const Make& make) : pipeline_(make()) {}
 
-  void bind_attrs(T&, const char**) {}
-  void reset(T& obj) { pipeline_.reset_target(obj); }
-  void on_start(std::string_view name, const char** attrs, T&) {
+  void bind_attrs(auto&, const char**) {}
+  void reset(auto& obj) { pipeline_.reset_target(obj); }
+  void on_start(std::string_view name, const char** attrs, auto&) {
     pipeline_.on_start(name, attrs);
   }
-  void on_text(std::string_view chunk, T&) { pipeline_.on_text(chunk); }
-  void on_end(std::string_view name, T&) { pipeline_.on_end(name); }
+  void on_text(std::string_view chunk, auto&) { pipeline_.on_text(chunk); }
+  void on_end(std::string_view name, auto&) { pipeline_.on_end(name); }
   [[nodiscard]] bool failed() const { return detail::failed(pipeline_); }
 };
+
+namespace detail {
+
+template <typename PipelineFactory, typename MakeWriter>
+auto make_pipeline_collector(const PipelineFactory& factory,
+                             const MakeWriter& make_writer) {
+  return PipelineCollector<decltype(factory.build(make_writer))>(
+      [&] { return factory.build(make_writer); });
+}
+
+}  // namespace detail
 
 template <typename T, typename Member, typename Expr>
 class BindSpec {
@@ -749,7 +741,8 @@ class FirstExpr {
 
   template <typename T, typename Member>
   [[nodiscard]] auto make_collector(Member T::* member) const {
-    return FirstCollector<T, Member, PipelineFactory>(member, factory_);
+    return detail::make_pipeline_collector(
+        factory_, [member] { return FirstWriter<T, Member>(member); });
   }
 };
 
@@ -762,7 +755,8 @@ class CollectExpr {
 
   template <typename T, typename Member>
   [[nodiscard]] auto make_collector(Member T::* member) const {
-    return CollectCollector<T, Member, PipelineFactory>(member, factory_);
+    return detail::make_pipeline_collector(
+        factory_, [member] { return CollectWriter<T, Member>(member); });
   }
 };
 
@@ -829,8 +823,10 @@ auto operator|(A a, B b) {
 // Top-level parser
 // ----------------------------------------------------------------------------
 
-template <typename Sink>
+template <typename Query>
 class XmlParser {
+  using Sink = decltype(std::declval<const Query&>().build(
+      std::declval<detail::MakeNullSink>()));
   Sink sink_;
   XML_Parser parser_ = nullptr;
 
@@ -852,8 +848,11 @@ class XmlParser {
   }
 
  public:
-  explicit XmlParser(Sink sink) : sink_(std::move(sink)) {
-    parser_ = XML_ParserCreate(nullptr);
+  // Builds the query's sinks in place. Never moved: Expat holds `this` as its
+  // user data, so construct it where it lives (e.g. optional::emplace(query)).
+  explicit XmlParser(const Query& query)
+      : sink_(query.build(detail::MakeNullSink{})),
+        parser_(XML_ParserCreate(nullptr)) {
     XML_SetUserData(parser_, this);
     XML_SetStartElementHandler(parser_, start_cb);
     XML_SetCharacterDataHandler(parser_, text_cb);
@@ -864,29 +863,6 @@ class XmlParser {
     if (parser_) {
       XML_ParserFree(parser_);
     }
-  }
-
-  XmlParser(XmlParser&& other) noexcept
-      : sink_(std::move(other.sink_)), parser_(other.parser_) {
-    other.parser_ = nullptr;
-    if (parser_) {
-      XML_SetUserData(parser_, this);
-    }
-  }
-
-  XmlParser& operator=(XmlParser&& other) noexcept {
-    if (this != &other) {
-      if (parser_) {
-        XML_ParserFree(parser_);
-      }
-      sink_ = std::move(other.sink_);
-      parser_ = other.parser_;
-      other.parser_ = nullptr;
-      if (parser_) {
-        XML_SetUserData(parser_, this);
-      }
-    }
-    return *this;
   }
 
   XmlParser(const XmlParser&) = delete;
