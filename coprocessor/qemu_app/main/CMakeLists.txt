@@ -4,12 +4,13 @@
 # The app's sources, as on the device, but for its main (Wi-Fi) and BLE.
 file(GLOB_RECURSE app_sources "${CMAKE_CURRENT_LIST_DIR}/../../src/*.cpp")
 list(FILTER app_sources EXCLUDE REGEX "/src/main\\.cpp$")
-list(FILTER app_sources EXCLUDE REGEX "/src/provisioning/ble_improv\\.cpp$")
+list(FILTER app_sources EXCLUDE REGEX "/src/ble/")
+list(FILTER app_sources EXCLUDE REGEX "/src/provisioning/improv_ble\\.cpp$")
 
 idf_component_register(
     SRCS
         "main.cpp"
-        "ble_stub.cpp"
+        "provisioning_stub.cpp"
         ${app_sources}
     INCLUDE_DIRS
         "."

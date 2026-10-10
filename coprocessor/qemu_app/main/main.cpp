@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 // The coprocessor under QEMU: the same app, on OpenCores Ethernet instead of
-// Wi-Fi, and without BLE (see ble_stub.cpp).
+// Wi-Fi, and without BLE (see provisioning_stub.cpp).
 
 #include "esp_eth.h"
 #include "esp_eth_mac_openeth.h"

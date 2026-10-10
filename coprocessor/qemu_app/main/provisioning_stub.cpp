@@ -5,15 +5,14 @@
 
 #include <cstdint>
 
-#include "provisioning/ble_improv.h"
+#include "provisioning/improv_ble.h"
 
 namespace coprocessor {
 
 ESP_EVENT_DEFINE_BASE(PROVISIONING_EVENT);
 
-void ble_init() {}
-void ble_start(uint32_t /*timeout_seconds*/) {}
-void ble_stop() {}
-bool ble_is_active() { return false; }
+void provisioning_start(uint32_t /*timeout_seconds*/) {}
+void provisioning_stop() {}
+bool provisioning_is_active() { return false; }
 
 }  // namespace coprocessor
