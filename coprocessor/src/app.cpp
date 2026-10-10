@@ -171,8 +171,6 @@ void app_start(TetherPins pins) {
   if (heartbeat_timer != nullptr) {
     xTimerStart(heartbeat_timer, 0);
   }
-
-  ESP_LOGI(TAG, "Co-processor started");
 }
 
 }  // namespace coprocessor

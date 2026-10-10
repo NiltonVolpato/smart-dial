@@ -107,7 +107,13 @@ void WifiServiceHandler::connect(
 
   ESP_LOGI(TAG, "Connect requested for SSID: '%.*s'",
            static_cast<int>(ssid.size()), ssid.data());
-  wifi_connect(ssid, password);
+  if (esp_err_t err = wifi_connect(ssid, password); err != ESP_OK) {
+    ESP_LOGW(TAG, "Connect rejected: %s", esp_err_to_name(err));
+    fail_reply(reply, err == ESP_ERR_INVALID_ARG
+                          ? tether::WireStatus::INVALID_ARGUMENT
+                          : tether::WireStatus::UNAVAILABLE);
+    return;
+  }
 
   send_reply(reply, [](flatbuffers::FlatBufferBuilder& fbb) {
     return CoprocessorProto::CreateEmpty(fbb);
