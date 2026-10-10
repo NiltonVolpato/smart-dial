@@ -8,7 +8,7 @@ IncludeCategories:
   - Regex: '^<.*'
     Priority: 2
   # Project headers: src/ subdirectories and generated bindings.
-  - Regex: '^"((async|net|provisioning|services|sonos|xml_query)/|log\.h")'
+  - Regex: '^"((async|ble|net|provisioning|services|sonos|xml_query)/|log\.h")'
     Priority: 4
   - Regex: '^"coprocessor_(generated|rpc)\.h"'
     Priority: 4

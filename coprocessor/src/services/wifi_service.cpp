@@ -13,7 +13,7 @@
 #include "net/ipv4.h"
 #include "net/network.h"
 #include "net/wifi_manager.h"
-#include "provisioning/ble_improv.h"
+#include "provisioning/improv_ble.h"
 #include "services/rpc.h"
 
 namespace coprocessor {
@@ -134,7 +134,7 @@ void WifiServiceHandler::start_provisioning(
   uint32_t timeout_seconds = request.timeout_seconds();
   ESP_LOGI(TAG, "Start provisioning requested (timeout=%u s)",
            static_cast<unsigned>(timeout_seconds));
-  ble_start(timeout_seconds);
+  provisioning_start(timeout_seconds);
 
   send_reply(reply, [](flatbuffers::FlatBufferBuilder& fbb) {
     return CoprocessorProto::CreateEmpty(fbb);
@@ -145,7 +145,7 @@ void WifiServiceHandler::stop_provisioning(
     tether::Reply<CoprocessorProto::Empty> reply,
     const CoprocessorProto::Empty& /*request*/) {
   ESP_LOGI(TAG, "Stop provisioning requested");
-  ble_stop();
+  provisioning_stop();
 
   send_reply(reply, [](flatbuffers::FlatBufferBuilder& fbb) {
     return CoprocessorProto::CreateEmpty(fbb);
@@ -159,8 +159,9 @@ void WifiServiceHandler::watch_provisioning(
            static_cast<unsigned>(sink.call_id()));
   prov_sink_ = sink;
 
-  auto state = ble_is_active() ? CoprocessorProto::ProvisioningState::Active
-                               : CoprocessorProto::ProvisioningState::Inactive;
+  auto state = provisioning_is_active()
+                   ? CoprocessorProto::ProvisioningState::Active
+                   : CoprocessorProto::ProvisioningState::Inactive;
 
   send_provisioning(state);
 }

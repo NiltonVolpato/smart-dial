@@ -4,8 +4,8 @@
 #include "app.h"
 #include "esp_log.h"
 
+#include "ble/ble.h"
 #include "net/wifi_manager.h"
-#include "provisioning/ble_improv.h"
 
 extern "C" void app_main() {
   coprocessor::app_start({.tx = 23, .rx = 18});

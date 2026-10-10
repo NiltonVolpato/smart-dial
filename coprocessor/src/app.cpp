@@ -29,7 +29,7 @@
 #include "net/time_sync.h"
 #include "net/web_server.h"
 #include "net/wifi_manager.h"
-#include "provisioning/ble_improv.h"
+#include "provisioning/improv_ble.h"
 #include "services/sonos_service.h"
 #include "services/system_service.h"
 #include "services/wifi_service.h"
@@ -112,10 +112,10 @@ void heartbeat(TimerHandle_t /*timer*/) {
   }
   ESP_LOGI(TAG,
            "[Heartbeat] uptime=%lus, heap=%luKB, network=%s (ip=%s, "
-           "ssid='%s', rssi=%d), ble=%s",
+           "ssid='%s', rssi=%d), provisioning=%s",
            uptime_sec, free_heap_kb, network_is_up() ? "up" : "down",
            network_ip().to_string().c_str(), ssid.c_str(), rssi,
-           ble_is_active() ? "active" : "dormant");
+           provisioning_is_active() ? "active" : "off");
 }
 
 void reactor_task(void* arg) {
