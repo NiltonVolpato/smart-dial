@@ -105,7 +105,7 @@ _monitor-expect PORT="/dev/cu.usbserial-10" TIMEOUT='15' TAIL='5':
     set timeout {{TIMEOUT}}
     set pid [spawn pio device monitor --port {{PORT}} --baud 115200]
     expect {
-        "Co-Processor initialized" {
+        "Co-processor initialized" {
             # Device initialized: keep streaming for TAIL seconds to catch post-boot panics, crashes, or bootloops
             set timeout {{TAIL}}
             expect {
