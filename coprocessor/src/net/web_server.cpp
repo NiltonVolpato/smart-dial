@@ -1,35 +1,51 @@
 // Copyright © 2026 Nilton Volpato
 // SPDX-License-Identifier: MIT
 
-#include "web_server.h"
+#include "net/web_server.h"
 
 #include <sys/time.h>
-#include <time.h>
 
+#include <algorithm>
+#include <array>
 #include <atomic>
-#include <cstdio>
+#include <ctime>
+#include <memory>
+#include <mutex>
 #include <string>
+#include <string_view>
 
-#include "coprocessor_generated.h"
+#include "esp_event.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
+#include "esp_netif_types.h"
 #include "esp_system.h"
 #include "esp_timer.h"
 #include "esp_wifi.h"
-#include "sonos_controller.h"
-#include "wifi_manager.h"
+#include "format.h"
+
+#include "coprocessor_generated.h"
+#include "net/network.h"
+#include "net/wifi_manager.h"
+#include "sonos/gena.h"
 
 namespace {
 
 constexpr const char* TAG = "web_server";
 
+// Part of lwIP's socket budget: see app.cpp.
+constexpr int kMaxOpenSockets = 4;
+
+// Started and stopped on the event loop task (IP events); broadcasts come
+// from tether_io: g_server_mutex keeps the handle from being freed under them.
+std::mutex g_server_mutex;
 httpd_handle_t g_server = nullptr;
+coprocessor::GenaRegistry* g_gena = nullptr;  // Set by web_server_init().
 
 std::atomic<uint32_t> g_battery_millivolts{0};
 std::atomic<int32_t> g_battery_percent{-1};
 std::atomic<bool> g_battery_plugged{false};
 
-constexpr const char INDEX_HTML[] = R"rawliteral(<!DOCTYPE html>
+constexpr std::string_view INDEX_HTML = R"rawliteral(<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -237,103 +253,121 @@ constexpr const char INDEX_HTML[] = R"rawliteral(<!DOCTYPE html>
 </html>
 )rawliteral";
 
-std::string build_status_json() {
-  uint32_t mv = g_battery_millivolts.load();
-  int32_t pct = g_battery_percent.load();
-  bool plugged = g_battery_plugged.load();
+// A string as a JSON string, quotes included, escaped.
+struct JsonString {
+  std::string_view text;
 
-  bool wifi_conn = coprocessor::wifi_is_connected();
-  std::string ssid = coprocessor::wifi_get_ssid();
-  std::string ip = coprocessor::wifi_get_ip();
-  int8_t rssi = 0;
-  if (wifi_conn) {
-    wifi_ap_record_t ap_info = {};
-    if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {
-      rssi = ap_info.rssi;
+  void format_to(coprocessor::Writer& out) const {
+    out.write("\"");
+    std::size_t start = 0;  // First character not written yet.
+    for (std::size_t i = 0; i < text.size(); ++i) {
+      const auto c = static_cast<unsigned char>(text[i]);
+      if (c != '"' && c != '\\' && c >= 0x20) {
+        continue;
+      }
+      out.write(text.substr(start, i - start));
+      if (c == '"' || c == '\\') {
+        const std::array<char, 2> escaped{'\\', static_cast<char>(c)};
+        out.write({escaped.data(), escaped.size()});
+      } else {
+        constexpr std::string_view kHex = "0123456789abcdef";
+        const std::array<char, 6> escaped{'\\', 'u',          '0',
+                                          '0',  kHex[c >> 4], kHex[c & 0xf]};
+        out.write({escaped.data(), escaped.size()});
+      }
+      start = i + 1;
     }
+    out.write(text.substr(start));
+    out.write("\"");
   }
+};
 
-  uint32_t uptime_seconds =
-      static_cast<uint32_t>(esp_timer_get_time() / 1000000);
-  uint32_t free_heap = esp_get_free_heap_size();
-  uint32_t min_free_heap = esp_get_minimum_free_heap_size();
+constexpr std::string_view json_bool(bool value) {
+  return value ? "true" : "false";
+}
+
+std::string build_status_json() {
+  const bool connected = coprocessor::network_is_up();
+  const std::string ssid = coprocessor::wifi_get_ssid();
+  int8_t rssi = 0;
+  wifi_ap_record_t ap_info{};
+  if (connected && esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {
+    rssi = ap_info.rssi;
+  }
 
   time_t now = 0;
   time(&now);
-  struct tm timeinfo = {};
-  gmtime_r(&now, &timeinfo);
-  char time_buffer[64] = {};
-  strftime(time_buffer, sizeof(time_buffer), "%Y-%m-%d %H:%M:%S UTC",
-           &timeinfo);
+  tm utc{};
+  gmtime_r(&now, &utc);
+  std::array<char, 32> formatted{};
+  const std::size_t formatted_size = strftime(
+      formatted.data(), formatted.size(), "%Y-%m-%d %H:%M:%S UTC", &utc);
 
-  char buffer[512] = {};
-  int written = snprintf(
-      buffer, sizeof(buffer),
-      "{\"battery\":{\"millivolts\":%lu,\"percent\":%d,\"is_plugged\":%s},"
-      "\"wifi\":{\"connected\":%s,\"ssid\":\"%.*s\",\"ip\":\"%.*s\",\"rssi\":"
-      "%d},"
-      "\"system\":{\"uptime_seconds\":%lu,\"free_heap_bytes\":%lu,\"min_free_"
-      "heap_bytes\":%lu},"
-      "\"time\":{\"epoch_seconds\":%llu,\"formatted\":\"%s\"}}",
-      static_cast<unsigned long>(mv), static_cast<int>(pct),
-      plugged ? "true" : "false", wifi_conn ? "true" : "false",
-      static_cast<int>(ssid.size()), ssid.data(), static_cast<int>(ip.size()),
-      ip.data(), rssi, static_cast<unsigned long>(uptime_seconds),
-      static_cast<unsigned long>(free_heap),
-      static_cast<unsigned long>(min_free_heap),
-      static_cast<unsigned long long>(now), time_buffer);
-
-  if (written > 0 && static_cast<size_t>(written) < sizeof(buffer)) {
-    return std::string(buffer, written);
+  std::array<char, 512> buffer{};
+  coprocessor::Writer out(buffer);
+  out.print(R"({{"battery":{{"millivolts":{},"percent":{},"is_plugged":{}}},)"
+            R"("wifi":{{"connected":{},"ssid":{},"ip":"{}","rssi":{}}},)"
+            R"("system":{{"uptime_seconds":{},"free_heap_bytes":{},)"
+            R"("min_free_heap_bytes":{}}},)"
+            R"("time":{{"epoch_seconds":{},"formatted":"{}"}}}})",
+            g_battery_millivolts.load(), g_battery_percent.load(),
+            json_bool(g_battery_plugged.load()), json_bool(connected),
+            JsonString{ssid}, coprocessor::network_ip(), rssi,
+            static_cast<uint32_t>(esp_timer_get_time() / 1'000'000),
+            esp_get_free_heap_size(), esp_get_minimum_free_heap_size(),
+            static_cast<int64_t>(now),
+            std::string_view(formatted.data(), formatted_size));
+  if (out.size() > buffer.size()) {
+    ESP_LOGE(TAG, "Status JSON needs %u bytes",
+             static_cast<unsigned>(out.size()));
+    return "{}";
   }
-  return "{}";
+  return {buffer.data(), out.size()};
 }
 
 struct WsBroadcastData {
+  httpd_handle_t server;  // The one whose task runs the work: alive meanwhile.
   std::string json;
 };
 
+// The server's task.
 void ws_broadcast_work(void* arg) {
-  auto* data = static_cast<WsBroadcastData*>(arg);
-  if (!data) {
+  std::unique_ptr<WsBroadcastData> data(static_cast<WsBroadcastData*>(arg));
+  httpd_ws_frame_t ws_frame{};
+  ws_frame.type = HTTPD_WS_TYPE_TEXT;
+  ws_frame.payload = reinterpret_cast<uint8_t*>(data->json.data());
+  ws_frame.len = data->json.size();
+
+  std::array<int, kMaxOpenSockets> client_fds{};
+  size_t client_count = client_fds.size();
+  if (httpd_get_client_list(data->server, &client_count, client_fds.data()) !=
+      ESP_OK) {
     return;
   }
-
-  if (g_server) {
-    httpd_ws_frame_t ws_frame = {};
-    ws_frame.type = HTTPD_WS_TYPE_TEXT;
-    ws_frame.payload = reinterpret_cast<uint8_t*>(data->json.data());
-    ws_frame.len = data->json.size();
-
-    size_t max_clients = 8;
-    int client_fds[8] = {};
-    if (httpd_get_client_list(g_server, &max_clients, client_fds) == ESP_OK) {
-      for (size_t i = 0; i < max_clients; ++i) {
-        int fd = client_fds[i];
-        if (httpd_ws_get_fd_info(g_server, fd) == HTTPD_WS_CLIENT_WEBSOCKET) {
-          httpd_ws_send_frame_async(g_server, fd, &ws_frame);
-        }
-      }
+  for (size_t i = 0; i < client_count; ++i) {
+    if (httpd_ws_get_fd_info(data->server, client_fds[i]) ==
+        HTTPD_WS_CLIENT_WEBSOCKET) {
+      httpd_ws_send_frame_async(data->server, client_fds[i], &ws_frame);
     }
   }
-
-  delete data;
 }
 
+// Any task.
 void broadcast_status() {
-  if (!g_server) {
+  std::scoped_lock lock(g_server_mutex);
+  if (g_server == nullptr) {
     return;
   }
-  auto* data = new WsBroadcastData{build_status_json()};
-  esp_err_t ret = httpd_queue_work(g_server, ws_broadcast_work, data);
-  if (ret != ESP_OK) {
-    delete data;
+  auto data = std::make_unique<WsBroadcastData>(
+      WsBroadcastData{.server = g_server, .json = build_status_json()});
+  if (httpd_queue_work(g_server, ws_broadcast_work, data.get()) == ESP_OK) {
+    data.release();  // ws_broadcast_work() owns it now.
   }
 }
 
 esp_err_t index_get_handler(httpd_req_t* req) {
   httpd_resp_set_type(req, "text/html; charset=utf-8");
-  return httpd_resp_send(req, INDEX_HTML, HTTPD_RESP_USE_STRLEN);
+  return httpd_resp_send(req, INDEX_HTML.data(), INDEX_HTML.size());
 }
 
 esp_err_t status_get_handler(httpd_req_t* req) {
@@ -358,9 +392,9 @@ esp_err_t ws_post_handshake_cb(httpd_req_t* req) {
 
 esp_err_t ws_handler(httpd_req_t* req) {
   httpd_ws_frame_t ws_pkt = {};
-  uint8_t buffer[64] = {};
-  ws_pkt.payload = buffer;
-  esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, sizeof(buffer) - 1);
+  std::array<uint8_t, 64> buffer = {};
+  ws_pkt.payload = buffer.data();
+  esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, buffer.size() - 1);
   if (ret != ESP_OK) {
     ESP_LOGW(TAG, "httpd_ws_recv_frame failed: %d", ret);
     return ret;
@@ -374,10 +408,10 @@ uint32_t g_notify_window_start_ms = 0;
 uint32_t g_notify_count = 0;
 bool g_notify_warned = false;
 
-// Handles UPnP GENA NOTIFY requests from subscribed Sonos speakers. The body
-// is forwarded to the Sonos task for parsing; nothing heavy runs here.
+// Handles UPnP GENA NOTIFY requests from subscribed Sonos speakers: their
+// listener parses the body inline, on this task, as it streams in.
 esp_err_t media_notify_handler(httpd_req_t* req) {
-  uint32_t now_ms = static_cast<uint32_t>(esp_timer_get_time() / 1000);
+  auto now_ms = static_cast<uint32_t>(esp_timer_get_time() / 1000);
   if (now_ms - g_notify_window_start_ms >= 1000) {
     g_notify_window_start_ms = now_ms;
     g_notify_count = 0;
@@ -389,49 +423,69 @@ esp_err_t media_notify_handler(httpd_req_t* req) {
     ESP_LOGW(TAG, "NOTIFY flood detected: >10 requests/second");
   }
 
-  char sid[160] = {};
-  if (httpd_req_get_hdr_value_str(req, "SID", sid, sizeof(sid)) != ESP_OK) {
+  std::array<char, 160> sid = {};
+  if (httpd_req_get_hdr_value_str(req, "SID", sid.data(), sid.size()) !=
+      ESP_OK) {
     sid[0] = '\0';
   }
 
-  std::string body;
-  int remaining = req->content_len;
-  if (remaining > 16 * 1024) {
-    ESP_LOGW(TAG, "NOTIFY body too large (%d bytes), rejecting", remaining);
-    return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "body too large");
-  }
-  if (remaining > 0) {
-    body.reserve(remaining);
-    char buf[256];
-    while (remaining > 0) {
-      int chunk = remaining < static_cast<int>(sizeof(buf))
-                      ? remaining
-                      : static_cast<int>(sizeof(buf));
-      int n = httpd_req_recv(req, buf, chunk);
-      if (n <= 0) {
-        if (n == HTTPD_SOCK_ERR_TIMEOUT) {
-          continue;
+  // The listener parses the body inline, as it streams in, under the
+  // registry's lock: its handler can't go away meanwhile.
+  bool received = true;
+  bool well_formed = true;
+  const bool known =
+      g_gena->dispatch(sid.data(), [&](coprocessor::NotifyListener& listener) {
+        std::array<char, 512> buf = {};
+        int remaining = req->content_len;
+        bool first = true;
+        if (remaining == 0) {
+          well_formed = listener.on_notify({}, true, true);
+          return;
         }
-        ESP_LOGW(TAG, "NOTIFY body recv failed: %d", n);
-        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR,
-                                   "recv failed");
-      }
-      body.append(buf, n);
-      remaining -= n;
-    }
-  }
+        while (remaining > 0 && well_formed) {
+          const int n =
+              httpd_req_recv(req, buf.data(),
+                             std::min(remaining, static_cast<int>(buf.size())));
+          if (n == HTTPD_SOCK_ERR_TIMEOUT) {
+            continue;
+          }
+          if (n <= 0) {
+            received = false;
+            return;
+          }
+          remaining -= n;
+          well_formed = listener.on_notify(
+              {buf.data(), static_cast<std::size_t>(n)}, first, remaining == 0);
+          first = false;
+        }
+      });
 
-  // Acknowledge promptly, then hand off to the Sonos task.
-  esp_err_t ret = httpd_resp_send(req, nullptr, 0);
-  coprocessor::sonos_post_notify(sid, std::move(body));
-  return ret;
+  if (!known) {
+    // An old or foreign subscription: 412 tells the speaker to drop it.
+    ESP_LOGW(TAG, "NOTIFY for unknown SID '%s': 412", sid.data());
+    httpd_resp_set_status(req, "412 Precondition Failed");
+    return httpd_resp_send(req, "unknown sid", HTTPD_RESP_USE_STRLEN);
+  }
+  if (!received) {
+    ESP_LOGW(TAG, "NOTIFY body recv failed");
+    return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR,
+                               "recv failed");
+  }
+  if (!well_formed) {
+    ESP_LOGW(TAG, "NOTIFY XML parse error");
+    return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "xml parse error");
+  }
+  return httpd_resp_send(req, nullptr, 0);
 }
 
 }  // namespace
 
 namespace coprocessor {
 
+namespace {
+
 esp_err_t web_server_start() {
+  std::scoped_lock lock(g_server_mutex);
   if (g_server) {
     ESP_LOGI(TAG, "Web server already running");
     return ESP_OK;
@@ -441,7 +495,10 @@ esp_err_t web_server_start() {
   config.server_port = 80;
   config.lru_purge_enable = true;
   config.max_uri_handlers = 8;
-  config.max_open_sockets = 7;
+  config.max_open_sockets = kMaxOpenSockets;
+  // NOTIFYs are parsed inline, on this task. Measured in QEMU at -Og: 4 KB
+  // used at most, by a LastChange with track metadata (a nested parse).
+  config.stack_size = 8192;
 
   ESP_LOGI(TAG, "Starting web server on port %d...", config.server_port);
   esp_err_t ret = httpd_start(&g_server, &config);
@@ -496,6 +553,7 @@ esp_err_t web_server_start() {
 }
 
 esp_err_t web_server_stop() {
+  std::scoped_lock lock(g_server_mutex);
   if (!g_server) {
     return ESP_OK;
   }
@@ -505,7 +563,7 @@ esp_err_t web_server_stop() {
   return ret;
 }
 
-bool web_server_is_running() { return g_server != nullptr; }
+}  // namespace
 
 void web_server_update_battery(const CoprocessorProto::BatteryStatus* status) {
   if (!status) {
@@ -521,6 +579,33 @@ void web_server_update_battery(const CoprocessorProto::BatteryStatus* status) {
   }
 
   broadcast_status();
+}
+
+namespace {
+
+// Serves while there's an IP, on whichever interface has it.
+void on_ip_event(void* /*arg*/, esp_event_base_t /*base*/, int32_t id,
+                 void* /*data*/) {
+  switch (id) {
+    case IP_EVENT_STA_GOT_IP:
+    case IP_EVENT_ETH_GOT_IP:
+      web_server_start();
+      break;
+    case IP_EVENT_STA_LOST_IP:
+    case IP_EVENT_ETH_LOST_IP:
+      web_server_stop();
+      break;
+    default:
+      break;
+  }
+}
+
+}  // namespace
+
+void web_server_init(GenaRegistry& gena) {
+  g_gena = &gena;
+  ESP_ERROR_CHECK(esp_event_handler_instance_register(
+      IP_EVENT, ESP_EVENT_ANY_ID, &on_ip_event, nullptr, nullptr));
 }
 
 }  // namespace coprocessor

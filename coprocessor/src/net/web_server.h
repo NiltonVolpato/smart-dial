@@ -3,22 +3,18 @@
 
 #pragma once
 
-#include "esp_err.h"
-
 namespace CoprocessorProto {
 struct BatteryStatus;
 }  // namespace CoprocessorProto
 
 namespace coprocessor {
 
-/// Starts the embedded HTTP and WebSocket server on port 80.
-esp_err_t web_server_start();
+class GenaRegistry;
 
-/// Stops the HTTP and WebSocket server.
-esp_err_t web_server_stop();
-
-/// Returns true if the web server is currently running.
-bool web_server_is_running();
+/// Serves the dashboard (HTTP and WebSocket, port 80) and speakers' GENA
+/// NOTIFYs (to `gena`'s listeners) whenever there's an IP: starts and stops
+/// itself on IP events. Requires the default event loop.
+void web_server_init(GenaRegistry& gena);
 
 /// Updates cached battery state and broadcasts real-time updates to connected
 /// WebSocket clients.
