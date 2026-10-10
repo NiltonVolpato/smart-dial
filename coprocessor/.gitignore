@@ -3,6 +3,7 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+sdkconfig
 sdkconfig.*
 !sdkconfig.defaults
 !sdkconfig.release.defaults
