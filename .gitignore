@@ -6,3 +6,4 @@ profile*.log
 .flatc.stamp
 .env.local
 .env
+/.cache
