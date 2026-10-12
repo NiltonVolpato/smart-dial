@@ -61,6 +61,44 @@ impl Pack for fb::coprocessor_proto::EmptyT {
     }
 }
 
+impl Table for fb::coprocessor_proto::GetTimestampRequest<'static> {
+    type View<'a> = fb::coprocessor_proto::GetTimestampRequest<'a>;
+    fn verify(
+        buf: &[u8],
+    ) -> Result<fb::coprocessor_proto::GetTimestampRequest<'_>, flatbuffers::InvalidFlatbuffer>
+    {
+        flatbuffers::root::<fb::coprocessor_proto::GetTimestampRequest>(buf)
+    }
+}
+
+impl Pack for fb::coprocessor_proto::GetTimestampRequestT {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut fbb = flatbuffers::FlatBufferBuilder::new();
+        let root = self.pack(&mut fbb);
+        fbb.finish(root, None);
+        fbb.finished_data().to_vec()
+    }
+}
+
+impl Table for fb::coprocessor_proto::GetTimestampResponse<'static> {
+    type View<'a> = fb::coprocessor_proto::GetTimestampResponse<'a>;
+    fn verify(
+        buf: &[u8],
+    ) -> Result<fb::coprocessor_proto::GetTimestampResponse<'_>, flatbuffers::InvalidFlatbuffer>
+    {
+        flatbuffers::root::<fb::coprocessor_proto::GetTimestampResponse>(buf)
+    }
+}
+
+impl Pack for fb::coprocessor_proto::GetTimestampResponseT {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut fbb = flatbuffers::FlatBufferBuilder::new();
+        let root = self.pack(&mut fbb);
+        fbb.finish(root, None);
+        fbb.finished_data().to_vec()
+    }
+}
+
 impl Table for fb::coprocessor_proto::GroupsSummary<'static> {
     type View<'a> = fb::coprocessor_proto::GroupsSummary<'a>;
     fn verify(
@@ -71,6 +109,25 @@ impl Table for fb::coprocessor_proto::GroupsSummary<'static> {
 }
 
 impl Pack for fb::coprocessor_proto::GroupsSummaryT {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut fbb = flatbuffers::FlatBufferBuilder::new();
+        let root = self.pack(&mut fbb);
+        fbb.finish(root, None);
+        fbb.finished_data().to_vec()
+    }
+}
+
+impl Table for fb::coprocessor_proto::GroupsSummaryRequest<'static> {
+    type View<'a> = fb::coprocessor_proto::GroupsSummaryRequest<'a>;
+    fn verify(
+        buf: &[u8],
+    ) -> Result<fb::coprocessor_proto::GroupsSummaryRequest<'_>, flatbuffers::InvalidFlatbuffer>
+    {
+        flatbuffers::root::<fb::coprocessor_proto::GroupsSummaryRequest>(buf)
+    }
+}
+
+impl Pack for fb::coprocessor_proto::GroupsSummaryRequestT {
     fn to_bytes(&self) -> Vec<u8> {
         let mut fbb = flatbuffers::FlatBufferBuilder::new();
         let root = self.pack(&mut fbb);
@@ -144,24 +201,6 @@ impl Table for fb::coprocessor_proto::StateUpdate<'static> {
 }
 
 impl Pack for fb::coprocessor_proto::StateUpdateT {
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut fbb = flatbuffers::FlatBufferBuilder::new();
-        let root = self.pack(&mut fbb);
-        fbb.finish(root, None);
-        fbb.finished_data().to_vec()
-    }
-}
-
-impl Table for fb::coprocessor_proto::TimeSync<'static> {
-    type View<'a> = fb::coprocessor_proto::TimeSync<'a>;
-    fn verify(
-        buf: &[u8],
-    ) -> Result<fb::coprocessor_proto::TimeSync<'_>, flatbuffers::InvalidFlatbuffer> {
-        flatbuffers::root::<fb::coprocessor_proto::TimeSync>(buf)
-    }
-}
-
-impl Pack for fb::coprocessor_proto::TimeSyncT {
     fn to_bytes(&self) -> Vec<u8> {
         let mut fbb = flatbuffers::FlatBufferBuilder::new();
         let root = self.pack(&mut fbb);
@@ -276,7 +315,7 @@ pub mod coprocessor_proto {
         Some(tether::ServiceInfo {
             name: "CoprocessorProto.System",
             methods: &[
-                Some(tether::MethodInfo { name: "WatchTime", streaming: true }),
+                Some(tether::MethodInfo { name: "GetTimestamp", streaming: false }),
                 Some(tether::MethodInfo { name: "ReportBattery", streaming: false }),
             ],
         }),
@@ -345,9 +384,9 @@ pub mod coprocessor_proto {
             }
             pub fn get_groups_summary(
                 &self,
-                req: &fb::coprocessor_proto::EmptyT,
+                req: &fb::coprocessor_proto::GroupsSummaryRequestT,
             ) -> Call<X::Call, fb::coprocessor_proto::GroupsSummary<'static>> {
-                Call::new(self.0.call(GET_GROUPS_SUMMARY, &req.to_bytes(), 2000))
+                Call::new(self.0.call(GET_GROUPS_SUMMARY, &req.to_bytes(), 5000))
             }
         }
 
@@ -375,7 +414,7 @@ pub mod coprocessor_proto {
             fn get_groups_summary(
                 &mut self,
                 reply: Reply<S::Reply, fb::coprocessor_proto::GroupsSummaryT>,
-                req: fb::coprocessor_proto::Empty<'_>,
+                req: fb::coprocessor_proto::GroupsSummaryRequest<'_>,
             );
             /// The client dropped `call` before it finished.
             fn cancelled(&mut self, _call: CallId) {}
@@ -398,7 +437,9 @@ pub mod coprocessor_proto {
                         Ok(req) => self.0.set_volume(Reply::new(reply), req),
                         Err(_) => reply.send(Err(Status::InvalidArgument)),
                     },
-                    4 => match flatbuffers::root::<fb::coprocessor_proto::Empty>(request) {
+                    4 => match flatbuffers::root::<fb::coprocessor_proto::GroupsSummaryRequest>(
+                        request,
+                    ) {
                         Ok(req) => self.0.get_groups_summary(Reply::new(reply), req),
                         Err(_) => reply.send(Err(Status::InvalidArgument)),
                     },
@@ -440,21 +481,21 @@ pub mod coprocessor_proto {
         /// This service's id in its server's table.
         pub const ID: u8 = 1;
 
-        /// `CoprocessorProto.System/WatchTime`
-        pub const WATCH_TIME: MethodId = MethodId::new(ID, 0);
+        /// `CoprocessorProto.System/GetTimestamp`
+        pub const GET_TIMESTAMP: MethodId = MethodId::new(ID, 0);
         /// `CoprocessorProto.System/ReportBattery`
         pub const REPORT_BATTERY: MethodId = MethodId::new(ID, 1);
 
         pub struct Client<X>(pub X);
 
         impl<X: Transport> Client<X> {
-            /// Streams network time updates whenever SNTP synchronizes.
-            pub fn watch_time(
+            /// Requests the current time from the coprocessor. The coprocessor will
+            /// already sync the time via SNTP when WiFi is connected.
+            pub fn get_timestamp(
                 &self,
-                req: &fb::coprocessor_proto::EmptyT,
-                capacity: u16,
-            ) -> Channel<X::Channel, fb::coprocessor_proto::TimeSync<'static>> {
-                Channel::new(self.0.open(WATCH_TIME, &req.to_bytes(), capacity))
+                req: &fb::coprocessor_proto::GetTimestampRequestT,
+            ) -> Call<X::Call, fb::coprocessor_proto::GetTimestampResponse<'static>> {
+                Call::new(self.0.call(GET_TIMESTAMP, &req.to_bytes(), 5000))
             }
             /// Reports battery state from the host ADC to the co-processor.
             pub fn report_battery(
@@ -466,11 +507,12 @@ pub mod coprocessor_proto {
         }
 
         pub trait Handler<S: ServerTypes> {
-            /// Streams network time updates whenever SNTP synchronizes.
-            fn watch_time(
+            /// Requests the current time from the coprocessor. The coprocessor will
+            /// already sync the time via SNTP when WiFi is connected.
+            fn get_timestamp(
                 &mut self,
-                sink: Sink<S::Sink, fb::coprocessor_proto::TimeSyncT>,
-                req: fb::coprocessor_proto::Empty<'_>,
+                reply: Reply<S::Reply, fb::coprocessor_proto::GetTimestampResponseT>,
+                req: fb::coprocessor_proto::GetTimestampRequest<'_>,
             );
             /// Reports battery state from the host ADC to the co-processor.
             fn report_battery(
@@ -491,6 +533,12 @@ pub mod coprocessor_proto {
 
             fn call(&mut self, method: u8, request: &[u8], reply: S::Reply) {
                 match method {
+                    0 => match flatbuffers::root::<fb::coprocessor_proto::GetTimestampRequest>(
+                        request,
+                    ) {
+                        Ok(req) => self.0.get_timestamp(Reply::new(reply), req),
+                        Err(_) => reply.send(Err(Status::InvalidArgument)),
+                    },
                     1 => match flatbuffers::root::<fb::coprocessor_proto::BatteryStatus>(request) {
                         Ok(req) => self.0.report_battery(Reply::new(reply), req),
                         Err(_) => reply.send(Err(Status::InvalidArgument)),
@@ -501,10 +549,6 @@ pub mod coprocessor_proto {
 
             fn open(&mut self, method: u8, request: &[u8], sink: S::Sink) {
                 match method {
-                    0 => match flatbuffers::root::<fb::coprocessor_proto::Empty>(request) {
-                        Ok(req) => self.0.watch_time(Sink::new(sink), req),
-                        Err(_) => sink.end(Err(Status::InvalidArgument)),
-                    },
                     _ => sink.end(Err(Status::Unimplemented)),
                 }
             }
