@@ -61,44 +61,6 @@ impl Pack for fb::coprocessor_proto::EmptyT {
     }
 }
 
-impl Table for fb::coprocessor_proto::GetTimestampRequest<'static> {
-    type View<'a> = fb::coprocessor_proto::GetTimestampRequest<'a>;
-    fn verify(
-        buf: &[u8],
-    ) -> Result<fb::coprocessor_proto::GetTimestampRequest<'_>, flatbuffers::InvalidFlatbuffer>
-    {
-        flatbuffers::root::<fb::coprocessor_proto::GetTimestampRequest>(buf)
-    }
-}
-
-impl Pack for fb::coprocessor_proto::GetTimestampRequestT {
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut fbb = flatbuffers::FlatBufferBuilder::new();
-        let root = self.pack(&mut fbb);
-        fbb.finish(root, None);
-        fbb.finished_data().to_vec()
-    }
-}
-
-impl Table for fb::coprocessor_proto::GetTimestampResponse<'static> {
-    type View<'a> = fb::coprocessor_proto::GetTimestampResponse<'a>;
-    fn verify(
-        buf: &[u8],
-    ) -> Result<fb::coprocessor_proto::GetTimestampResponse<'_>, flatbuffers::InvalidFlatbuffer>
-    {
-        flatbuffers::root::<fb::coprocessor_proto::GetTimestampResponse>(buf)
-    }
-}
-
-impl Pack for fb::coprocessor_proto::GetTimestampResponseT {
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut fbb = flatbuffers::FlatBufferBuilder::new();
-        let root = self.pack(&mut fbb);
-        fbb.finish(root, None);
-        fbb.finished_data().to_vec()
-    }
-}
-
 impl Table for fb::coprocessor_proto::GroupsSummary<'static> {
     type View<'a> = fb::coprocessor_proto::GroupsSummary<'a>;
     fn verify(
@@ -154,24 +116,6 @@ impl Pack for fb::coprocessor_proto::PlaybackRequestT {
     }
 }
 
-impl Table for fb::coprocessor_proto::ProvisioningStatus<'static> {
-    type View<'a> = fb::coprocessor_proto::ProvisioningStatus<'a>;
-    fn verify(
-        buf: &[u8],
-    ) -> Result<fb::coprocessor_proto::ProvisioningStatus<'_>, flatbuffers::InvalidFlatbuffer> {
-        flatbuffers::root::<fb::coprocessor_proto::ProvisioningStatus>(buf)
-    }
-}
-
-impl Pack for fb::coprocessor_proto::ProvisioningStatusT {
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut fbb = flatbuffers::FlatBufferBuilder::new();
-        let root = self.pack(&mut fbb);
-        fbb.finish(root, None);
-        fbb.finished_data().to_vec()
-    }
-}
-
 impl Table for fb::coprocessor_proto::StartProvisioningRequest<'static> {
     type View<'a> = fb::coprocessor_proto::StartProvisioningRequest<'a>;
     fn verify(
@@ -201,6 +145,24 @@ impl Table for fb::coprocessor_proto::StateUpdate<'static> {
 }
 
 impl Pack for fb::coprocessor_proto::StateUpdateT {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut fbb = flatbuffers::FlatBufferBuilder::new();
+        let root = self.pack(&mut fbb);
+        fbb.finish(root, None);
+        fbb.finished_data().to_vec()
+    }
+}
+
+impl Table for fb::coprocessor_proto::SystemEvent<'static> {
+    type View<'a> = fb::coprocessor_proto::SystemEvent<'a>;
+    fn verify(
+        buf: &[u8],
+    ) -> Result<fb::coprocessor_proto::SystemEvent<'_>, flatbuffers::InvalidFlatbuffer> {
+        flatbuffers::root::<fb::coprocessor_proto::SystemEvent>(buf)
+    }
+}
+
+impl Pack for fb::coprocessor_proto::SystemEventT {
     fn to_bytes(&self) -> Vec<u8> {
         let mut fbb = flatbuffers::FlatBufferBuilder::new();
         let root = self.pack(&mut fbb);
@@ -281,24 +243,6 @@ impl Pack for fb::coprocessor_proto::WifiConnectRequestT {
     }
 }
 
-impl Table for fb::coprocessor_proto::WifiStatus<'static> {
-    type View<'a> = fb::coprocessor_proto::WifiStatus<'a>;
-    fn verify(
-        buf: &[u8],
-    ) -> Result<fb::coprocessor_proto::WifiStatus<'_>, flatbuffers::InvalidFlatbuffer> {
-        flatbuffers::root::<fb::coprocessor_proto::WifiStatus>(buf)
-    }
-}
-
-impl Pack for fb::coprocessor_proto::WifiStatusT {
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut fbb = flatbuffers::FlatBufferBuilder::new();
-        let root = self.pack(&mut fbb);
-        fbb.finish(root, None);
-        fbb.finished_data().to_vec()
-    }
-}
-
 pub mod coprocessor_proto {
     /// The services the co-processor serves: wire IDs are fixed in append-only order.
     pub static SERVER: &tether::ServerTable = &[
@@ -306,16 +250,14 @@ pub mod coprocessor_proto {
             name: "CoprocessorProto.Wifi",
             methods: &[
                 Some(tether::MethodInfo { name: "Connect", streaming: false }),
-                Some(tether::MethodInfo { name: "Watch", streaming: true }),
                 Some(tether::MethodInfo { name: "StartProvisioning", streaming: false }),
                 Some(tether::MethodInfo { name: "StopProvisioning", streaming: false }),
-                Some(tether::MethodInfo { name: "WatchProvisioning", streaming: true }),
             ],
         }),
         Some(tether::ServiceInfo {
             name: "CoprocessorProto.System",
             methods: &[
-                Some(tether::MethodInfo { name: "GetTimestamp", streaming: false }),
+                Some(tether::MethodInfo { name: "Watch", streaming: true }),
                 Some(tether::MethodInfo { name: "ReportBattery", streaming: false }),
             ],
         }),
@@ -469,7 +411,7 @@ pub mod coprocessor_proto {
         }
     }
 
-    /// System telemetry and network clock synchronization service.
+    /// System state and telemetry.
     pub mod system {
         use tether::{
             Call, CallId, Channel, MethodId, Pack, RawReply, RawSink, Reply, ServerTypes, Sink,
@@ -481,21 +423,24 @@ pub mod coprocessor_proto {
         /// This service's id in its server's table.
         pub const ID: u8 = 1;
 
-        /// `CoprocessorProto.System/GetTimestamp`
-        pub const GET_TIMESTAMP: MethodId = MethodId::new(ID, 0);
+        /// `CoprocessorProto.System/Watch`
+        pub const WATCH: MethodId = MethodId::new(ID, 0);
         /// `CoprocessorProto.System/ReportBattery`
         pub const REPORT_BATTERY: MethodId = MethodId::new(ID, 1);
 
         pub struct Client<X>(pub X);
 
         impl<X: Transport> Client<X> {
-            /// Requests the current time from the coprocessor. The coprocessor will
-            /// already sync the time via SNTP when WiFi is connected.
-            pub fn get_timestamp(
+            /// Streams system events: first the current state (Wi-Fi, provisioning,
+            /// and the time if synced), then each change. Only the latest of each
+            /// kind is kept while the client hasn't caught up. One watcher: a new
+            /// Watch ends the previous one.
+            pub fn watch(
                 &self,
-                req: &fb::coprocessor_proto::GetTimestampRequestT,
-            ) -> Call<X::Call, fb::coprocessor_proto::GetTimestampResponse<'static>> {
-                Call::new(self.0.call(GET_TIMESTAMP, &req.to_bytes(), 5000))
+                req: &fb::coprocessor_proto::EmptyT,
+                capacity: u16,
+            ) -> Channel<X::Channel, fb::coprocessor_proto::SystemEvent<'static>> {
+                Channel::new(self.0.open(WATCH, &req.to_bytes(), capacity))
             }
             /// Reports battery state from the host ADC to the co-processor.
             pub fn report_battery(
@@ -507,12 +452,14 @@ pub mod coprocessor_proto {
         }
 
         pub trait Handler<S: ServerTypes> {
-            /// Requests the current time from the coprocessor. The coprocessor will
-            /// already sync the time via SNTP when WiFi is connected.
-            fn get_timestamp(
+            /// Streams system events: first the current state (Wi-Fi, provisioning,
+            /// and the time if synced), then each change. Only the latest of each
+            /// kind is kept while the client hasn't caught up. One watcher: a new
+            /// Watch ends the previous one.
+            fn watch(
                 &mut self,
-                reply: Reply<S::Reply, fb::coprocessor_proto::GetTimestampResponseT>,
-                req: fb::coprocessor_proto::GetTimestampRequest<'_>,
+                sink: Sink<S::Sink, fb::coprocessor_proto::SystemEventT>,
+                req: fb::coprocessor_proto::Empty<'_>,
             );
             /// Reports battery state from the host ADC to the co-processor.
             fn report_battery(
@@ -533,12 +480,6 @@ pub mod coprocessor_proto {
 
             fn call(&mut self, method: u8, request: &[u8], reply: S::Reply) {
                 match method {
-                    0 => match flatbuffers::root::<fb::coprocessor_proto::GetTimestampRequest>(
-                        request,
-                    ) {
-                        Ok(req) => self.0.get_timestamp(Reply::new(reply), req),
-                        Err(_) => reply.send(Err(Status::InvalidArgument)),
-                    },
                     1 => match flatbuffers::root::<fb::coprocessor_proto::BatteryStatus>(request) {
                         Ok(req) => self.0.report_battery(Reply::new(reply), req),
                         Err(_) => reply.send(Err(Status::InvalidArgument)),
@@ -549,6 +490,10 @@ pub mod coprocessor_proto {
 
             fn open(&mut self, method: u8, request: &[u8], sink: S::Sink) {
                 match method {
+                    0 => match flatbuffers::root::<fb::coprocessor_proto::Empty>(request) {
+                        Ok(req) => self.0.watch(Sink::new(sink), req),
+                        Err(_) => sink.end(Err(Status::InvalidArgument)),
+                    },
                     _ => sink.end(Err(Status::Unimplemented)),
                 }
             }
@@ -559,7 +504,6 @@ pub mod coprocessor_proto {
         }
     }
 
-    /// Wi-Fi and BLE provisioning service.
     pub mod wifi {
         use tether::{
             Call, CallId, Channel, MethodId, Pack, RawReply, RawSink, Reply, ServerTypes, Sink,
@@ -573,34 +517,23 @@ pub mod coprocessor_proto {
 
         /// `CoprocessorProto.Wifi/Connect`
         pub const CONNECT: MethodId = MethodId::new(ID, 0);
-        /// `CoprocessorProto.Wifi/Watch`
-        pub const WATCH: MethodId = MethodId::new(ID, 1);
         /// `CoprocessorProto.Wifi/StartProvisioning`
-        pub const START_PROVISIONING: MethodId = MethodId::new(ID, 2);
+        pub const START_PROVISIONING: MethodId = MethodId::new(ID, 1);
         /// `CoprocessorProto.Wifi/StopProvisioning`
-        pub const STOP_PROVISIONING: MethodId = MethodId::new(ID, 3);
-        /// `CoprocessorProto.Wifi/WatchProvisioning`
-        pub const WATCH_PROVISIONING: MethodId = MethodId::new(ID, 4);
+        pub const STOP_PROVISIONING: MethodId = MethodId::new(ID, 2);
 
         pub struct Client<X>(pub X);
 
         impl<X: Transport> Client<X> {
-            /// Starts joining a Wi-Fi network; status arrives on Watch.
+            /// Starts joining a Wi-Fi network; progress arrives on System.Watch.
             pub fn connect(
                 &self,
                 req: &fb::coprocessor_proto::WifiConnectRequestT,
             ) -> Call<X::Call, fb::coprocessor_proto::Empty<'static>> {
                 Call::new(self.0.call(CONNECT, &req.to_bytes(), 1000))
             }
-            /// Streams initial connection status and all subsequent changes.
-            pub fn watch(
-                &self,
-                req: &fb::coprocessor_proto::EmptyT,
-                capacity: u16,
-            ) -> Channel<X::Channel, fb::coprocessor_proto::WifiStatus<'static>> {
-                Channel::new(self.0.open(WATCH, &req.to_bytes(), capacity))
-            }
-            /// Opens an on-demand BLE Improv provisioning session.
+            /// Opens an on-demand BLE Improv provisioning session; its state arrives
+            /// on System.Watch.
             pub fn start_provisioning(
                 &self,
                 req: &fb::coprocessor_proto::StartProvisioningRequestT,
@@ -614,31 +547,17 @@ pub mod coprocessor_proto {
             ) -> Call<X::Call, fb::coprocessor_proto::Empty<'static>> {
                 Call::new(self.0.call(STOP_PROVISIONING, &req.to_bytes(), 5000))
             }
-            /// Streams provisioning state transitions (active, provisioned, timed out).
-            pub fn watch_provisioning(
-                &self,
-                req: &fb::coprocessor_proto::EmptyT,
-                capacity: u16,
-            ) -> Channel<X::Channel, fb::coprocessor_proto::ProvisioningStatus<'static>>
-            {
-                Channel::new(self.0.open(WATCH_PROVISIONING, &req.to_bytes(), capacity))
-            }
         }
 
         pub trait Handler<S: ServerTypes> {
-            /// Starts joining a Wi-Fi network; status arrives on Watch.
+            /// Starts joining a Wi-Fi network; progress arrives on System.Watch.
             fn connect(
                 &mut self,
                 reply: Reply<S::Reply, fb::coprocessor_proto::EmptyT>,
                 req: fb::coprocessor_proto::WifiConnectRequest<'_>,
             );
-            /// Streams initial connection status and all subsequent changes.
-            fn watch(
-                &mut self,
-                sink: Sink<S::Sink, fb::coprocessor_proto::WifiStatusT>,
-                req: fb::coprocessor_proto::Empty<'_>,
-            );
-            /// Opens an on-demand BLE Improv provisioning session.
+            /// Opens an on-demand BLE Improv provisioning session; its state arrives
+            /// on System.Watch.
             fn start_provisioning(
                 &mut self,
                 reply: Reply<S::Reply, fb::coprocessor_proto::EmptyT>,
@@ -648,12 +567,6 @@ pub mod coprocessor_proto {
             fn stop_provisioning(
                 &mut self,
                 reply: Reply<S::Reply, fb::coprocessor_proto::EmptyT>,
-                req: fb::coprocessor_proto::Empty<'_>,
-            );
-            /// Streams provisioning state transitions (active, provisioned, timed out).
-            fn watch_provisioning(
-                &mut self,
-                sink: Sink<S::Sink, fb::coprocessor_proto::ProvisioningStatusT>,
                 req: fb::coprocessor_proto::Empty<'_>,
             );
             /// The client dropped `call` before it finished.
@@ -675,7 +588,7 @@ pub mod coprocessor_proto {
                         Ok(req) => self.0.connect(Reply::new(reply), req),
                         Err(_) => reply.send(Err(Status::InvalidArgument)),
                     },
-                    2 => {
+                    1 => {
                         match flatbuffers::root::<fb::coprocessor_proto::StartProvisioningRequest>(
                             request,
                         ) {
@@ -683,7 +596,7 @@ pub mod coprocessor_proto {
                             Err(_) => reply.send(Err(Status::InvalidArgument)),
                         }
                     }
-                    3 => match flatbuffers::root::<fb::coprocessor_proto::Empty>(request) {
+                    2 => match flatbuffers::root::<fb::coprocessor_proto::Empty>(request) {
                         Ok(req) => self.0.stop_provisioning(Reply::new(reply), req),
                         Err(_) => reply.send(Err(Status::InvalidArgument)),
                     },
@@ -693,14 +606,6 @@ pub mod coprocessor_proto {
 
             fn open(&mut self, method: u8, request: &[u8], sink: S::Sink) {
                 match method {
-                    1 => match flatbuffers::root::<fb::coprocessor_proto::Empty>(request) {
-                        Ok(req) => self.0.watch(Sink::new(sink), req),
-                        Err(_) => sink.end(Err(Status::InvalidArgument)),
-                    },
-                    4 => match flatbuffers::root::<fb::coprocessor_proto::Empty>(request) {
-                        Ok(req) => self.0.watch_provisioning(Sink::new(sink), req),
-                        Err(_) => sink.end(Err(Status::InvalidArgument)),
-                    },
                     _ => sink.end(Err(Status::Unimplemented)),
                 }
             }

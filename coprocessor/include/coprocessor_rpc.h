@@ -14,16 +14,14 @@
 
 namespace CoprocessorProto {
 
-inline constexpr std::array<std::optional<tether::MethodInfo>, 5> kCoprocessorProto_WifiMethods{
+inline constexpr std::array<std::optional<tether::MethodInfo>, 3> kCoprocessorProto_WifiMethods{
     tether::MethodInfo{.name = "Connect", .streaming = false},
-    tether::MethodInfo{.name = "Watch", .streaming = true},
     tether::MethodInfo{.name = "StartProvisioning", .streaming = false},
     tether::MethodInfo{.name = "StopProvisioning", .streaming = false},
-    tether::MethodInfo{.name = "WatchProvisioning", .streaming = true},
 };
 
 inline constexpr std::array<std::optional<tether::MethodInfo>, 2> kCoprocessorProto_SystemMethods{
-    tether::MethodInfo{.name = "GetTimestamp", .streaming = false},
+    tether::MethodInfo{.name = "Watch", .streaming = true},
     tether::MethodInfo{.name = "ReportBattery", .streaming = false},
 };
 
@@ -151,22 +149,24 @@ class Service final : public tether::Service {
 
 }  // namespace sonos
 
-// System telemetry and network clock synchronization service.
+// System state and telemetry.
 namespace system {
 
 // This service's id in its server's table.
 inline constexpr uint8_t kId = 1;
 
-// `CoprocessorProto.System/GetTimestamp`
-inline constexpr tether::MethodId kGetTimestamp{kId, 0};
+// `CoprocessorProto.System/Watch`
+inline constexpr tether::MethodId kWatch{kId, 0};
 // `CoprocessorProto.System/ReportBattery`
 inline constexpr tether::MethodId kReportBattery{kId, 1};
 
 class Handler {
  public:
-  // Requests the current time from the coprocessor. The coprocessor will
-  // already sync the time via SNTP when WiFi is connected.
-  virtual void get_timestamp(tether::Reply<::CoprocessorProto::GetTimestampResponse> reply, const ::CoprocessorProto::GetTimestampRequest& request) = 0;
+  // Streams system events: first the current state (Wi-Fi, provisioning,
+  // and the time if synced), then each change. Only the latest of each
+  // kind is kept while the client hasn't caught up. One watcher: a new
+  // Watch ends the previous one.
+  virtual void watch(tether::Sink<::CoprocessorProto::SystemEvent> sink, const ::CoprocessorProto::Empty& request) = 0;
   // Reports battery state from the host ADC to the co-processor.
   virtual void report_battery(tether::Reply<::CoprocessorProto::Empty> reply, const ::CoprocessorProto::BatteryStatus& request) = 0;
   // The client dropped `call` before it finished.
@@ -186,15 +186,6 @@ class Service final : public tether::Service {
             [[maybe_unused]] std::span<const std::byte> request,
             [[maybe_unused]] tether::RawReply reply) override {
     switch (method) {
-      case 0: {
-        const auto* message = tether::verify<::CoprocessorProto::GetTimestampRequest>(request);
-        if (message == nullptr) {
-          (void)reply.fail(tether::WireStatus::INVALID_ARGUMENT);
-          return;
-        }
-        handler_->get_timestamp(tether::Reply<::CoprocessorProto::GetTimestampResponse>(reply), *message);
-        return;
-      }
       case 1: {
         const auto* message = tether::verify<::CoprocessorProto::BatteryStatus>(request);
         if (message == nullptr) {
@@ -214,6 +205,15 @@ class Service final : public tether::Service {
             [[maybe_unused]] std::span<const std::byte> request,
             [[maybe_unused]] tether::RawSink sink) override {
     switch (method) {
+      case 0: {
+        const auto* message = tether::verify<::CoprocessorProto::Empty>(request);
+        if (message == nullptr) {
+          (void)sink.end(tether::WireStatus::INVALID_ARGUMENT);
+          return;
+        }
+        handler_->watch(tether::Sink<::CoprocessorProto::SystemEvent>(sink), *message);
+        return;
+      }
       default:
         (void)sink.end(tether::WireStatus::UNIMPLEMENTED);
         return;
@@ -228,7 +228,6 @@ class Service final : public tether::Service {
 
 }  // namespace system
 
-// Wi-Fi and BLE provisioning service.
 namespace wifi {
 
 // This service's id in its server's table.
@@ -236,27 +235,20 @@ inline constexpr uint8_t kId = 0;
 
 // `CoprocessorProto.Wifi/Connect`
 inline constexpr tether::MethodId kConnect{kId, 0};
-// `CoprocessorProto.Wifi/Watch`
-inline constexpr tether::MethodId kWatch{kId, 1};
 // `CoprocessorProto.Wifi/StartProvisioning`
-inline constexpr tether::MethodId kStartProvisioning{kId, 2};
+inline constexpr tether::MethodId kStartProvisioning{kId, 1};
 // `CoprocessorProto.Wifi/StopProvisioning`
-inline constexpr tether::MethodId kStopProvisioning{kId, 3};
-// `CoprocessorProto.Wifi/WatchProvisioning`
-inline constexpr tether::MethodId kWatchProvisioning{kId, 4};
+inline constexpr tether::MethodId kStopProvisioning{kId, 2};
 
 class Handler {
  public:
-  // Starts joining a Wi-Fi network; status arrives on Watch.
+  // Starts joining a Wi-Fi network; progress arrives on System.Watch.
   virtual void connect(tether::Reply<::CoprocessorProto::Empty> reply, const ::CoprocessorProto::WifiConnectRequest& request) = 0;
-  // Streams initial connection status and all subsequent changes.
-  virtual void watch(tether::Sink<::CoprocessorProto::WifiStatus> sink, const ::CoprocessorProto::Empty& request) = 0;
-  // Opens an on-demand BLE Improv provisioning session.
+  // Opens an on-demand BLE Improv provisioning session; its state arrives
+  // on System.Watch.
   virtual void start_provisioning(tether::Reply<::CoprocessorProto::Empty> reply, const ::CoprocessorProto::StartProvisioningRequest& request) = 0;
   // Cancels any active BLE Improv provisioning session.
   virtual void stop_provisioning(tether::Reply<::CoprocessorProto::Empty> reply, const ::CoprocessorProto::Empty& request) = 0;
-  // Streams provisioning state transitions (active, provisioned, timed out).
-  virtual void watch_provisioning(tether::Sink<::CoprocessorProto::ProvisioningStatus> sink, const ::CoprocessorProto::Empty& request) = 0;
   // The client dropped `call` before it finished.
   virtual void cancelled(tether::CallId /*call*/) {}
 
@@ -283,7 +275,7 @@ class Service final : public tether::Service {
         handler_->connect(tether::Reply<::CoprocessorProto::Empty>(reply), *message);
         return;
       }
-      case 2: {
+      case 1: {
         const auto* message = tether::verify<::CoprocessorProto::StartProvisioningRequest>(request);
         if (message == nullptr) {
           (void)reply.fail(tether::WireStatus::INVALID_ARGUMENT);
@@ -292,7 +284,7 @@ class Service final : public tether::Service {
         handler_->start_provisioning(tether::Reply<::CoprocessorProto::Empty>(reply), *message);
         return;
       }
-      case 3: {
+      case 2: {
         const auto* message = tether::verify<::CoprocessorProto::Empty>(request);
         if (message == nullptr) {
           (void)reply.fail(tether::WireStatus::INVALID_ARGUMENT);
@@ -311,24 +303,6 @@ class Service final : public tether::Service {
             [[maybe_unused]] std::span<const std::byte> request,
             [[maybe_unused]] tether::RawSink sink) override {
     switch (method) {
-      case 1: {
-        const auto* message = tether::verify<::CoprocessorProto::Empty>(request);
-        if (message == nullptr) {
-          (void)sink.end(tether::WireStatus::INVALID_ARGUMENT);
-          return;
-        }
-        handler_->watch(tether::Sink<::CoprocessorProto::WifiStatus>(sink), *message);
-        return;
-      }
-      case 4: {
-        const auto* message = tether::verify<::CoprocessorProto::Empty>(request);
-        if (message == nullptr) {
-          (void)sink.end(tether::WireStatus::INVALID_ARGUMENT);
-          return;
-        }
-        handler_->watch_provisioning(tether::Sink<::CoprocessorProto::ProvisioningStatus>(sink), *message);
-        return;
-      }
       default:
         (void)sink.end(tether::WireStatus::UNIMPLEMENTED);
         return;

@@ -44,6 +44,13 @@ enum : int32_t { kConnect };
 constexpr int kMaxRetries = 5;
 int s_retry_count = 0;
 
+// Posts a WIFI_MANAGER_EVENT. From the loop's own task: don't wait for room.
+void announce(int32_t id, const char* name) {
+  if (esp_event_post(WIFI_MANAGER_EVENT, id, nullptr, 0, 0) != ESP_OK) {
+    ESP_LOGE(TAG, "Event queue full: dropped %s", name);
+  }
+}
+
 std::string_view ssid_of(const wifi_config_t& cfg) {
   const auto* ssid = reinterpret_cast<const char*>(cfg.sta.ssid);
   // A 32-byte SSID fills the field, with no NUL.
@@ -68,6 +75,7 @@ void connect_to_stored() {
   const std::string_view ssid = ssid_of(cfg);
   ESP_LOGI(TAG, "Joining saved network '%.*s'", static_cast<int>(ssid.size()),
            ssid.data());
+  announce(WIFI_MANAGER_CONNECTING, "WIFI_MANAGER_CONNECTING");
   esp_wifi_connect();
 }
 
@@ -89,6 +97,7 @@ void on_connect_request(const wifi_config_t& cfg) {
     }
   }
   s_retry_count = 0;
+  announce(WIFI_MANAGER_CONNECTING, "WIFI_MANAGER_CONNECTING");
   // Its STA_DISCONNECTED isn't a failed attempt: see on_disconnected().
   esp_wifi_disconnect();
   esp_wifi_connect();
@@ -102,6 +111,10 @@ void on_disconnected(const wifi_event_sta_disconnected_t& event) {
     return;
   }
   if (s_retry_count < kMaxRetries) {
+    if (s_retry_count == 0) {
+      // A drop (or joining's first failure, a repeat): rejoining starts.
+      announce(WIFI_MANAGER_CONNECTING, "WIFI_MANAGER_CONNECTING");
+    }
     s_retry_count++;
     ESP_LOGI(TAG, "Wi-Fi disconnected (reason %d), retrying (%d/%d)...",
              event.reason, s_retry_count, kMaxRetries);
@@ -109,11 +122,7 @@ void on_disconnected(const wifi_event_sta_disconnected_t& event) {
     return;
   }
   ESP_LOGW(TAG, "Wi-Fi disconnected (reason %d), giving up", event.reason);
-  // Posting from the loop's own task: don't wait for room.
-  if (esp_event_post(WIFI_MANAGER_EVENT, WIFI_MANAGER_GAVE_UP, nullptr, 0, 0) !=
-      ESP_OK) {
-    ESP_LOGE(TAG, "Event queue full: dropped WIFI_MANAGER_GAVE_UP");
-  }
+  announce(WIFI_MANAGER_GAVE_UP, "WIFI_MANAGER_GAVE_UP");
 }
 
 void on_wifi_event(void* /*arg*/, esp_event_base_t /*base*/, int32_t id,

@@ -63,39 +63,4 @@ void fail_reply(const tether::Reply<T>& reply, tether::WireStatus status) {
   }
 }
 
-/// Sends one stream item, from any task. Returns false once the stream is
-/// over: the client cancelled or the link restarted (Closed), or the item was
-/// too large (a bug: the stream is ended with INTERNAL). Stop sending then.
-///
-/// CAVEAT: on QueueFull/NoCredit the item is DROPPED, not retried: the client
-/// keeps its previous value until the next item. Retrying in place could
-/// deadlock on the I/O task, the only one draining the send queue; a retry
-/// belongs in a handler, on the reactor.
-template <class T, class Build>
-[[nodiscard]] bool send_item(const tether::Sink<T>& sink, Build&& build) {
-  auto result = sink.send(std::forward<Build>(build));
-  if (result) {
-    return true;
-  }
-  switch (result.error()) {
-    case tether::CallError::Closed:
-      return false;
-    case tether::CallError::QueueFull:
-    case tether::CallError::NoCredit:
-      ESP_LOGW(detail::kRpcTag, "Item on call %u dropped: %s",
-               static_cast<unsigned>(sink.call_id()),
-               result.error() == tether::CallError::NoCredit
-                   ? "client hasn't caught up"
-                   : "send queue full");
-      return true;
-    case tether::CallError::TooLarge:
-      ESP_LOGE(detail::kRpcTag, "Item on call %u exceeds the max payload",
-               static_cast<unsigned>(sink.call_id()));
-      // Ending can only fail as Closed or QueueFull: nothing left to do.
-      (void)sink.end(tether::WireStatus::INTERNAL);
-      return false;
-  }
-  return false;
-}
-
 }  // namespace coprocessor

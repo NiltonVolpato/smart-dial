@@ -9,6 +9,107 @@ pub mod coprocessor_proto {
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
+    pub const ENUM_MIN_WIFI_STATE: u8 = 0;
+    #[deprecated(
+        since = "2.0.0",
+        note = "Use associated constants instead. This will no longer be generated in 2021."
+    )]
+    pub const ENUM_MAX_WIFI_STATE: u8 = 3;
+    #[deprecated(
+        since = "2.0.0",
+        note = "Use associated constants instead. This will no longer be generated in 2021."
+    )]
+    #[allow(non_camel_case_types)]
+    pub const ENUM_VALUES_WIFI_STATE: [WifiState; 4] = [
+        WifiState::Disconnected,
+        WifiState::Connecting,
+        WifiState::Connected,
+        WifiState::Failed,
+    ];
+
+    #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+    #[repr(transparent)]
+    pub struct WifiState(pub u8);
+    #[allow(non_upper_case_globals)]
+    impl WifiState {
+        /// No network to join.
+        pub const Disconnected: Self = Self(0);
+        /// Joining, or rejoining after a drop.
+        pub const Connecting: Self = Self(1);
+        pub const Connected: Self = Self(2);
+        /// Gave up joining (the network may be gone) until the next Connect.
+        pub const Failed: Self = Self(3);
+
+        pub const ENUM_MIN: u8 = 0;
+        pub const ENUM_MAX: u8 = 3;
+        pub const ENUM_VALUES: &'static [Self] =
+            &[Self::Disconnected, Self::Connecting, Self::Connected, Self::Failed];
+        /// Returns the variant's name or "" if unknown.
+        pub fn variant_name(self) -> Option<&'static str> {
+            match self {
+                Self::Disconnected => Some("Disconnected"),
+                Self::Connecting => Some("Connecting"),
+                Self::Connected => Some("Connected"),
+                Self::Failed => Some("Failed"),
+                _ => None,
+            }
+        }
+    }
+    impl ::core::fmt::Debug for WifiState {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+            if let Some(name) = self.variant_name() {
+                f.write_str(name)
+            } else {
+                f.write_fmt(format_args!("<UNKNOWN {:?}>", self.0))
+            }
+        }
+    }
+    impl<'a> ::flatbuffers::Follow<'a> for WifiState {
+        type Inner = Self;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            let b = unsafe { ::flatbuffers::read_scalar_at::<u8>(buf, loc) };
+            Self(b)
+        }
+    }
+
+    impl ::flatbuffers::Push for WifiState {
+        type Output = WifiState;
+        #[inline]
+        unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
+            unsafe { ::flatbuffers::emplace_scalar::<u8>(dst, self.0) };
+        }
+    }
+
+    impl ::flatbuffers::EndianScalar for WifiState {
+        type Scalar = u8;
+        #[inline]
+        fn to_little_endian(self) -> u8 {
+            self.0.to_le()
+        }
+        #[inline]
+        #[allow(clippy::wrong_self_convention)]
+        fn from_little_endian(v: u8) -> Self {
+            let b = u8::from_le(v);
+            Self(b)
+        }
+    }
+
+    impl<'a> ::flatbuffers::Verifiable for WifiState {
+        #[inline]
+        fn run_verifier(
+            v: &mut ::flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), ::flatbuffers::InvalidFlatbuffer> {
+            u8::run_verifier(v, pos)
+        }
+    }
+
+    impl ::flatbuffers::SimpleToVerifyInSlice for WifiState {}
+    #[deprecated(
+        since = "2.0.0",
+        note = "Use associated constants instead. This will no longer be generated in 2021."
+    )]
     pub const ENUM_MIN_PROVISIONING_STATE: u8 = 0;
     #[deprecated(
         since = "2.0.0",
@@ -103,6 +204,194 @@ pub mod coprocessor_proto {
     }
 
     impl ::flatbuffers::SimpleToVerifyInSlice for ProvisioningState {}
+    #[deprecated(
+        since = "2.0.0",
+        note = "Use associated constants instead. This will no longer be generated in 2021."
+    )]
+    pub const ENUM_MIN_SYSTEM_EVENT_KIND: u8 = 0;
+    #[deprecated(
+        since = "2.0.0",
+        note = "Use associated constants instead. This will no longer be generated in 2021."
+    )]
+    pub const ENUM_MAX_SYSTEM_EVENT_KIND: u8 = 3;
+    #[deprecated(
+        since = "2.0.0",
+        note = "Use associated constants instead. This will no longer be generated in 2021."
+    )]
+    #[allow(non_camel_case_types)]
+    pub const ENUM_VALUES_SYSTEM_EVENT_KIND: [SystemEventKind; 4] = [
+        SystemEventKind::NONE,
+        SystemEventKind::WifiStatus,
+        SystemEventKind::ProvisioningStatus,
+        SystemEventKind::TimeSynced,
+    ];
+
+    #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+    #[repr(transparent)]
+    pub struct SystemEventKind(pub u8);
+    #[allow(non_upper_case_globals)]
+    impl SystemEventKind {
+        pub const NONE: Self = Self(0);
+        pub const WifiStatus: Self = Self(1);
+        pub const ProvisioningStatus: Self = Self(2);
+        pub const TimeSynced: Self = Self(3);
+
+        pub const ENUM_MIN: u8 = 0;
+        pub const ENUM_MAX: u8 = 3;
+        pub const ENUM_VALUES: &'static [Self] =
+            &[Self::NONE, Self::WifiStatus, Self::ProvisioningStatus, Self::TimeSynced];
+        /// Returns the variant's name or "" if unknown.
+        pub fn variant_name(self) -> Option<&'static str> {
+            match self {
+                Self::NONE => Some("NONE"),
+                Self::WifiStatus => Some("WifiStatus"),
+                Self::ProvisioningStatus => Some("ProvisioningStatus"),
+                Self::TimeSynced => Some("TimeSynced"),
+                _ => None,
+            }
+        }
+    }
+    impl ::core::fmt::Debug for SystemEventKind {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+            if let Some(name) = self.variant_name() {
+                f.write_str(name)
+            } else {
+                f.write_fmt(format_args!("<UNKNOWN {:?}>", self.0))
+            }
+        }
+    }
+    impl<'a> ::flatbuffers::Follow<'a> for SystemEventKind {
+        type Inner = Self;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            let b = unsafe { ::flatbuffers::read_scalar_at::<u8>(buf, loc) };
+            Self(b)
+        }
+    }
+
+    impl ::flatbuffers::Push for SystemEventKind {
+        type Output = SystemEventKind;
+        #[inline]
+        unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
+            unsafe { ::flatbuffers::emplace_scalar::<u8>(dst, self.0) };
+        }
+    }
+
+    impl ::flatbuffers::EndianScalar for SystemEventKind {
+        type Scalar = u8;
+        #[inline]
+        fn to_little_endian(self) -> u8 {
+            self.0.to_le()
+        }
+        #[inline]
+        #[allow(clippy::wrong_self_convention)]
+        fn from_little_endian(v: u8) -> Self {
+            let b = u8::from_le(v);
+            Self(b)
+        }
+    }
+
+    impl<'a> ::flatbuffers::Verifiable for SystemEventKind {
+        #[inline]
+        fn run_verifier(
+            v: &mut ::flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), ::flatbuffers::InvalidFlatbuffer> {
+            u8::run_verifier(v, pos)
+        }
+    }
+
+    impl ::flatbuffers::SimpleToVerifyInSlice for SystemEventKind {}
+    pub struct SystemEventKindUnionTableOffset {}
+
+    #[allow(clippy::upper_case_acronyms)]
+    #[non_exhaustive]
+    #[derive(Debug, Clone, PartialEq)]
+    pub enum SystemEventKindT {
+        NONE,
+        WifiStatus(alloc::boxed::Box<WifiStatusT>),
+        ProvisioningStatus(alloc::boxed::Box<ProvisioningStatusT>),
+        TimeSynced(alloc::boxed::Box<TimeSyncedT>),
+    }
+    impl Default for SystemEventKindT {
+        fn default() -> Self {
+            Self::NONE
+        }
+    }
+    impl SystemEventKindT {
+        pub fn system_event_kind_type(&self) -> SystemEventKind {
+            match self {
+                Self::NONE => SystemEventKind::NONE,
+                Self::WifiStatus(_) => SystemEventKind::WifiStatus,
+                Self::ProvisioningStatus(_) => SystemEventKind::ProvisioningStatus,
+                Self::TimeSynced(_) => SystemEventKind::TimeSynced,
+            }
+        }
+        pub fn pack<'b, A: ::flatbuffers::Allocator + 'b>(
+            &self,
+            fbb: &mut ::flatbuffers::FlatBufferBuilder<'b, A>,
+        ) -> Option<::flatbuffers::WIPOffset<::flatbuffers::UnionWIPOffset>> {
+            match self {
+                Self::NONE => None,
+                Self::WifiStatus(v) => Some(v.pack(fbb).as_union_value()),
+                Self::ProvisioningStatus(v) => Some(v.pack(fbb).as_union_value()),
+                Self::TimeSynced(v) => Some(v.pack(fbb).as_union_value()),
+            }
+        }
+        /// If the union variant matches, return the owned WifiStatusT, setting the union to NONE.
+        pub fn take_wifi_status(&mut self) -> Option<alloc::boxed::Box<WifiStatusT>> {
+            if let Self::WifiStatus(_) = self {
+                let v = ::core::mem::replace(self, Self::NONE);
+                if let Self::WifiStatus(w) = v { Some(w) } else { unreachable!() }
+            } else {
+                None
+            }
+        }
+        /// If the union variant matches, return a reference to the WifiStatusT.
+        pub fn as_wifi_status(&self) -> Option<&WifiStatusT> {
+            if let Self::WifiStatus(v) = self { Some(v.as_ref()) } else { None }
+        }
+        /// If the union variant matches, return a mutable reference to the WifiStatusT.
+        pub fn as_wifi_status_mut(&mut self) -> Option<&mut WifiStatusT> {
+            if let Self::WifiStatus(v) = self { Some(v.as_mut()) } else { None }
+        }
+        /// If the union variant matches, return the owned ProvisioningStatusT, setting the union to NONE.
+        pub fn take_provisioning_status(
+            &mut self,
+        ) -> Option<alloc::boxed::Box<ProvisioningStatusT>> {
+            if let Self::ProvisioningStatus(_) = self {
+                let v = ::core::mem::replace(self, Self::NONE);
+                if let Self::ProvisioningStatus(w) = v { Some(w) } else { unreachable!() }
+            } else {
+                None
+            }
+        }
+        /// If the union variant matches, return a reference to the ProvisioningStatusT.
+        pub fn as_provisioning_status(&self) -> Option<&ProvisioningStatusT> {
+            if let Self::ProvisioningStatus(v) = self { Some(v.as_ref()) } else { None }
+        }
+        /// If the union variant matches, return a mutable reference to the ProvisioningStatusT.
+        pub fn as_provisioning_status_mut(&mut self) -> Option<&mut ProvisioningStatusT> {
+            if let Self::ProvisioningStatus(v) = self { Some(v.as_mut()) } else { None }
+        }
+        /// If the union variant matches, return the owned TimeSyncedT, setting the union to NONE.
+        pub fn take_time_synced(&mut self) -> Option<alloc::boxed::Box<TimeSyncedT>> {
+            if let Self::TimeSynced(_) = self {
+                let v = ::core::mem::replace(self, Self::NONE);
+                if let Self::TimeSynced(w) = v { Some(w) } else { unreachable!() }
+            } else {
+                None
+            }
+        }
+        /// If the union variant matches, return a reference to the TimeSyncedT.
+        pub fn as_time_synced(&self) -> Option<&TimeSyncedT> {
+            if let Self::TimeSynced(v) = self { Some(v.as_ref()) } else { None }
+        }
+        /// If the union variant matches, return a mutable reference to the TimeSyncedT.
+        pub fn as_time_synced_mut(&mut self) -> Option<&mut TimeSyncedT> {
+            if let Self::TimeSynced(v) = self { Some(v.as_mut()) } else { None }
+        }
+    }
     #[deprecated(
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
@@ -807,190 +1096,6 @@ pub mod coprocessor_proto {
             WifiConnectRequest::create(_fbb, &WifiConnectRequestArgs { ssid, password })
         }
     }
-    pub enum WifiStatusOffset {}
-    #[derive(Copy, Clone, PartialEq)]
-
-    pub struct WifiStatus<'a> {
-        pub _tab: ::flatbuffers::Table<'a>,
-    }
-
-    impl<'a> ::flatbuffers::Follow<'a> for WifiStatus<'a> {
-        type Inner = WifiStatus<'a>;
-        #[inline]
-        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-            Self { _tab: unsafe { ::flatbuffers::Table::new(buf, loc) } }
-        }
-    }
-
-    impl<'a> WifiStatus<'a> {
-        pub const VT_CONNECTED: ::flatbuffers::VOffsetT = 4;
-        pub const VT_IP: ::flatbuffers::VOffsetT = 6;
-        pub const VT_SSID: ::flatbuffers::VOffsetT = 8;
-        pub const VT_RSSI: ::flatbuffers::VOffsetT = 10;
-
-        #[inline]
-        pub unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
-            WifiStatus { _tab: table }
-        }
-        #[allow(unused_mut)]
-        pub fn create<
-            'bldr: 'args,
-            'args: 'mut_bldr,
-            'mut_bldr,
-            A: ::flatbuffers::Allocator + 'bldr,
-        >(
-            _fbb: &'mut_bldr mut ::flatbuffers::FlatBufferBuilder<'bldr, A>,
-            args: &'args WifiStatusArgs<'args>,
-        ) -> ::flatbuffers::WIPOffset<WifiStatus<'bldr>> {
-            let mut builder = WifiStatusBuilder::new(_fbb);
-            if let Some(x) = args.ssid {
-                builder.add_ssid(x);
-            }
-            builder.add_ip(args.ip);
-            builder.add_rssi(args.rssi);
-            builder.add_connected(args.connected);
-            builder.finish()
-        }
-
-        pub fn unpack(&self) -> WifiStatusT {
-            let connected = self.connected();
-            let ip = self.ip();
-            let ssid = self.ssid().map(|x| alloc::string::ToString::to_string(x));
-            let rssi = self.rssi();
-            WifiStatusT { connected, ip, ssid, rssi }
-        }
-
-        #[inline]
-        pub fn connected(&self) -> bool {
-            // Safety:
-            // Created from valid Table for this object
-            // which contains a valid value in this slot
-            unsafe { self._tab.get::<bool>(WifiStatus::VT_CONNECTED, Some(false)).unwrap() }
-        }
-        #[inline]
-        pub fn ip(&self) -> u32 {
-            // Safety:
-            // Created from valid Table for this object
-            // which contains a valid value in this slot
-            unsafe { self._tab.get::<u32>(WifiStatus::VT_IP, Some(0)).unwrap() }
-        }
-        #[inline]
-        pub fn ssid(&self) -> Option<&'a str> {
-            // Safety:
-            // Created from valid Table for this object
-            // which contains a valid value in this slot
-            unsafe {
-                self._tab.get::<::flatbuffers::ForwardsUOffset<&str>>(WifiStatus::VT_SSID, None)
-            }
-        }
-        #[inline]
-        pub fn rssi(&self) -> i16 {
-            // Safety:
-            // Created from valid Table for this object
-            // which contains a valid value in this slot
-            unsafe { self._tab.get::<i16>(WifiStatus::VT_RSSI, Some(0)).unwrap() }
-        }
-    }
-
-    impl ::flatbuffers::Verifiable for WifiStatus<'_> {
-        #[inline]
-        fn run_verifier(
-            v: &mut ::flatbuffers::Verifier,
-            pos: usize,
-        ) -> Result<(), ::flatbuffers::InvalidFlatbuffer> {
-            v.visit_table(pos)?
-                .visit_field::<bool>("connected", Self::VT_CONNECTED, false)?
-                .visit_field::<u32>("ip", Self::VT_IP, false)?
-                .visit_field::<::flatbuffers::ForwardsUOffset<&str>>("ssid", Self::VT_SSID, false)?
-                .visit_field::<i16>("rssi", Self::VT_RSSI, false)?
-                .finish();
-            Ok(())
-        }
-    }
-    pub struct WifiStatusArgs<'a> {
-        pub connected: bool,
-        pub ip: u32,
-        pub ssid: Option<::flatbuffers::WIPOffset<&'a str>>,
-        pub rssi: i16,
-    }
-    impl<'a> Default for WifiStatusArgs<'a> {
-        #[inline]
-        fn default() -> Self {
-            WifiStatusArgs { connected: false, ip: 0, ssid: None, rssi: 0 }
-        }
-    }
-
-    pub struct WifiStatusBuilder<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a> {
-        fbb_: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
-        start_: ::flatbuffers::WIPOffset<::flatbuffers::TableUnfinishedWIPOffset>,
-    }
-    impl<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a> WifiStatusBuilder<'a, 'b, A> {
-        #[inline]
-        pub fn add_connected(&mut self, connected: bool) {
-            self.fbb_.push_slot::<bool>(WifiStatus::VT_CONNECTED, connected, false);
-        }
-        #[inline]
-        pub fn add_ip(&mut self, ip: u32) {
-            self.fbb_.push_slot::<u32>(WifiStatus::VT_IP, ip, 0);
-        }
-        #[inline]
-        pub fn add_ssid(&mut self, ssid: ::flatbuffers::WIPOffset<&'b str>) {
-            self.fbb_
-                .push_slot_always::<::flatbuffers::WIPOffset<_>>(WifiStatus::VT_SSID, ssid);
-        }
-        #[inline]
-        pub fn add_rssi(&mut self, rssi: i16) {
-            self.fbb_.push_slot::<i16>(WifiStatus::VT_RSSI, rssi, 0);
-        }
-        #[inline]
-        pub fn new(
-            _fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
-        ) -> WifiStatusBuilder<'a, 'b, A> {
-            let start = _fbb.start_table();
-            WifiStatusBuilder { fbb_: _fbb, start_: start }
-        }
-        #[inline]
-        pub fn finish(self) -> ::flatbuffers::WIPOffset<WifiStatus<'a>> {
-            let o = self.fbb_.end_table(self.start_);
-            ::flatbuffers::WIPOffset::new(o.value())
-        }
-    }
-
-    impl ::core::fmt::Debug for WifiStatus<'_> {
-        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-            let mut ds = f.debug_struct("WifiStatus");
-            ds.field("connected", &self.connected());
-            ds.field("ip", &self.ip());
-            ds.field("ssid", &self.ssid());
-            ds.field("rssi", &self.rssi());
-            ds.finish()
-        }
-    }
-    #[non_exhaustive]
-    #[derive(Debug, Clone, PartialEq)]
-    pub struct WifiStatusT {
-        pub connected: bool,
-        pub ip: u32,
-        pub ssid: Option<alloc::string::String>,
-        pub rssi: i16,
-    }
-    impl Default for WifiStatusT {
-        fn default() -> Self {
-            Self { connected: false, ip: 0, ssid: None, rssi: 0 }
-        }
-    }
-    impl WifiStatusT {
-        pub fn pack<'b, A: ::flatbuffers::Allocator + 'b>(
-            &self,
-            _fbb: &mut ::flatbuffers::FlatBufferBuilder<'b, A>,
-        ) -> ::flatbuffers::WIPOffset<WifiStatus<'b>> {
-            let connected = self.connected;
-            let ip = self.ip;
-            let ssid = self.ssid.as_ref().map(|x| _fbb.create_string(x));
-            let rssi = self.rssi;
-            WifiStatus::create(_fbb, &WifiStatusArgs { connected, ip, ssid, rssi })
-        }
-    }
     pub enum StartProvisioningRequestOffset {}
     #[derive(Copy, Clone, PartialEq)]
 
@@ -1122,6 +1227,195 @@ pub mod coprocessor_proto {
                 _fbb,
                 &StartProvisioningRequestArgs { timeout_seconds },
             )
+        }
+    }
+    pub enum WifiStatusOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct WifiStatus<'a> {
+        pub _tab: ::flatbuffers::Table<'a>,
+    }
+
+    impl<'a> ::flatbuffers::Follow<'a> for WifiStatus<'a> {
+        type Inner = WifiStatus<'a>;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self { _tab: unsafe { ::flatbuffers::Table::new(buf, loc) } }
+        }
+    }
+
+    impl<'a> WifiStatus<'a> {
+        pub const VT_STATE: ::flatbuffers::VOffsetT = 4;
+        pub const VT_IP: ::flatbuffers::VOffsetT = 6;
+        pub const VT_SSID: ::flatbuffers::VOffsetT = 8;
+        pub const VT_RSSI: ::flatbuffers::VOffsetT = 10;
+
+        #[inline]
+        pub unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
+            WifiStatus { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<
+            'bldr: 'args,
+            'args: 'mut_bldr,
+            'mut_bldr,
+            A: ::flatbuffers::Allocator + 'bldr,
+        >(
+            _fbb: &'mut_bldr mut ::flatbuffers::FlatBufferBuilder<'bldr, A>,
+            args: &'args WifiStatusArgs<'args>,
+        ) -> ::flatbuffers::WIPOffset<WifiStatus<'bldr>> {
+            let mut builder = WifiStatusBuilder::new(_fbb);
+            if let Some(x) = args.ssid {
+                builder.add_ssid(x);
+            }
+            builder.add_ip(args.ip);
+            builder.add_rssi(args.rssi);
+            builder.add_state(args.state);
+            builder.finish()
+        }
+
+        pub fn unpack(&self) -> WifiStatusT {
+            let state = self.state();
+            let ip = self.ip();
+            let ssid = self.ssid().map(|x| alloc::string::ToString::to_string(x));
+            let rssi = self.rssi();
+            WifiStatusT { state, ip, ssid, rssi }
+        }
+
+        #[inline]
+        pub fn state(&self) -> WifiState {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<WifiState>(WifiStatus::VT_STATE, Some(WifiState::Disconnected))
+                    .unwrap()
+            }
+        }
+        #[inline]
+        pub fn ip(&self) -> u32 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe { self._tab.get::<u32>(WifiStatus::VT_IP, Some(0)).unwrap() }
+        }
+        #[inline]
+        pub fn ssid(&self) -> Option<&'a str> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab.get::<::flatbuffers::ForwardsUOffset<&str>>(WifiStatus::VT_SSID, None)
+            }
+        }
+        #[inline]
+        pub fn rssi(&self) -> i16 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe { self._tab.get::<i16>(WifiStatus::VT_RSSI, Some(0)).unwrap() }
+        }
+    }
+
+    impl ::flatbuffers::Verifiable for WifiStatus<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut ::flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), ::flatbuffers::InvalidFlatbuffer> {
+            v.visit_table(pos)?
+                .visit_field::<WifiState>("state", Self::VT_STATE, false)?
+                .visit_field::<u32>("ip", Self::VT_IP, false)?
+                .visit_field::<::flatbuffers::ForwardsUOffset<&str>>("ssid", Self::VT_SSID, false)?
+                .visit_field::<i16>("rssi", Self::VT_RSSI, false)?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct WifiStatusArgs<'a> {
+        pub state: WifiState,
+        pub ip: u32,
+        pub ssid: Option<::flatbuffers::WIPOffset<&'a str>>,
+        pub rssi: i16,
+    }
+    impl<'a> Default for WifiStatusArgs<'a> {
+        #[inline]
+        fn default() -> Self {
+            WifiStatusArgs { state: WifiState::Disconnected, ip: 0, ssid: None, rssi: 0 }
+        }
+    }
+
+    pub struct WifiStatusBuilder<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a> {
+        fbb_: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
+        start_: ::flatbuffers::WIPOffset<::flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a> WifiStatusBuilder<'a, 'b, A> {
+        #[inline]
+        pub fn add_state(&mut self, state: WifiState) {
+            self.fbb_
+                .push_slot::<WifiState>(WifiStatus::VT_STATE, state, WifiState::Disconnected);
+        }
+        #[inline]
+        pub fn add_ip(&mut self, ip: u32) {
+            self.fbb_.push_slot::<u32>(WifiStatus::VT_IP, ip, 0);
+        }
+        #[inline]
+        pub fn add_ssid(&mut self, ssid: ::flatbuffers::WIPOffset<&'b str>) {
+            self.fbb_
+                .push_slot_always::<::flatbuffers::WIPOffset<_>>(WifiStatus::VT_SSID, ssid);
+        }
+        #[inline]
+        pub fn add_rssi(&mut self, rssi: i16) {
+            self.fbb_.push_slot::<i16>(WifiStatus::VT_RSSI, rssi, 0);
+        }
+        #[inline]
+        pub fn new(
+            _fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
+        ) -> WifiStatusBuilder<'a, 'b, A> {
+            let start = _fbb.start_table();
+            WifiStatusBuilder { fbb_: _fbb, start_: start }
+        }
+        #[inline]
+        pub fn finish(self) -> ::flatbuffers::WIPOffset<WifiStatus<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            ::flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl ::core::fmt::Debug for WifiStatus<'_> {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+            let mut ds = f.debug_struct("WifiStatus");
+            ds.field("state", &self.state());
+            ds.field("ip", &self.ip());
+            ds.field("ssid", &self.ssid());
+            ds.field("rssi", &self.rssi());
+            ds.finish()
+        }
+    }
+    #[non_exhaustive]
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct WifiStatusT {
+        pub state: WifiState,
+        pub ip: u32,
+        pub ssid: Option<alloc::string::String>,
+        pub rssi: i16,
+    }
+    impl Default for WifiStatusT {
+        fn default() -> Self {
+            Self { state: WifiState::Disconnected, ip: 0, ssid: None, rssi: 0 }
+        }
+    }
+    impl WifiStatusT {
+        pub fn pack<'b, A: ::flatbuffers::Allocator + 'b>(
+            &self,
+            _fbb: &mut ::flatbuffers::FlatBufferBuilder<'b, A>,
+        ) -> ::flatbuffers::WIPOffset<WifiStatus<'b>> {
+            let state = self.state;
+            let ip = self.ip;
+            let ssid = self.ssid.as_ref().map(|x| _fbb.create_string(x));
+            let rssi = self.rssi;
+            WifiStatus::create(_fbb, &WifiStatusArgs { state, ip, ssid, rssi })
         }
     }
     pub enum ProvisioningStatusOffset {}
@@ -1257,125 +1551,28 @@ pub mod coprocessor_proto {
             ProvisioningStatus::create(_fbb, &ProvisioningStatusArgs { state })
         }
     }
-    pub enum GetTimestampRequestOffset {}
+    pub enum TimeSyncedOffset {}
     #[derive(Copy, Clone, PartialEq)]
 
-    pub struct GetTimestampRequest<'a> {
+    /// The clock synced over SNTP: the co-processor's time when it sent this.
+    pub struct TimeSynced<'a> {
         pub _tab: ::flatbuffers::Table<'a>,
     }
 
-    impl<'a> ::flatbuffers::Follow<'a> for GetTimestampRequest<'a> {
-        type Inner = GetTimestampRequest<'a>;
+    impl<'a> ::flatbuffers::Follow<'a> for TimeSynced<'a> {
+        type Inner = TimeSynced<'a>;
         #[inline]
         unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
             Self { _tab: unsafe { ::flatbuffers::Table::new(buf, loc) } }
         }
     }
 
-    impl<'a> GetTimestampRequest<'a> {
-        #[inline]
-        pub unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
-            GetTimestampRequest { _tab: table }
-        }
-        #[allow(unused_mut)]
-        pub fn create<
-            'bldr: 'args,
-            'args: 'mut_bldr,
-            'mut_bldr,
-            A: ::flatbuffers::Allocator + 'bldr,
-        >(
-            _fbb: &'mut_bldr mut ::flatbuffers::FlatBufferBuilder<'bldr, A>,
-            _args: &'args GetTimestampRequestArgs,
-        ) -> ::flatbuffers::WIPOffset<GetTimestampRequest<'bldr>> {
-            let mut builder = GetTimestampRequestBuilder::new(_fbb);
-            builder.finish()
-        }
-
-        pub fn unpack(&self) -> GetTimestampRequestT {
-            GetTimestampRequestT {}
-        }
-    }
-
-    impl ::flatbuffers::Verifiable for GetTimestampRequest<'_> {
-        #[inline]
-        fn run_verifier(
-            v: &mut ::flatbuffers::Verifier,
-            pos: usize,
-        ) -> Result<(), ::flatbuffers::InvalidFlatbuffer> {
-            v.visit_table(pos)?.finish();
-            Ok(())
-        }
-    }
-    pub struct GetTimestampRequestArgs {}
-    impl<'a> Default for GetTimestampRequestArgs {
-        #[inline]
-        fn default() -> Self {
-            GetTimestampRequestArgs {}
-        }
-    }
-
-    pub struct GetTimestampRequestBuilder<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a> {
-        fbb_: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
-        start_: ::flatbuffers::WIPOffset<::flatbuffers::TableUnfinishedWIPOffset>,
-    }
-    impl<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a> GetTimestampRequestBuilder<'a, 'b, A> {
-        #[inline]
-        pub fn new(
-            _fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
-        ) -> GetTimestampRequestBuilder<'a, 'b, A> {
-            let start = _fbb.start_table();
-            GetTimestampRequestBuilder { fbb_: _fbb, start_: start }
-        }
-        #[inline]
-        pub fn finish(self) -> ::flatbuffers::WIPOffset<GetTimestampRequest<'a>> {
-            let o = self.fbb_.end_table(self.start_);
-            ::flatbuffers::WIPOffset::new(o.value())
-        }
-    }
-
-    impl ::core::fmt::Debug for GetTimestampRequest<'_> {
-        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-            let mut ds = f.debug_struct("GetTimestampRequest");
-            ds.finish()
-        }
-    }
-    #[non_exhaustive]
-    #[derive(Debug, Clone, PartialEq)]
-    pub struct GetTimestampRequestT {}
-    impl Default for GetTimestampRequestT {
-        fn default() -> Self {
-            Self {}
-        }
-    }
-    impl GetTimestampRequestT {
-        pub fn pack<'b, A: ::flatbuffers::Allocator + 'b>(
-            &self,
-            _fbb: &mut ::flatbuffers::FlatBufferBuilder<'b, A>,
-        ) -> ::flatbuffers::WIPOffset<GetTimestampRequest<'b>> {
-            GetTimestampRequest::create(_fbb, &GetTimestampRequestArgs {})
-        }
-    }
-    pub enum GetTimestampResponseOffset {}
-    #[derive(Copy, Clone, PartialEq)]
-
-    pub struct GetTimestampResponse<'a> {
-        pub _tab: ::flatbuffers::Table<'a>,
-    }
-
-    impl<'a> ::flatbuffers::Follow<'a> for GetTimestampResponse<'a> {
-        type Inner = GetTimestampResponse<'a>;
-        #[inline]
-        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-            Self { _tab: unsafe { ::flatbuffers::Table::new(buf, loc) } }
-        }
-    }
-
-    impl<'a> GetTimestampResponse<'a> {
+    impl<'a> TimeSynced<'a> {
         pub const VT_TIMESTAMP: ::flatbuffers::VOffsetT = 4;
 
         #[inline]
         pub unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
-            GetTimestampResponse { _tab: table }
+            TimeSynced { _tab: table }
         }
         #[allow(unused_mut)]
         pub fn create<
@@ -1385,18 +1582,18 @@ pub mod coprocessor_proto {
             A: ::flatbuffers::Allocator + 'bldr,
         >(
             _fbb: &'mut_bldr mut ::flatbuffers::FlatBufferBuilder<'bldr, A>,
-            args: &'args GetTimestampResponseArgs<'args>,
-        ) -> ::flatbuffers::WIPOffset<GetTimestampResponse<'bldr>> {
-            let mut builder = GetTimestampResponseBuilder::new(_fbb);
+            args: &'args TimeSyncedArgs<'args>,
+        ) -> ::flatbuffers::WIPOffset<TimeSynced<'bldr>> {
+            let mut builder = TimeSyncedBuilder::new(_fbb);
             if let Some(x) = args.timestamp {
                 builder.add_timestamp(x);
             }
             builder.finish()
         }
 
-        pub fn unpack(&self) -> GetTimestampResponseT {
+        pub fn unpack(&self) -> TimeSyncedT {
             let timestamp = self.timestamp().map(|x| x.unpack());
-            GetTimestampResponseT { timestamp }
+            TimeSyncedT { timestamp }
         }
 
         #[inline]
@@ -1404,11 +1601,11 @@ pub mod coprocessor_proto {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
-            unsafe { self._tab.get::<Timestamp>(GetTimestampResponse::VT_TIMESTAMP, None) }
+            unsafe { self._tab.get::<Timestamp>(TimeSynced::VT_TIMESTAMP, None) }
         }
     }
 
-    impl ::flatbuffers::Verifiable for GetTimestampResponse<'_> {
+    impl ::flatbuffers::Verifiable for TimeSynced<'_> {
         #[inline]
         fn run_verifier(
             v: &mut ::flatbuffers::Verifier,
@@ -1420,65 +1617,325 @@ pub mod coprocessor_proto {
             Ok(())
         }
     }
-    pub struct GetTimestampResponseArgs<'a> {
+    pub struct TimeSyncedArgs<'a> {
         pub timestamp: Option<&'a Timestamp>,
     }
-    impl<'a> Default for GetTimestampResponseArgs<'a> {
+    impl<'a> Default for TimeSyncedArgs<'a> {
         #[inline]
         fn default() -> Self {
-            GetTimestampResponseArgs { timestamp: None }
+            TimeSyncedArgs { timestamp: None }
         }
     }
 
-    pub struct GetTimestampResponseBuilder<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a> {
+    pub struct TimeSyncedBuilder<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a> {
         fbb_: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
         start_: ::flatbuffers::WIPOffset<::flatbuffers::TableUnfinishedWIPOffset>,
     }
-    impl<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a> GetTimestampResponseBuilder<'a, 'b, A> {
+    impl<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a> TimeSyncedBuilder<'a, 'b, A> {
         #[inline]
         pub fn add_timestamp(&mut self, timestamp: &Timestamp) {
-            self.fbb_
-                .push_slot_always::<&Timestamp>(GetTimestampResponse::VT_TIMESTAMP, timestamp);
+            self.fbb_.push_slot_always::<&Timestamp>(TimeSynced::VT_TIMESTAMP, timestamp);
         }
         #[inline]
         pub fn new(
             _fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
-        ) -> GetTimestampResponseBuilder<'a, 'b, A> {
+        ) -> TimeSyncedBuilder<'a, 'b, A> {
             let start = _fbb.start_table();
-            GetTimestampResponseBuilder { fbb_: _fbb, start_: start }
+            TimeSyncedBuilder { fbb_: _fbb, start_: start }
         }
         #[inline]
-        pub fn finish(self) -> ::flatbuffers::WIPOffset<GetTimestampResponse<'a>> {
+        pub fn finish(self) -> ::flatbuffers::WIPOffset<TimeSynced<'a>> {
             let o = self.fbb_.end_table(self.start_);
             ::flatbuffers::WIPOffset::new(o.value())
         }
     }
 
-    impl ::core::fmt::Debug for GetTimestampResponse<'_> {
+    impl ::core::fmt::Debug for TimeSynced<'_> {
         fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-            let mut ds = f.debug_struct("GetTimestampResponse");
+            let mut ds = f.debug_struct("TimeSynced");
             ds.field("timestamp", &self.timestamp());
             ds.finish()
         }
     }
     #[non_exhaustive]
     #[derive(Debug, Clone, PartialEq)]
-    pub struct GetTimestampResponseT {
+    pub struct TimeSyncedT {
         pub timestamp: Option<TimestampT>,
     }
-    impl Default for GetTimestampResponseT {
+    impl Default for TimeSyncedT {
         fn default() -> Self {
             Self { timestamp: None }
         }
     }
-    impl GetTimestampResponseT {
+    impl TimeSyncedT {
         pub fn pack<'b, A: ::flatbuffers::Allocator + 'b>(
             &self,
             _fbb: &mut ::flatbuffers::FlatBufferBuilder<'b, A>,
-        ) -> ::flatbuffers::WIPOffset<GetTimestampResponse<'b>> {
+        ) -> ::flatbuffers::WIPOffset<TimeSynced<'b>> {
             let timestamp_tmp = self.timestamp.as_ref().map(|x| x.pack());
             let timestamp = timestamp_tmp.as_ref();
-            GetTimestampResponse::create(_fbb, &GetTimestampResponseArgs { timestamp })
+            TimeSynced::create(_fbb, &TimeSyncedArgs { timestamp })
+        }
+    }
+    pub enum SystemEventOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct SystemEvent<'a> {
+        pub _tab: ::flatbuffers::Table<'a>,
+    }
+
+    impl<'a> ::flatbuffers::Follow<'a> for SystemEvent<'a> {
+        type Inner = SystemEvent<'a>;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self { _tab: unsafe { ::flatbuffers::Table::new(buf, loc) } }
+        }
+    }
+
+    impl<'a> SystemEvent<'a> {
+        pub const VT_EVENT_TYPE: ::flatbuffers::VOffsetT = 4;
+        pub const VT_EVENT: ::flatbuffers::VOffsetT = 6;
+
+        #[inline]
+        pub unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
+            SystemEvent { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<
+            'bldr: 'args,
+            'args: 'mut_bldr,
+            'mut_bldr,
+            A: ::flatbuffers::Allocator + 'bldr,
+        >(
+            _fbb: &'mut_bldr mut ::flatbuffers::FlatBufferBuilder<'bldr, A>,
+            args: &'args SystemEventArgs,
+        ) -> ::flatbuffers::WIPOffset<SystemEvent<'bldr>> {
+            let mut builder = SystemEventBuilder::new(_fbb);
+            if let Some(x) = args.event {
+                builder.add_event(x);
+            }
+            builder.add_event_type(args.event_type);
+            builder.finish()
+        }
+
+        pub fn unpack(&self) -> SystemEventT {
+            let event = match self.event_type() {
+      SystemEventKind::NONE => SystemEventKindT::NONE,
+      SystemEventKind::WifiStatus => SystemEventKindT::WifiStatus(alloc::boxed::Box::new(
+        self.event_as_wifi_status()
+            .expect("Invalid union table, expected `SystemEventKind::WifiStatus`.")
+            .unpack()
+      )),
+      SystemEventKind::ProvisioningStatus => SystemEventKindT::ProvisioningStatus(alloc::boxed::Box::new(
+        self.event_as_provisioning_status()
+            .expect("Invalid union table, expected `SystemEventKind::ProvisioningStatus`.")
+            .unpack()
+      )),
+      SystemEventKind::TimeSynced => SystemEventKindT::TimeSynced(alloc::boxed::Box::new(
+        self.event_as_time_synced()
+            .expect("Invalid union table, expected `SystemEventKind::TimeSynced`.")
+            .unpack()
+      )),
+      _ => SystemEventKindT::NONE,
+    };
+            SystemEventT { event }
+        }
+
+        #[inline]
+        pub fn event_type(&self) -> SystemEventKind {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<SystemEventKind>(SystemEvent::VT_EVENT_TYPE, Some(SystemEventKind::NONE))
+                    .unwrap()
+            }
+        }
+        #[inline]
+        pub fn event(&self) -> Option<::flatbuffers::Table<'a>> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab.get::<::flatbuffers::ForwardsUOffset<::flatbuffers::Table<'a>>>(
+                    SystemEvent::VT_EVENT,
+                    None,
+                )
+            }
+        }
+        #[inline]
+        #[allow(non_snake_case)]
+        pub fn event_as_wifi_status(&self) -> Option<WifiStatus<'a>> {
+            if self.event_type() == SystemEventKind::WifiStatus {
+                self.event().map(|t| {
+                    // Safety:
+                    // Created from a valid Table for this object
+                    // Which contains a valid union in this slot
+                    unsafe { WifiStatus::init_from_table(t) }
+                })
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        #[allow(non_snake_case)]
+        pub fn event_as_provisioning_status(&self) -> Option<ProvisioningStatus<'a>> {
+            if self.event_type() == SystemEventKind::ProvisioningStatus {
+                self.event().map(|t| {
+                    // Safety:
+                    // Created from a valid Table for this object
+                    // Which contains a valid union in this slot
+                    unsafe { ProvisioningStatus::init_from_table(t) }
+                })
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        #[allow(non_snake_case)]
+        pub fn event_as_time_synced(&self) -> Option<TimeSynced<'a>> {
+            if self.event_type() == SystemEventKind::TimeSynced {
+                self.event().map(|t| {
+                    // Safety:
+                    // Created from a valid Table for this object
+                    // Which contains a valid union in this slot
+                    unsafe { TimeSynced::init_from_table(t) }
+                })
+            } else {
+                None
+            }
+        }
+    }
+
+    impl ::flatbuffers::Verifiable for SystemEvent<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut ::flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), ::flatbuffers::InvalidFlatbuffer> {
+            v.visit_table(pos)?
+     .visit_union::<SystemEventKind, _>("event_type", Self::VT_EVENT_TYPE, "event", Self::VT_EVENT, false, |key, v, pos| {
+        match key {
+          SystemEventKind::WifiStatus => v.verify_union_variant::<::flatbuffers::ForwardsUOffset<WifiStatus>>("SystemEventKind::WifiStatus", pos),
+          SystemEventKind::ProvisioningStatus => v.verify_union_variant::<::flatbuffers::ForwardsUOffset<ProvisioningStatus>>("SystemEventKind::ProvisioningStatus", pos),
+          SystemEventKind::TimeSynced => v.verify_union_variant::<::flatbuffers::ForwardsUOffset<TimeSynced>>("SystemEventKind::TimeSynced", pos),
+          _ => Ok(()),
+        }
+     })?
+     .finish();
+            Ok(())
+        }
+    }
+    pub struct SystemEventArgs {
+        pub event_type: SystemEventKind,
+        pub event: Option<::flatbuffers::WIPOffset<::flatbuffers::UnionWIPOffset>>,
+    }
+    impl<'a> Default for SystemEventArgs {
+        #[inline]
+        fn default() -> Self {
+            SystemEventArgs { event_type: SystemEventKind::NONE, event: None }
+        }
+    }
+
+    pub struct SystemEventBuilder<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a> {
+        fbb_: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
+        start_: ::flatbuffers::WIPOffset<::flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a> SystemEventBuilder<'a, 'b, A> {
+        #[inline]
+        pub fn add_event_type(&mut self, event_type: SystemEventKind) {
+            self.fbb_.push_slot::<SystemEventKind>(
+                SystemEvent::VT_EVENT_TYPE,
+                event_type,
+                SystemEventKind::NONE,
+            );
+        }
+        #[inline]
+        pub fn add_event(
+            &mut self,
+            event: ::flatbuffers::WIPOffset<::flatbuffers::UnionWIPOffset>,
+        ) {
+            self.fbb_
+                .push_slot_always::<::flatbuffers::WIPOffset<_>>(SystemEvent::VT_EVENT, event);
+        }
+        #[inline]
+        pub fn new(
+            _fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
+        ) -> SystemEventBuilder<'a, 'b, A> {
+            let start = _fbb.start_table();
+            SystemEventBuilder { fbb_: _fbb, start_: start }
+        }
+        #[inline]
+        pub fn finish(self) -> ::flatbuffers::WIPOffset<SystemEvent<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            ::flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl ::core::fmt::Debug for SystemEvent<'_> {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+            let mut ds = f.debug_struct("SystemEvent");
+            ds.field("event_type", &self.event_type());
+            match self.event_type() {
+                SystemEventKind::WifiStatus => {
+                    if let Some(x) = self.event_as_wifi_status() {
+                        ds.field("event", &x)
+                    } else {
+                        ds.field(
+                            "event",
+                            &"InvalidFlatbuffer: Union discriminant does not match value.",
+                        )
+                    }
+                }
+                SystemEventKind::ProvisioningStatus => {
+                    if let Some(x) = self.event_as_provisioning_status() {
+                        ds.field("event", &x)
+                    } else {
+                        ds.field(
+                            "event",
+                            &"InvalidFlatbuffer: Union discriminant does not match value.",
+                        )
+                    }
+                }
+                SystemEventKind::TimeSynced => {
+                    if let Some(x) = self.event_as_time_synced() {
+                        ds.field("event", &x)
+                    } else {
+                        ds.field(
+                            "event",
+                            &"InvalidFlatbuffer: Union discriminant does not match value.",
+                        )
+                    }
+                }
+                _ => {
+                    let x: Option<()> = None;
+                    ds.field("event", &x)
+                }
+            };
+            ds.finish()
+        }
+    }
+    #[non_exhaustive]
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct SystemEventT {
+        pub event: SystemEventKindT,
+    }
+    impl Default for SystemEventT {
+        fn default() -> Self {
+            Self { event: SystemEventKindT::NONE }
+        }
+    }
+    impl SystemEventT {
+        pub fn pack<'b, A: ::flatbuffers::Allocator + 'b>(
+            &self,
+            _fbb: &mut ::flatbuffers::FlatBufferBuilder<'b, A>,
+        ) -> ::flatbuffers::WIPOffset<SystemEvent<'b>> {
+            let event_type = self.event.system_event_kind_type();
+            let event = self.event.pack(_fbb);
+            SystemEvent::create(_fbb, &SystemEventArgs { event_type, event })
         }
     }
     pub enum BatteryStatusOffset {}

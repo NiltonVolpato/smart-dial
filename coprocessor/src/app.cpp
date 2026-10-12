@@ -76,13 +76,14 @@ struct App {
 
   // First: handlers below keep references to these. Sized from what tether
   // bounds (calls, streams):
-  // - inbox: a start per call and per UNSUBSCRIBE, and per stream a flush
-  //   and a finish;
-  // - timers: one per HttpClient, and per stream a renewal and a resend.
+  // - inbox: a start per call and per UNSUBSCRIBE, per stream a flush and a
+  //   finish, and System.Watch's flush;
+  // - timers: one per HttpClient, per stream a renewal and a resend, and
+  //   System.Watch's resend.
   Reactor reactor{{
-      .inbox = kMaxCalls + kMaxSubscriptions + 2 * kMaxStreams,
+      .inbox = kMaxCalls + kMaxSubscriptions + 2 * kMaxStreams + 1,
       .watches = kMaxConnections,
-      .timers = kMaxHttpClients + 2 * kMaxStreams,
+      .timers = kMaxHttpClients + 2 * kMaxStreams + 1,
   }};
   ConnectionPermits connections{kMaxConnections, kMaxHttpClients};
   GenaRegistry gena{kMaxSubscriptions};
@@ -93,7 +94,7 @@ struct App {
       server, CoprocessorProto::kServer};
   WifiServiceHandler wifi_handler;
   CoprocessorProto::wifi::Service wifi_service{wifi_handler};
-  SystemServiceHandler system_handler;
+  SystemServiceHandler system_handler{reactor};
   CoprocessorProto::system::Service system_service{system_handler};
   SonosServiceHandler sonos_handler{reactor, connections, gena};
   CoprocessorProto::sonos::Service sonos_service{sonos_handler};
@@ -131,7 +132,6 @@ void reactor_task(void* arg) {
     app.io.serve(app.server);
     ESP_LOGW(TAG, "Tether link closed, restarting with new boot id");
     app.server.restart(new_boot_id());
-    app.wifi_handler.reset();
   }
 }
 

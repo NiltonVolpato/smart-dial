@@ -11,38 +11,16 @@ table WifiConnectRequest {
     password: string;
 }
 
-table WifiStatus {
-    connected: bool;
-    ip: uint32;  // IPv4 (see common.fbs); 0 while disconnected.
-    ssid: string;
-    rssi: int16;
-}
-
 table StartProvisioningRequest {
     timeout_seconds: uint32;
 }
 
-enum ProvisioningState : ubyte {
-    Inactive = 0,
-    Active = 1,
-    Provisioned = 2,
-    TimedOut = 3,
-}
-
-table ProvisioningStatus {
-    state: ProvisioningState;
-}
-
-/// Wi-Fi and BLE provisioning service.
 rpc_service Wifi {
-    /// Starts joining a Wi-Fi network; status arrives on Watch.
+    /// Starts joining a Wi-Fi network; progress arrives on System.Watch.
     Connect(WifiConnectRequest): Empty (timeout_ms: "1000");
-    /// Streams initial connection status and all subsequent changes.
-    Watch(Empty): WifiStatus (streaming: "server");
-    /// Opens an on-demand BLE Improv provisioning session.
+    /// Opens an on-demand BLE Improv provisioning session; its state arrives
+    /// on System.Watch.
     StartProvisioning(StartProvisioningRequest): Empty;
     /// Cancels any active BLE Improv provisioning session.
     StopProvisioning(Empty): Empty;
-    /// Streams provisioning state transitions (active, provisioned, timed out).
-    WatchProvisioning(Empty): ProvisioningStatus (streaming: "server");
 }

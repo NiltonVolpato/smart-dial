@@ -85,28 +85,21 @@ impl RawChannel for QueuedChannel {
 // --- Tests ---
 
 #[test]
-fn test_wifi_status_pack_verify() {
-    let status_obj = proto::WifiStatusT {
-        connected: true,
-        ip: Some("192.168.1.50".into()),
-        ssid: Some("HomeWiFi".into()),
-        rssi: -62,
+fn test_time_synced_event_pack_verify() {
+    let event = proto::SystemEventT {
+        event: proto::SystemEventKindT::TimeSynced(alloc::boxed::Box::new(proto::TimeSyncedT {
+            timestamp: Some(proto::TimestampT { epoch_seconds: 1775215000, subsec_micros: 987654 }),
+        })),
     };
-    let bytes = status_obj.to_bytes();
-    let view = proto::WifiStatus::verify(&bytes).expect("Verification must succeed");
-    assert!(view.connected());
-    assert_eq!(view.ip(), Some("192.168.1.50"));
-    assert_eq!(view.ssid(), Some("HomeWiFi"));
-    assert_eq!(view.rssi(), -62);
-}
-
-#[test]
-fn test_time_sync_pack_verify() {
-    let sync_obj = proto::TimeSyncT { epoch_seconds: 1775215000, subsec_micros: 987654 };
-    let bytes = sync_obj.to_bytes();
-    let view = proto::TimeSync::verify(&bytes).expect("Verification must succeed");
-    assert_eq!(view.epoch_seconds(), 1775215000);
-    assert_eq!(view.subsec_micros(), 987654);
+    let bytes = event.to_bytes();
+    let view = proto::SystemEvent::verify(&bytes).expect("Verification must succeed");
+    assert_eq!(view.event_type(), proto::SystemEventKind::TimeSynced);
+    let ts = view
+        .event_as_time_synced()
+        .and_then(|t| t.timestamp())
+        .expect("timestamp present");
+    assert_eq!(ts.epoch_seconds(), 1775215000);
+    assert_eq!(ts.subsec_micros(), 987654);
 }
 
 #[test]
@@ -143,29 +136,33 @@ fn test_wifi_client_connect_rpc() {
 }
 
 #[test]
-fn test_wifi_client_watch_stream() {
+fn test_system_client_watch_stream() {
     let transport = FakeTransport::default();
-    let item1 = proto::WifiStatusT { connected: false, ip: None, ssid: None, rssi: 0 }.to_bytes();
-    let item2 = proto::WifiStatusT {
-        connected: true,
-        ip: Some("10.0.0.42".into()),
-        ssid: Some("OfficeNet".into()),
-        rssi: -50,
-    }
-    .to_bytes();
+    let wifi_event = |state, ip, ssid: Option<&str>, rssi| {
+        proto::SystemEventT {
+            event: proto::SystemEventKindT::WifiStatus(alloc::boxed::Box::new(
+                proto::WifiStatusT { state, ip, ssid: ssid.map(Into::into), rssi },
+            )),
+        }
+        .to_bytes()
+    };
+    let item1 = wifi_event(proto::WifiState::Connecting, 0, Some("OfficeNet"), 0);
+    let item2 = wifi_event(proto::WifiState::Connected, 0x0A00002A, Some("OfficeNet"), -50);
 
-    transport.stream(wifi::WATCH, vec![item1, item2], Ok(()));
+    transport.stream(system::WATCH, vec![item1, item2], Ok(()));
 
-    let client = wifi::Client(&transport);
+    let client = system::Client(&transport);
     let mut stream = client.watch(&proto::EmptyT {}, 4);
 
     let first = stream.try_recv().expect("first item present");
-    assert!(!first.get().connected());
+    let status = first.get().event_as_wifi_status().expect("a Wi-Fi status");
+    assert_eq!(status.state(), proto::WifiState::Connecting);
 
     let second = stream.try_recv().expect("second item present");
-    assert!(second.get().connected());
-    assert_eq!(second.get().ip(), Some("10.0.0.42"));
-    assert_eq!(second.get().ssid(), Some("OfficeNet"));
+    let status = second.get().event_as_wifi_status().expect("a Wi-Fi status");
+    assert_eq!(status.state(), proto::WifiState::Connected);
+    assert_eq!(status.ip(), 0x0A00002A);
+    assert_eq!(status.ssid(), Some("OfficeNet"));
 
     assert!(stream.try_recv().is_none());
     assert_eq!(stream.end(), Some(Ok(())));
@@ -201,13 +198,12 @@ fn test_sonos_topology_pack_verify() {
     let member = proto::MemberT {
         name: Some("Living Room".into()),
         uuid: Some("RINCON_123".into()),
-        ip: Some("192.168.1.100".into()),
+        ip: 0xC0A80164,
     };
     let group = proto::GroupT {
         id: Some("RINCON_123:456".into()),
         name: Some("Living Room".into()),
-        coordinator_ip: Some("192.168.1.100".into()),
-        coordinator_port: 1400,
+        coordinator_ip: 0xC0A80164,
         is_playing: true,
         members: Some(alloc::vec![member]),
     };
@@ -225,7 +221,7 @@ fn test_sonos_topology_pack_verify() {
     assert_eq!(view.total_groups(), 1);
     let g = view.group().expect("group present");
     assert_eq!(g.name(), Some("Living Room"));
-    assert_eq!(g.coordinator_ip(), Some("192.168.1.100"));
+    assert_eq!(g.coordinator_ip(), 0xC0A80164);
     assert!(g.is_playing());
 }
 
@@ -240,7 +236,7 @@ fn test_sonos_state_update_pack_verify() {
         album_art_uri: Some("/getaa?s=1&u=x-sonos-http%3a...".into()),
     };
     let state = proto::StateUpdateT {
-        endpoint_ip: Some("192.168.1.105".into()),
+        endpoint_ip: 0xC0A80169,
         transport_state: Some(proto::TransportState::Playing),
         volume: Some(15),
         is_muted: Some(false),
@@ -249,7 +245,7 @@ fn test_sonos_state_update_pack_verify() {
 
     let bytes = state.to_bytes();
     let view = proto::StateUpdate::verify(&bytes).expect("Verification must succeed");
-    assert_eq!(view.endpoint_ip(), Some("192.168.1.105"));
+    assert_eq!(view.endpoint_ip(), 0xC0A80169);
     assert_eq!(view.transport_state(), Some(proto::TransportState::Playing));
     assert_eq!(view.volume(), Some(15));
     assert_eq!(view.is_muted(), Some(false));
@@ -269,19 +265,13 @@ fn test_sonos_client_action_and_volume() {
 
     let client = sonos::Client(&transport);
     let action_req = proto::ActionRequestT {
-        endpoint_ip: Some("192.168.1.100".into()),
-        endpoint_port: 1400,
+        endpoint_ip: 0xC0A80164,
         action: proto::ActionType::TogglePlayPause,
     };
     let mut action_call = client.action(&action_req);
     assert!(action_call.try_result().unwrap().is_ok());
 
-    let vol_req = proto::VolumeRequestT {
-        endpoint_ip: Some("192.168.1.100".into()),
-        endpoint_port: 1400,
-        volume: 5,
-        is_relative: true,
-    };
+    let vol_req = proto::VolumeRequestT { endpoint_ip: 0xC0A80164, volume: 5, is_relative: true };
     let mut vol_call = client.set_volume(&vol_req);
     assert!(vol_call.try_result().unwrap().is_ok());
 

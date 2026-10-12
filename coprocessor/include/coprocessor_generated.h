@@ -23,13 +23,13 @@ struct WifiConnectRequest;
 struct WifiConnectRequestBuilder;
 struct WifiConnectRequestT;
 
-struct WifiStatus;
-struct WifiStatusBuilder;
-struct WifiStatusT;
-
 struct StartProvisioningRequest;
 struct StartProvisioningRequestBuilder;
 struct StartProvisioningRequestT;
+
+struct WifiStatus;
+struct WifiStatusBuilder;
+struct WifiStatusT;
 
 struct ProvisioningStatus;
 struct ProvisioningStatusBuilder;
@@ -37,13 +37,13 @@ struct ProvisioningStatusT;
 
 struct Timestamp;
 
-struct GetTimestampRequest;
-struct GetTimestampRequestBuilder;
-struct GetTimestampRequestT;
+struct TimeSynced;
+struct TimeSyncedBuilder;
+struct TimeSyncedT;
 
-struct GetTimestampResponse;
-struct GetTimestampResponseBuilder;
-struct GetTimestampResponseT;
+struct SystemEvent;
+struct SystemEventBuilder;
+struct SystemEventT;
 
 struct BatteryStatus;
 struct BatteryStatusBuilder;
@@ -97,6 +97,45 @@ struct GroupsSummary;
 struct GroupsSummaryBuilder;
 struct GroupsSummaryT;
 
+enum class WifiState : uint8_t {
+  /// No network to join.
+  Disconnected = 0,
+  /// Joining, or rejoining after a drop.
+  Connecting = 1,
+  Connected = 2,
+  /// Gave up joining (the network may be gone) until the next Connect.
+  Failed = 3,
+  MIN = Disconnected,
+  MAX = Failed
+};
+
+inline const WifiState (&EnumValuesWifiState())[4] {
+  static const WifiState values[] = {
+    WifiState::Disconnected,
+    WifiState::Connecting,
+    WifiState::Connected,
+    WifiState::Failed
+  };
+  return values;
+}
+
+inline const char * const *EnumNamesWifiState() {
+  static const char * const names[5] = {
+    "Disconnected",
+    "Connecting",
+    "Connected",
+    "Failed",
+    nullptr
+  };
+  return names;
+}
+
+inline const char *EnumNameWifiState(WifiState e) {
+  if (::flatbuffers::IsOutRange(e, WifiState::Disconnected, WifiState::Failed)) return "";
+  const size_t index = static_cast<size_t>(e);
+  return EnumNamesWifiState()[index];
+}
+
 enum class ProvisioningState : uint8_t {
   Inactive = 0,
   Active = 1,
@@ -132,6 +171,135 @@ inline const char *EnumNameProvisioningState(ProvisioningState e) {
   const size_t index = static_cast<size_t>(e);
   return EnumNamesProvisioningState()[index];
 }
+
+enum class SystemEventKind : uint8_t {
+  NONE = 0,
+  WifiStatus = 1,
+  ProvisioningStatus = 2,
+  TimeSynced = 3,
+  MIN = NONE,
+  MAX = TimeSynced
+};
+
+inline const SystemEventKind (&EnumValuesSystemEventKind())[4] {
+  static const SystemEventKind values[] = {
+    SystemEventKind::NONE,
+    SystemEventKind::WifiStatus,
+    SystemEventKind::ProvisioningStatus,
+    SystemEventKind::TimeSynced
+  };
+  return values;
+}
+
+inline const char * const *EnumNamesSystemEventKind() {
+  static const char * const names[5] = {
+    "NONE",
+    "WifiStatus",
+    "ProvisioningStatus",
+    "TimeSynced",
+    nullptr
+  };
+  return names;
+}
+
+inline const char *EnumNameSystemEventKind(SystemEventKind e) {
+  if (::flatbuffers::IsOutRange(e, SystemEventKind::NONE, SystemEventKind::TimeSynced)) return "";
+  const size_t index = static_cast<size_t>(e);
+  return EnumNamesSystemEventKind()[index];
+}
+
+template<typename T> struct SystemEventKindTraits {
+  static const SystemEventKind enum_value = SystemEventKind::NONE;
+};
+
+template<> struct SystemEventKindTraits<CoprocessorProto::WifiStatus> {
+  static const SystemEventKind enum_value = SystemEventKind::WifiStatus;
+};
+
+template<> struct SystemEventKindTraits<CoprocessorProto::ProvisioningStatus> {
+  static const SystemEventKind enum_value = SystemEventKind::ProvisioningStatus;
+};
+
+template<> struct SystemEventKindTraits<CoprocessorProto::TimeSynced> {
+  static const SystemEventKind enum_value = SystemEventKind::TimeSynced;
+};
+
+template<typename T> struct SystemEventKindUnionTraits {
+  static const SystemEventKind enum_value = SystemEventKind::NONE;
+};
+
+template<> struct SystemEventKindUnionTraits<CoprocessorProto::WifiStatusT> {
+  static const SystemEventKind enum_value = SystemEventKind::WifiStatus;
+};
+
+template<> struct SystemEventKindUnionTraits<CoprocessorProto::ProvisioningStatusT> {
+  static const SystemEventKind enum_value = SystemEventKind::ProvisioningStatus;
+};
+
+template<> struct SystemEventKindUnionTraits<CoprocessorProto::TimeSyncedT> {
+  static const SystemEventKind enum_value = SystemEventKind::TimeSynced;
+};
+
+struct SystemEventKindUnion {
+  SystemEventKind type;
+  void *value;
+
+  SystemEventKindUnion() : type(SystemEventKind::NONE), value(nullptr) {}
+  SystemEventKindUnion(SystemEventKindUnion&& u) FLATBUFFERS_NOEXCEPT :
+    type(SystemEventKind::NONE), value(nullptr)
+    { std::swap(type, u.type); std::swap(value, u.value); }
+  SystemEventKindUnion(const SystemEventKindUnion &);
+  SystemEventKindUnion &operator=(const SystemEventKindUnion &u)
+    { SystemEventKindUnion t(u); std::swap(type, t.type); std::swap(value, t.value); return *this; }
+  SystemEventKindUnion &operator=(SystemEventKindUnion &&u) FLATBUFFERS_NOEXCEPT
+    { std::swap(type, u.type); std::swap(value, u.value); return *this; }
+  ~SystemEventKindUnion() { Reset(); }
+
+  void Reset();
+
+  template <typename T>
+  void Set(T&& val) {
+    typedef typename std::remove_reference<T>::type RT;
+    Reset();
+    type = SystemEventKindUnionTraits<RT>::enum_value;
+    if (type != SystemEventKind::NONE) {
+      value = new RT(std::forward<T>(val));
+    }
+  }
+
+  static void *UnPack(const void *obj, SystemEventKind type, const ::flatbuffers::resolver_function_t *resolver);
+  ::flatbuffers::Offset<void> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr) const;
+
+  CoprocessorProto::WifiStatusT *AsWifiStatus() {
+    return type == SystemEventKind::WifiStatus ?
+      reinterpret_cast<CoprocessorProto::WifiStatusT *>(value) : nullptr;
+  }
+  const CoprocessorProto::WifiStatusT *AsWifiStatus() const {
+    return type == SystemEventKind::WifiStatus ?
+      reinterpret_cast<const CoprocessorProto::WifiStatusT *>(value) : nullptr;
+  }
+  CoprocessorProto::ProvisioningStatusT *AsProvisioningStatus() {
+    return type == SystemEventKind::ProvisioningStatus ?
+      reinterpret_cast<CoprocessorProto::ProvisioningStatusT *>(value) : nullptr;
+  }
+  const CoprocessorProto::ProvisioningStatusT *AsProvisioningStatus() const {
+    return type == SystemEventKind::ProvisioningStatus ?
+      reinterpret_cast<const CoprocessorProto::ProvisioningStatusT *>(value) : nullptr;
+  }
+  CoprocessorProto::TimeSyncedT *AsTimeSynced() {
+    return type == SystemEventKind::TimeSynced ?
+      reinterpret_cast<CoprocessorProto::TimeSyncedT *>(value) : nullptr;
+  }
+  const CoprocessorProto::TimeSyncedT *AsTimeSynced() const {
+    return type == SystemEventKind::TimeSynced ?
+      reinterpret_cast<const CoprocessorProto::TimeSyncedT *>(value) : nullptr;
+  }
+};
+
+template <bool B = false>
+bool VerifySystemEventKind(::flatbuffers::VerifierTemplate<B> &verifier, const void *obj, SystemEventKind type);
+template <bool B = false>
+bool VerifySystemEventKindVector(::flatbuffers::VerifierTemplate<B> &verifier, const ::flatbuffers::Vector<::flatbuffers::Offset<void>> *values, const ::flatbuffers::Vector<SystemEventKind> *types);
 
 enum class TransportState : uint8_t {
   Stopped = 0,
@@ -408,114 +576,6 @@ inline ::flatbuffers::Offset<WifiConnectRequest> CreateWifiConnectRequestDirect(
 
 ::flatbuffers::Offset<WifiConnectRequest> CreateWifiConnectRequest(::flatbuffers::FlatBufferBuilder &_fbb, const WifiConnectRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
-struct WifiStatusT : public ::flatbuffers::NativeTable {
-  typedef WifiStatus TableType;
-  bool connected = false;
-  uint32_t ip = 0;
-  std::string ssid{};
-  int16_t rssi = 0;
-};
-
-struct WifiStatus FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef WifiStatusT NativeTableType;
-  typedef WifiStatusBuilder Builder;
-  struct Traits;
-  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_CONNECTED = 4,
-    VT_IP = 6,
-    VT_SSID = 8,
-    VT_RSSI = 10
-  };
-  bool connected() const {
-    return GetField<uint8_t>(VT_CONNECTED, 0) != 0;
-  }
-  uint32_t ip() const {
-    return GetField<uint32_t>(VT_IP, 0);
-  }
-  const ::flatbuffers::String *ssid() const {
-    return GetPointer<const ::flatbuffers::String *>(VT_SSID);
-  }
-  int16_t rssi() const {
-    return GetField<int16_t>(VT_RSSI, 0);
-  }
-  template <bool B = false>
-  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
-    return VerifyTableStart(verifier) &&
-           VerifyField<uint8_t>(verifier, VT_CONNECTED, 1) &&
-           VerifyField<uint32_t>(verifier, VT_IP, 4) &&
-           VerifyOffset(verifier, VT_SSID) &&
-           verifier.VerifyString(ssid()) &&
-           VerifyField<int16_t>(verifier, VT_RSSI, 2) &&
-           verifier.EndTable();
-  }
-  WifiStatusT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
-  void UnPackTo(WifiStatusT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
-  static ::flatbuffers::Offset<WifiStatus> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const WifiStatusT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
-};
-
-struct WifiStatusBuilder {
-  typedef WifiStatus Table;
-  ::flatbuffers::FlatBufferBuilder &fbb_;
-  ::flatbuffers::uoffset_t start_;
-  void add_connected(bool connected) {
-    fbb_.AddElement<uint8_t>(WifiStatus::VT_CONNECTED, static_cast<uint8_t>(connected), 0);
-  }
-  void add_ip(uint32_t ip) {
-    fbb_.AddElement<uint32_t>(WifiStatus::VT_IP, ip, 0);
-  }
-  void add_ssid(::flatbuffers::Offset<::flatbuffers::String> ssid) {
-    fbb_.AddOffset(WifiStatus::VT_SSID, ssid);
-  }
-  void add_rssi(int16_t rssi) {
-    fbb_.AddElement<int16_t>(WifiStatus::VT_RSSI, rssi, 0);
-  }
-  explicit WifiStatusBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
-        : fbb_(_fbb) {
-    start_ = fbb_.StartTable();
-  }
-  ::flatbuffers::Offset<WifiStatus> Finish() {
-    const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<WifiStatus>(end);
-    return o;
-  }
-};
-
-inline ::flatbuffers::Offset<WifiStatus> CreateWifiStatus(
-    ::flatbuffers::FlatBufferBuilder &_fbb,
-    bool connected = false,
-    uint32_t ip = 0,
-    ::flatbuffers::Offset<::flatbuffers::String> ssid = 0,
-    int16_t rssi = 0) {
-  WifiStatusBuilder builder_(_fbb);
-  builder_.add_ssid(ssid);
-  builder_.add_ip(ip);
-  builder_.add_rssi(rssi);
-  builder_.add_connected(connected);
-  return builder_.Finish();
-}
-
-struct WifiStatus::Traits {
-  using type = WifiStatus;
-  static auto constexpr Create = CreateWifiStatus;
-};
-
-inline ::flatbuffers::Offset<WifiStatus> CreateWifiStatusDirect(
-    ::flatbuffers::FlatBufferBuilder &_fbb,
-    bool connected = false,
-    uint32_t ip = 0,
-    const char *ssid = nullptr,
-    int16_t rssi = 0) {
-  auto ssid__ = ssid ? _fbb.CreateString(ssid) : 0;
-  return CoprocessorProto::CreateWifiStatus(
-      _fbb,
-      connected,
-      ip,
-      ssid__,
-      rssi);
-}
-
-::flatbuffers::Offset<WifiStatus> CreateWifiStatus(::flatbuffers::FlatBufferBuilder &_fbb, const WifiStatusT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
-
 struct StartProvisioningRequestT : public ::flatbuffers::NativeTable {
   typedef StartProvisioningRequest TableType;
   uint32_t timeout_seconds = 0;
@@ -574,6 +634,114 @@ struct StartProvisioningRequest::Traits {
 };
 
 ::flatbuffers::Offset<StartProvisioningRequest> CreateStartProvisioningRequest(::flatbuffers::FlatBufferBuilder &_fbb, const StartProvisioningRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct WifiStatusT : public ::flatbuffers::NativeTable {
+  typedef WifiStatus TableType;
+  CoprocessorProto::WifiState state = CoprocessorProto::WifiState::Disconnected;
+  uint32_t ip = 0;
+  std::string ssid{};
+  int16_t rssi = 0;
+};
+
+struct WifiStatus FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef WifiStatusT NativeTableType;
+  typedef WifiStatusBuilder Builder;
+  struct Traits;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_STATE = 4,
+    VT_IP = 6,
+    VT_SSID = 8,
+    VT_RSSI = 10
+  };
+  CoprocessorProto::WifiState state() const {
+    return static_cast<CoprocessorProto::WifiState>(GetField<uint8_t>(VT_STATE, 0));
+  }
+  uint32_t ip() const {
+    return GetField<uint32_t>(VT_IP, 0);
+  }
+  const ::flatbuffers::String *ssid() const {
+    return GetPointer<const ::flatbuffers::String *>(VT_SSID);
+  }
+  int16_t rssi() const {
+    return GetField<int16_t>(VT_RSSI, 0);
+  }
+  template <bool B = false>
+  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint8_t>(verifier, VT_STATE, 1) &&
+           VerifyField<uint32_t>(verifier, VT_IP, 4) &&
+           VerifyOffset(verifier, VT_SSID) &&
+           verifier.VerifyString(ssid()) &&
+           VerifyField<int16_t>(verifier, VT_RSSI, 2) &&
+           verifier.EndTable();
+  }
+  WifiStatusT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(WifiStatusT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<WifiStatus> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const WifiStatusT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct WifiStatusBuilder {
+  typedef WifiStatus Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_state(CoprocessorProto::WifiState state) {
+    fbb_.AddElement<uint8_t>(WifiStatus::VT_STATE, static_cast<uint8_t>(state), 0);
+  }
+  void add_ip(uint32_t ip) {
+    fbb_.AddElement<uint32_t>(WifiStatus::VT_IP, ip, 0);
+  }
+  void add_ssid(::flatbuffers::Offset<::flatbuffers::String> ssid) {
+    fbb_.AddOffset(WifiStatus::VT_SSID, ssid);
+  }
+  void add_rssi(int16_t rssi) {
+    fbb_.AddElement<int16_t>(WifiStatus::VT_RSSI, rssi, 0);
+  }
+  explicit WifiStatusBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<WifiStatus> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<WifiStatus>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<WifiStatus> CreateWifiStatus(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    CoprocessorProto::WifiState state = CoprocessorProto::WifiState::Disconnected,
+    uint32_t ip = 0,
+    ::flatbuffers::Offset<::flatbuffers::String> ssid = 0,
+    int16_t rssi = 0) {
+  WifiStatusBuilder builder_(_fbb);
+  builder_.add_ssid(ssid);
+  builder_.add_ip(ip);
+  builder_.add_rssi(rssi);
+  builder_.add_state(state);
+  return builder_.Finish();
+}
+
+struct WifiStatus::Traits {
+  using type = WifiStatus;
+  static auto constexpr Create = CreateWifiStatus;
+};
+
+inline ::flatbuffers::Offset<WifiStatus> CreateWifiStatusDirect(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    CoprocessorProto::WifiState state = CoprocessorProto::WifiState::Disconnected,
+    uint32_t ip = 0,
+    const char *ssid = nullptr,
+    int16_t rssi = 0) {
+  auto ssid__ = ssid ? _fbb.CreateString(ssid) : 0;
+  return CoprocessorProto::CreateWifiStatus(
+      _fbb,
+      state,
+      ip,
+      ssid__,
+      rssi);
+}
+
+::flatbuffers::Offset<WifiStatus> CreateWifiStatus(::flatbuffers::FlatBufferBuilder &_fbb, const WifiStatusT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
 struct ProvisioningStatusT : public ::flatbuffers::NativeTable {
   typedef ProvisioningStatus TableType;
@@ -634,64 +802,19 @@ struct ProvisioningStatus::Traits {
 
 ::flatbuffers::Offset<ProvisioningStatus> CreateProvisioningStatus(::flatbuffers::FlatBufferBuilder &_fbb, const ProvisioningStatusT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
-struct GetTimestampRequestT : public ::flatbuffers::NativeTable {
-  typedef GetTimestampRequest TableType;
-};
-
-struct GetTimestampRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef GetTimestampRequestT NativeTableType;
-  typedef GetTimestampRequestBuilder Builder;
-  struct Traits;
-  template <bool B = false>
-  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
-    return VerifyTableStart(verifier) &&
-           verifier.EndTable();
-  }
-  GetTimestampRequestT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
-  void UnPackTo(GetTimestampRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
-  static ::flatbuffers::Offset<GetTimestampRequest> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const GetTimestampRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
-};
-
-struct GetTimestampRequestBuilder {
-  typedef GetTimestampRequest Table;
-  ::flatbuffers::FlatBufferBuilder &fbb_;
-  ::flatbuffers::uoffset_t start_;
-  explicit GetTimestampRequestBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
-        : fbb_(_fbb) {
-    start_ = fbb_.StartTable();
-  }
-  ::flatbuffers::Offset<GetTimestampRequest> Finish() {
-    const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<GetTimestampRequest>(end);
-    return o;
-  }
-};
-
-inline ::flatbuffers::Offset<GetTimestampRequest> CreateGetTimestampRequest(
-    ::flatbuffers::FlatBufferBuilder &_fbb) {
-  GetTimestampRequestBuilder builder_(_fbb);
-  return builder_.Finish();
-}
-
-struct GetTimestampRequest::Traits {
-  using type = GetTimestampRequest;
-  static auto constexpr Create = CreateGetTimestampRequest;
-};
-
-::flatbuffers::Offset<GetTimestampRequest> CreateGetTimestampRequest(::flatbuffers::FlatBufferBuilder &_fbb, const GetTimestampRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
-
-struct GetTimestampResponseT : public ::flatbuffers::NativeTable {
-  typedef GetTimestampResponse TableType;
+struct TimeSyncedT : public ::flatbuffers::NativeTable {
+  typedef TimeSynced TableType;
   std::unique_ptr<CoprocessorProto::Timestamp> timestamp{};
-  GetTimestampResponseT() = default;
-  GetTimestampResponseT(const GetTimestampResponseT &o);
-  GetTimestampResponseT(GetTimestampResponseT&&) FLATBUFFERS_NOEXCEPT = default;
-  GetTimestampResponseT &operator=(GetTimestampResponseT o) FLATBUFFERS_NOEXCEPT;
+  TimeSyncedT() = default;
+  TimeSyncedT(const TimeSyncedT &o);
+  TimeSyncedT(TimeSyncedT&&) FLATBUFFERS_NOEXCEPT = default;
+  TimeSyncedT &operator=(TimeSyncedT o) FLATBUFFERS_NOEXCEPT;
 };
 
-struct GetTimestampResponse FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef GetTimestampResponseT NativeTableType;
-  typedef GetTimestampResponseBuilder Builder;
+/// The clock synced over SNTP: the co-processor's time when it sent this.
+struct TimeSynced FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef TimeSyncedT NativeTableType;
+  typedef TimeSyncedBuilder Builder;
   struct Traits;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_TIMESTAMP = 4
@@ -705,43 +828,135 @@ struct GetTimestampResponse FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Tab
            VerifyField<CoprocessorProto::Timestamp>(verifier, VT_TIMESTAMP, 8) &&
            verifier.EndTable();
   }
-  GetTimestampResponseT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
-  void UnPackTo(GetTimestampResponseT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
-  static ::flatbuffers::Offset<GetTimestampResponse> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const GetTimestampResponseT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+  TimeSyncedT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(TimeSyncedT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<TimeSynced> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const TimeSyncedT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 };
 
-struct GetTimestampResponseBuilder {
-  typedef GetTimestampResponse Table;
+struct TimeSyncedBuilder {
+  typedef TimeSynced Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
   void add_timestamp(const CoprocessorProto::Timestamp *timestamp) {
-    fbb_.AddStruct(GetTimestampResponse::VT_TIMESTAMP, timestamp);
+    fbb_.AddStruct(TimeSynced::VT_TIMESTAMP, timestamp);
   }
-  explicit GetTimestampResponseBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+  explicit TimeSyncedBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  ::flatbuffers::Offset<GetTimestampResponse> Finish() {
+  ::flatbuffers::Offset<TimeSynced> Finish() {
     const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<GetTimestampResponse>(end);
+    auto o = ::flatbuffers::Offset<TimeSynced>(end);
     return o;
   }
 };
 
-inline ::flatbuffers::Offset<GetTimestampResponse> CreateGetTimestampResponse(
+inline ::flatbuffers::Offset<TimeSynced> CreateTimeSynced(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     const CoprocessorProto::Timestamp *timestamp = nullptr) {
-  GetTimestampResponseBuilder builder_(_fbb);
+  TimeSyncedBuilder builder_(_fbb);
   builder_.add_timestamp(timestamp);
   return builder_.Finish();
 }
 
-struct GetTimestampResponse::Traits {
-  using type = GetTimestampResponse;
-  static auto constexpr Create = CreateGetTimestampResponse;
+struct TimeSynced::Traits {
+  using type = TimeSynced;
+  static auto constexpr Create = CreateTimeSynced;
 };
 
-::flatbuffers::Offset<GetTimestampResponse> CreateGetTimestampResponse(::flatbuffers::FlatBufferBuilder &_fbb, const GetTimestampResponseT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+::flatbuffers::Offset<TimeSynced> CreateTimeSynced(::flatbuffers::FlatBufferBuilder &_fbb, const TimeSyncedT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct SystemEventT : public ::flatbuffers::NativeTable {
+  typedef SystemEvent TableType;
+  CoprocessorProto::SystemEventKindUnion event{};
+};
+
+struct SystemEvent FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef SystemEventT NativeTableType;
+  typedef SystemEventBuilder Builder;
+  struct Traits;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_EVENT_TYPE = 4,
+    VT_EVENT = 6
+  };
+  CoprocessorProto::SystemEventKind event_type() const {
+    return static_cast<CoprocessorProto::SystemEventKind>(GetField<uint8_t>(VT_EVENT_TYPE, 0));
+  }
+  const void *event() const {
+    return GetPointer<const void *>(VT_EVENT);
+  }
+  template<typename T> const T *event_as() const;
+  const CoprocessorProto::WifiStatus *event_as_WifiStatus() const {
+    return event_type() == CoprocessorProto::SystemEventKind::WifiStatus ? static_cast<const CoprocessorProto::WifiStatus *>(event()) : nullptr;
+  }
+  const CoprocessorProto::ProvisioningStatus *event_as_ProvisioningStatus() const {
+    return event_type() == CoprocessorProto::SystemEventKind::ProvisioningStatus ? static_cast<const CoprocessorProto::ProvisioningStatus *>(event()) : nullptr;
+  }
+  const CoprocessorProto::TimeSynced *event_as_TimeSynced() const {
+    return event_type() == CoprocessorProto::SystemEventKind::TimeSynced ? static_cast<const CoprocessorProto::TimeSynced *>(event()) : nullptr;
+  }
+  template <bool B = false>
+  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint8_t>(verifier, VT_EVENT_TYPE, 1) &&
+           VerifyOffset(verifier, VT_EVENT) &&
+           VerifySystemEventKind(verifier, event(), event_type()) &&
+           verifier.EndTable();
+  }
+  SystemEventT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(SystemEventT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<SystemEvent> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const SystemEventT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+template<> inline const CoprocessorProto::WifiStatus *SystemEvent::event_as<CoprocessorProto::WifiStatus>() const {
+  return event_as_WifiStatus();
+}
+
+template<> inline const CoprocessorProto::ProvisioningStatus *SystemEvent::event_as<CoprocessorProto::ProvisioningStatus>() const {
+  return event_as_ProvisioningStatus();
+}
+
+template<> inline const CoprocessorProto::TimeSynced *SystemEvent::event_as<CoprocessorProto::TimeSynced>() const {
+  return event_as_TimeSynced();
+}
+
+struct SystemEventBuilder {
+  typedef SystemEvent Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_event_type(CoprocessorProto::SystemEventKind event_type) {
+    fbb_.AddElement<uint8_t>(SystemEvent::VT_EVENT_TYPE, static_cast<uint8_t>(event_type), 0);
+  }
+  void add_event(::flatbuffers::Offset<void> event) {
+    fbb_.AddOffset(SystemEvent::VT_EVENT, event);
+  }
+  explicit SystemEventBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<SystemEvent> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<SystemEvent>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<SystemEvent> CreateSystemEvent(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    CoprocessorProto::SystemEventKind event_type = CoprocessorProto::SystemEventKind::NONE,
+    ::flatbuffers::Offset<void> event = 0) {
+  SystemEventBuilder builder_(_fbb);
+  builder_.add_event(event);
+  builder_.add_event_type(event_type);
+  return builder_.Finish();
+}
+
+struct SystemEvent::Traits {
+  using type = SystemEvent;
+  static auto constexpr Create = CreateSystemEvent;
+};
+
+::flatbuffers::Offset<SystemEvent> CreateSystemEvent(::flatbuffers::FlatBufferBuilder &_fbb, const SystemEventT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
 struct BatteryStatusT : public ::flatbuffers::NativeTable {
   typedef BatteryStatus TableType;
@@ -1955,41 +2170,6 @@ inline ::flatbuffers::Offset<WifiConnectRequest> WifiConnectRequest::Pack(::flat
       _password);
 }
 
-inline WifiStatusT *WifiStatus::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
-  auto _o = std::make_unique<WifiStatusT>();
-  UnPackTo(_o.get(), _resolver);
-  return _o.release();
-}
-
-inline void WifiStatus::UnPackTo(WifiStatusT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
-  (void)_o;
-  (void)_resolver;
-  { auto _e = connected(); _o->connected = _e; }
-  { auto _e = ip(); _o->ip = _e; }
-  { auto _e = ssid(); if (_e) _o->ssid = _e->str(); }
-  { auto _e = rssi(); _o->rssi = _e; }
-}
-
-inline ::flatbuffers::Offset<WifiStatus> CreateWifiStatus(::flatbuffers::FlatBufferBuilder &_fbb, const WifiStatusT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
-  return WifiStatus::Pack(_fbb, _o, _rehasher);
-}
-
-inline ::flatbuffers::Offset<WifiStatus> WifiStatus::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const WifiStatusT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
-  (void)_rehasher;
-  (void)_o;
-  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const WifiStatusT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
-  auto _connected = _o->connected;
-  auto _ip = _o->ip;
-  auto _ssid = _o->ssid.empty() ? 0 : _fbb.CreateString(_o->ssid);
-  auto _rssi = _o->rssi;
-  return CoprocessorProto::CreateWifiStatus(
-      _fbb,
-      _connected,
-      _ip,
-      _ssid,
-      _rssi);
-}
-
 inline StartProvisioningRequestT *StartProvisioningRequest::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
   auto _o = std::make_unique<StartProvisioningRequestT>();
   UnPackTo(_o.get(), _resolver);
@@ -2014,6 +2194,41 @@ inline ::flatbuffers::Offset<StartProvisioningRequest> StartProvisioningRequest:
   return CoprocessorProto::CreateStartProvisioningRequest(
       _fbb,
       _timeout_seconds);
+}
+
+inline WifiStatusT *WifiStatus::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<WifiStatusT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void WifiStatus::UnPackTo(WifiStatusT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = state(); _o->state = _e; }
+  { auto _e = ip(); _o->ip = _e; }
+  { auto _e = ssid(); if (_e) _o->ssid = _e->str(); }
+  { auto _e = rssi(); _o->rssi = _e; }
+}
+
+inline ::flatbuffers::Offset<WifiStatus> CreateWifiStatus(::flatbuffers::FlatBufferBuilder &_fbb, const WifiStatusT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return WifiStatus::Pack(_fbb, _o, _rehasher);
+}
+
+inline ::flatbuffers::Offset<WifiStatus> WifiStatus::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const WifiStatusT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const WifiStatusT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _state = _o->state;
+  auto _ip = _o->ip;
+  auto _ssid = _o->ssid.empty() ? 0 : _fbb.CreateString(_o->ssid);
+  auto _rssi = _o->rssi;
+  return CoprocessorProto::CreateWifiStatus(
+      _fbb,
+      _state,
+      _ip,
+      _ssid,
+      _rssi);
 }
 
 inline ProvisioningStatusT *ProvisioningStatus::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
@@ -2042,62 +2257,68 @@ inline ::flatbuffers::Offset<ProvisioningStatus> ProvisioningStatus::Pack(::flat
       _state);
 }
 
-inline GetTimestampRequestT *GetTimestampRequest::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
-  auto _o = std::make_unique<GetTimestampRequestT>();
-  UnPackTo(_o.get(), _resolver);
-  return _o.release();
-}
-
-inline void GetTimestampRequest::UnPackTo(GetTimestampRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
-  (void)_o;
-  (void)_resolver;
-}
-
-inline ::flatbuffers::Offset<GetTimestampRequest> CreateGetTimestampRequest(::flatbuffers::FlatBufferBuilder &_fbb, const GetTimestampRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
-  return GetTimestampRequest::Pack(_fbb, _o, _rehasher);
-}
-
-inline ::flatbuffers::Offset<GetTimestampRequest> GetTimestampRequest::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const GetTimestampRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
-  (void)_rehasher;
-  (void)_o;
-  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const GetTimestampRequestT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
-  return CoprocessorProto::CreateGetTimestampRequest(
-      _fbb);
-}
-
-inline GetTimestampResponseT::GetTimestampResponseT(const GetTimestampResponseT &o)
+inline TimeSyncedT::TimeSyncedT(const TimeSyncedT &o)
       : timestamp((o.timestamp) ? new CoprocessorProto::Timestamp(*o.timestamp) : nullptr) {
 }
 
-inline GetTimestampResponseT &GetTimestampResponseT::operator=(GetTimestampResponseT o) FLATBUFFERS_NOEXCEPT {
+inline TimeSyncedT &TimeSyncedT::operator=(TimeSyncedT o) FLATBUFFERS_NOEXCEPT {
   std::swap(timestamp, o.timestamp);
   return *this;
 }
 
-inline GetTimestampResponseT *GetTimestampResponse::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
-  auto _o = std::make_unique<GetTimestampResponseT>();
+inline TimeSyncedT *TimeSynced::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<TimeSyncedT>();
   UnPackTo(_o.get(), _resolver);
   return _o.release();
 }
 
-inline void GetTimestampResponse::UnPackTo(GetTimestampResponseT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+inline void TimeSynced::UnPackTo(TimeSyncedT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
   (void)_o;
   (void)_resolver;
   { auto _e = timestamp(); if (_e) _o->timestamp = std::unique_ptr<CoprocessorProto::Timestamp>(new CoprocessorProto::Timestamp(*_e)); }
 }
 
-inline ::flatbuffers::Offset<GetTimestampResponse> CreateGetTimestampResponse(::flatbuffers::FlatBufferBuilder &_fbb, const GetTimestampResponseT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
-  return GetTimestampResponse::Pack(_fbb, _o, _rehasher);
+inline ::flatbuffers::Offset<TimeSynced> CreateTimeSynced(::flatbuffers::FlatBufferBuilder &_fbb, const TimeSyncedT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return TimeSynced::Pack(_fbb, _o, _rehasher);
 }
 
-inline ::flatbuffers::Offset<GetTimestampResponse> GetTimestampResponse::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const GetTimestampResponseT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+inline ::flatbuffers::Offset<TimeSynced> TimeSynced::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const TimeSyncedT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
   (void)_rehasher;
   (void)_o;
-  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const GetTimestampResponseT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const TimeSyncedT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
   auto _timestamp = _o->timestamp ? _o->timestamp.get() : nullptr;
-  return CoprocessorProto::CreateGetTimestampResponse(
+  return CoprocessorProto::CreateTimeSynced(
       _fbb,
       _timestamp);
+}
+
+inline SystemEventT *SystemEvent::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<SystemEventT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void SystemEvent::UnPackTo(SystemEventT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = event_type(); _o->event.type = _e; }
+  { auto _e = event(); if (_e) _o->event.value = CoprocessorProto::SystemEventKindUnion::UnPack(_e, event_type(), _resolver); }
+}
+
+inline ::flatbuffers::Offset<SystemEvent> CreateSystemEvent(::flatbuffers::FlatBufferBuilder &_fbb, const SystemEventT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return SystemEvent::Pack(_fbb, _o, _rehasher);
+}
+
+inline ::flatbuffers::Offset<SystemEvent> SystemEvent::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const SystemEventT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const SystemEventT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _event_type = _o->event.type;
+  auto _event = _o->event.Pack(_fbb);
+  return CoprocessorProto::CreateSystemEvent(
+      _fbb,
+      _event_type,
+      _event);
 }
 
 inline BatteryStatusT *BatteryStatus::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
@@ -2571,6 +2792,121 @@ inline ::flatbuffers::Offset<GroupsSummary> GroupsSummary::Pack(::flatbuffers::F
   return CoprocessorProto::CreateGroupsSummary(
       _fbb,
       _groups);
+}
+
+template <bool B>
+inline bool VerifySystemEventKind(::flatbuffers::VerifierTemplate<B> &verifier, const void *obj, SystemEventKind type) {
+  switch (type) {
+    case SystemEventKind::NONE: {
+      return true;
+    }
+    case SystemEventKind::WifiStatus: {
+      auto ptr = reinterpret_cast<const CoprocessorProto::WifiStatus *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case SystemEventKind::ProvisioningStatus: {
+      auto ptr = reinterpret_cast<const CoprocessorProto::ProvisioningStatus *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case SystemEventKind::TimeSynced: {
+      auto ptr = reinterpret_cast<const CoprocessorProto::TimeSynced *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    default: return true;
+  }
+}
+
+template <bool B>
+inline bool VerifySystemEventKindVector(::flatbuffers::VerifierTemplate<B> &verifier, const ::flatbuffers::Vector<::flatbuffers::Offset<void>> *values, const ::flatbuffers::Vector<SystemEventKind> *types) {
+  if (!values || !types) return !values && !types;
+  if (values->size() != types->size()) return false;
+  for (::flatbuffers::uoffset_t i = 0; i < values->size(); ++i) {
+    if (!VerifySystemEventKind(
+        verifier,  values->Get(i), types->GetEnum<SystemEventKind>(i))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+inline void *SystemEventKindUnion::UnPack(const void *obj, SystemEventKind type, const ::flatbuffers::resolver_function_t *resolver) {
+  (void)resolver;
+  switch (type) {
+    case SystemEventKind::WifiStatus: {
+      auto ptr = reinterpret_cast<const CoprocessorProto::WifiStatus *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    case SystemEventKind::ProvisioningStatus: {
+      auto ptr = reinterpret_cast<const CoprocessorProto::ProvisioningStatus *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    case SystemEventKind::TimeSynced: {
+      auto ptr = reinterpret_cast<const CoprocessorProto::TimeSynced *>(obj);
+      return ptr->UnPack(resolver);
+    }
+    default: return nullptr;
+  }
+}
+
+inline ::flatbuffers::Offset<void> SystemEventKindUnion::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const ::flatbuffers::rehasher_function_t *_rehasher) const {
+  (void)_rehasher;
+  switch (type) {
+    case SystemEventKind::WifiStatus: {
+      auto ptr = reinterpret_cast<const CoprocessorProto::WifiStatusT *>(value);
+      return CreateWifiStatus(_fbb, ptr, _rehasher).Union();
+    }
+    case SystemEventKind::ProvisioningStatus: {
+      auto ptr = reinterpret_cast<const CoprocessorProto::ProvisioningStatusT *>(value);
+      return CreateProvisioningStatus(_fbb, ptr, _rehasher).Union();
+    }
+    case SystemEventKind::TimeSynced: {
+      auto ptr = reinterpret_cast<const CoprocessorProto::TimeSyncedT *>(value);
+      return CreateTimeSynced(_fbb, ptr, _rehasher).Union();
+    }
+    default: return 0;
+  }
+}
+
+inline SystemEventKindUnion::SystemEventKindUnion(const SystemEventKindUnion &u) : type(u.type), value(nullptr) {
+  switch (type) {
+    case SystemEventKind::WifiStatus: {
+      value = new CoprocessorProto::WifiStatusT(*reinterpret_cast<CoprocessorProto::WifiStatusT *>(u.value));
+      break;
+    }
+    case SystemEventKind::ProvisioningStatus: {
+      value = new CoprocessorProto::ProvisioningStatusT(*reinterpret_cast<CoprocessorProto::ProvisioningStatusT *>(u.value));
+      break;
+    }
+    case SystemEventKind::TimeSynced: {
+      value = new CoprocessorProto::TimeSyncedT(*reinterpret_cast<CoprocessorProto::TimeSyncedT *>(u.value));
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+inline void SystemEventKindUnion::Reset() {
+  switch (type) {
+    case SystemEventKind::WifiStatus: {
+      auto ptr = reinterpret_cast<CoprocessorProto::WifiStatusT *>(value);
+      delete ptr;
+      break;
+    }
+    case SystemEventKind::ProvisioningStatus: {
+      auto ptr = reinterpret_cast<CoprocessorProto::ProvisioningStatusT *>(value);
+      delete ptr;
+      break;
+    }
+    case SystemEventKind::TimeSynced: {
+      auto ptr = reinterpret_cast<CoprocessorProto::TimeSyncedT *>(value);
+      delete ptr;
+      break;
+    }
+    default: break;
+  }
+  value = nullptr;
+  type = SystemEventKind::NONE;
 }
 
 }  // namespace CoprocessorProto
