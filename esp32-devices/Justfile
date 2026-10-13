@@ -41,13 +41,13 @@ clean:
 
 [doc("Typecheck device firmware crates.")]
 [group("verification")]
-check TARGET=DEVICE *ARGS:
-    cargo check -p {{TARGET}} {{ARGS}}
+check *ARGS:
+    cargo check --workspace {{ARGS}}
 
 [doc("Clippy on device firmware crates.")]
 [group("verification")]
-lint TARGET=DEVICE *ARGS:
-    cargo clippy -p {{TARGET}} {{ARGS}} -- -D warnings
+lint *ARGS:
+    cargo clippy --workspace {{ARGS}} -- -D warnings
 
 alias check-device := check
 alias lint-device := lint
@@ -56,10 +56,10 @@ alias lint-device := lint
 # Build, Flash, and Diagnostics
 # -----------------------------------------------------------------------------
 
-[doc("Build device firmware in release mode (default: waveshare_knob_1_8).")]
+[doc("Build device firmware in debug mode (default: waveshare_knob_1_8).")]
 [group("device")]
 build TARGET=DEVICE *ARGS:
-    cargo build -p {{TARGET}} --release {{ARGS}}
+    cargo build -p {{TARGET}} {{ARGS}}
 
 [doc("Build, flash, and monitor device firmware using probe-rs (cargo run).")]
 [group("device")]
