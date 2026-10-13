@@ -383,7 +383,7 @@ inline const char *EnumNameActionType(ActionType e) {
   return EnumNamesActionType()[index];
 }
 
-/// Link limits both ends must agree on. An enum only to carry constants into
+/// Link constants both ends must agree on. An enum only to carry constants into
 /// the generated code, until tether takes the max payload from the schema.
 enum class Limits : uint32_t {
   /// The most image data an AlbumArtChunk carries: room to spare in the
@@ -394,15 +394,19 @@ enum class Limits : uint32_t {
   /// The largest COBS frame for MaxPayload, delimiter excluded: tether's
   /// max_wire_size(MaxPayload) - 1 (CRC, header and padding, then COBS).
   MaxFrame = 1104,
+  /// The UART's rate, 8N1. Faster leaves less time for interrupt latency
+  /// before the receive FIFOs overflow (32-64 bytes past their thresholds).
+  BaudRate = 1500000,
   MIN = MaxAlbumArtChunk,
-  MAX = MaxFrame
+  MAX = BaudRate
 };
 
-inline const Limits (&EnumValuesLimits())[3] {
+inline const Limits (&EnumValuesLimits())[4] {
   static const Limits values[] = {
     Limits::MaxAlbumArtChunk,
     Limits::MaxPayload,
-    Limits::MaxFrame
+    Limits::MaxFrame,
+    Limits::BaudRate
   };
   return values;
 }
@@ -412,6 +416,7 @@ inline const char *EnumNameLimits(Limits e) {
     case Limits::MaxAlbumArtChunk: return "MaxAlbumArtChunk";
     case Limits::MaxPayload: return "MaxPayload";
     case Limits::MaxFrame: return "MaxFrame";
+    case Limits::BaudRate: return "BaudRate";
     default: return "";
   }
 }

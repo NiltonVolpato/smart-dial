@@ -9,7 +9,7 @@ include "sonos.fbs";
 
 namespace CoprocessorProto;
 
-/// Link limits both ends must agree on. An enum only to carry constants into
+/// Link constants both ends must agree on. An enum only to carry constants into
 /// the generated code, until tether takes the max payload from the schema.
 enum Limits : uint {
     /// The most image data an AlbumArtChunk carries: room to spare in the
@@ -20,6 +20,9 @@ enum Limits : uint {
     /// The largest COBS frame for MaxPayload, delimiter excluded: tether's
     /// max_wire_size(MaxPayload) - 1 (CRC, header and padding, then COBS).
     MaxFrame = 1104,
+    /// The UART's rate, 8N1. Faster leaves less time for interrupt latency
+    /// before the receive FIFOs overflow (32-64 bytes past their thresholds).
+    BaudRate = 1500000,
 }
 
 /// The services the co-processor serves: wire IDs are fixed in append-only order.

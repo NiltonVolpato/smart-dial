@@ -43,7 +43,8 @@ namespace {
 
 constexpr const char* TAG = "app";
 
-constexpr uint32_t kBaudRate = 921600;
+constexpr auto kBaudRate =
+    static_cast<uint32_t>(CoprocessorProto::Limits::BaudRate);
 constexpr auto kMaxPayload =
     static_cast<std::size_t>(CoprocessorProto::Limits::MaxPayload);
 // Clients size their receive buffers from the schema's MaxFrame.
@@ -107,7 +108,8 @@ struct App {
   CoprocessorProto::sonos::Service sonos_service{sonos_handler};
 };
 
-void heartbeat(TimerHandle_t /*timer*/) {
+void heartbeat(TimerHandle_t timer) {
+  const App& app = *static_cast<const App*>(pvTimerGetTimerID(timer));
   const auto uptime_sec =
       static_cast<unsigned long>(esp_timer_get_time() / 1'000'000);
   const auto free_heap_kb =
@@ -130,6 +132,20 @@ void heartbeat(TimerHandle_t /*timer*/) {
            uptime_sec, free_heap_kb, largest_block_kb, min_free_heap_kb,
            network_is_up() ? "up" : "down", network_ip().to_string().c_str(),
            ssid.c_str(), rssi, provisioning_is_active() ? "active" : "off");
+  // Read without the server's lock: counters, a stale one is fine here.
+  const tether::idf::UartStats& uart = app.io.stats();
+  const tether::LinkStats& link = app.server.link().stats();
+  ESP_LOGI(TAG,
+           "[Heartbeat] uart: overflows=%lu, line errors=%lu; link: "
+           "frames tx=%lu rx=%lu, retransmits=%lu, crc errors=%lu, cobs "
+           "errors=%lu",
+           static_cast<unsigned long>(uart.overflows),
+           static_cast<unsigned long>(uart.line_errors),
+           static_cast<unsigned long>(link.frames_tx),
+           static_cast<unsigned long>(link.frames_rx),
+           static_cast<unsigned long>(link.retransmits),
+           static_cast<unsigned long>(link.crc_errors),
+           static_cast<unsigned long>(link.cobs_errors));
 }
 
 void reactor_task(void* arg) {
@@ -182,8 +198,8 @@ void app_start(TetherPins pins) {
 
   time_sync_init();
 
-  TimerHandle_t heartbeat_timer = xTimerCreate(
-      "heartbeat", pdMS_TO_TICKS(10'000), pdTRUE, nullptr, heartbeat);
+  TimerHandle_t heartbeat_timer =
+      xTimerCreate("heartbeat", pdMS_TO_TICKS(10'000), pdTRUE, &app, heartbeat);
   if (heartbeat_timer != nullptr) {
     xTimerStart(heartbeat_timer, 0);
   }

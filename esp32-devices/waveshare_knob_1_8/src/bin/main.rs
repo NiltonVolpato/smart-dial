@@ -3,6 +3,7 @@
 #![deny(clippy::large_stack_frames)]
 
 use alloc::boxed::Box;
+use core::mem::MaybeUninit;
 
 use app_launcher::LauncherAppFactory;
 use app_shell::AppShell;
@@ -32,9 +33,14 @@ defmt::timestamp!("{=u64:tus} C{}", { Instant::now().duration_since_epoch().as_m
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
-/// Core 1 execution stack (16 KiB, 16-byte aligned).
+/// Core 1 execution stack (16 KiB, 16-byte aligned). In RAM the bootloader
+/// used, free once the app runs (core 1 starts long after): out of `.bss`,
+/// whatever RAM is left after which is core 0's stack.
 const APP_CORE_STACK_SIZE: usize = 16 * 1024;
-static mut APP_CORE_STACK: Stack<APP_CORE_STACK_SIZE> = Stack::new();
+#[esp_hal::ram(reclaimed)]
+static mut APP_CORE_STACK: MaybeUninit<Stack<APP_CORE_STACK_SIZE>> = MaybeUninit::uninit();
+/// All the RAM reclaimed from the bootloader.
+const RECLAIMED_RAM_SIZE: usize = 73744;
 
 /// Entry point for Core 1 (`AppCpu`): owns SH8601 display initialization and QSPI DMA transfers,
 /// and decodes album art below them, off the UI's core.
@@ -82,7 +88,7 @@ async fn main(spawner: Spawner) -> ! {
     esp_alloc::psram_allocator!(board.system.psram, esp_hal::psram);
 
     // 2. Register internal DRAM heaps (reclaimed bootloader memory for DMA buffers)
-    esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: 73744);
+    esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: RECLAIMED_RAM_SIZE - APP_CORE_STACK_SIZE);
 
     // 3. Initialize RTOS & Embassy tick driver
     let timg0 = TimerGroup::new(board.system.timg0);
@@ -95,7 +101,8 @@ async fn main(spawner: Spawner) -> ! {
     esp_rtos::start_second_core::<APP_CORE_STACK_SIZE>(
         board.system.cpu_ctrl,
         sw_int.software_interrupt1,
-        unsafe { &mut *core::ptr::addr_of_mut!(APP_CORE_STACK) },
+        // SAFETY: a `Stack` is only `MaybeUninit` bytes, valid uninitialized.
+        unsafe { (*core::ptr::addr_of_mut!(APP_CORE_STACK)).assume_init_mut() },
         move || {
             core1_entry(board.core1, sw_int.software_interrupt2, art_requests, art_results);
         },

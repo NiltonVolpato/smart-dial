@@ -609,16 +609,16 @@ pub mod coprocessor_proto {
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
-    pub const ENUM_MAX_LIMITS: u32 = 1104;
+    pub const ENUM_MAX_LIMITS: u32 = 1500000;
     #[deprecated(
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
     #[allow(non_camel_case_types)]
-    pub const ENUM_VALUES_LIMITS: [Limits; 3] =
-        [Limits::MaxAlbumArtChunk, Limits::MaxPayload, Limits::MaxFrame];
+    pub const ENUM_VALUES_LIMITS: [Limits; 4] =
+        [Limits::MaxAlbumArtChunk, Limits::MaxPayload, Limits::MaxFrame, Limits::BaudRate];
 
-    /// Link limits both ends must agree on. An enum only to carry constants into
+    /// Link constants both ends must agree on. An enum only to carry constants into
     /// the generated code, until tether takes the max payload from the schema.
     #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
     #[repr(transparent)]
@@ -633,17 +633,21 @@ pub mod coprocessor_proto {
         /// The largest COBS frame for MaxPayload, delimiter excluded: tether's
         /// max_wire_size(MaxPayload) - 1 (CRC, header and padding, then COBS).
         pub const MaxFrame: Self = Self(1104);
+        /// The UART's rate, 8N1. Faster leaves less time for interrupt latency
+        /// before the receive FIFOs overflow (32-64 bytes past their thresholds).
+        pub const BaudRate: Self = Self(1500000);
 
         pub const ENUM_MIN: u32 = 768;
-        pub const ENUM_MAX: u32 = 1104;
+        pub const ENUM_MAX: u32 = 1500000;
         pub const ENUM_VALUES: &'static [Self] =
-            &[Self::MaxAlbumArtChunk, Self::MaxPayload, Self::MaxFrame];
+            &[Self::MaxAlbumArtChunk, Self::MaxPayload, Self::MaxFrame, Self::BaudRate];
         /// Returns the variant's name or "" if unknown.
         pub fn variant_name(self) -> Option<&'static str> {
             match self {
                 Self::MaxAlbumArtChunk => Some("MaxAlbumArtChunk"),
                 Self::MaxPayload => Some("MaxPayload"),
                 Self::MaxFrame => Some("MaxFrame"),
+                Self::BaudRate => Some("BaudRate"),
                 _ => None,
             }
         }

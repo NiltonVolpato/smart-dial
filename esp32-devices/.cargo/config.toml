@@ -1,7 +1,12 @@
 [env]
 DEFMT_LOG="info,common=debug,waveshare_knob_1_8=info,coprocessor=debug,lilygo_t_encoder_pro=info,app_clock=debug,app_sonos=debug"
+
+# Bounded allocation time: allocations run under a lock that masks interrupts,
+# and the default linked list walks its free blocks (in PSRAM).
+ESP_ALLOC_CONFIG_HEAP_ALGORITHM="TLSF"
+
 ESP_HAL_CONFIG_DATA_CACHE_SIZE="64KB"
-ESP_HAL_CONFIG_PLACE_SPI_MASTER_DRIVER_IN_RAM="true"
+# ESP_HAL_CONFIG_PLACE_SPI_MASTER_DRIVER_IN_RAM="true"
 # ESP_HAL_CONFIG_INSTRUCTION_CACHE_SIZE="16KB"
 
 [build]

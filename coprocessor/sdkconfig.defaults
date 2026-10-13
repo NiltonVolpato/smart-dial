@@ -21,3 +21,6 @@ CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE=4096
 # Debug logs are built in but off: raise a tag at runtime with the web
 # server's /api/log (e.g. heap: heap_log.h).
 CONFIG_LOG_MAXIMUM_LEVEL_DEBUG=y
+# 1 ms ticks: timeouts under 10 ms don't round to 0, and tether's retransmit
+# timer fires within 1 ms of its deadline instead of 10.
+CONFIG_FREERTOS_HZ=1000

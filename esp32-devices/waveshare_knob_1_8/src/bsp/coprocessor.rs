@@ -20,9 +20,10 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 use bbqueue::nicknames::Churrasco;
 use coprocessor::proto::SystemEventKind;
 use coprocessor::{proto, system, wifi};
-use defmt::{error, info, warn};
+use defmt::{debug, error, info, warn};
+use embassy_futures::select::{Either, select};
 use embassy_sync::waitqueue::AtomicWaker;
-use embassy_time::Timer;
+use embassy_time::{Duration, Timer};
 use embedded_io_async::{ErrorType, Read, Write};
 use esp_hal::interrupt::Priority;
 use esp_hal::peripherals::{GPIO38, GPIO48, UART1};
@@ -32,12 +33,19 @@ use tether_core::link::LinkConfig;
 use tether_embassy::run_client;
 
 const RX_RING_BUFFER_SIZE: usize = 2048;
-const TX_RING_BUFFER_SIZE: usize = 2048;
+const TX_RING_BUFFER_SIZE: usize = 1024;
 static RX_QUEUE: Churrasco<RX_RING_BUFFER_SIZE> = Churrasco::new();
 static TX_QUEUE: Churrasco<TX_RING_BUFFER_SIZE> = Churrasco::new();
 static RX_WAKER: AtomicWaker = AtomicWaker::new();
 static TX_WAKER: AtomicWaker = AtomicWaker::new();
 static DROPPED_BYTES: AtomicUsize = AtomicUsize::new(0);
+/// Hardware RX FIFO overflows: the ISR ran too late, and bytes were lost.
+static FIFO_OVERFLOWS: AtomicUsize = AtomicUsize::new(0);
+/// Bytes in `RX_QUEUE`, and the most there have been: the ISR adds what it
+/// commits, `RingBufferRx` subtracts what it releases. A write grant from a task
+/// to measure the space would make the ISR's own grant fail.
+static RX_QUEUED: AtomicUsize = AtomicUsize::new(0);
+static RX_QUEUED_PEAK: AtomicUsize = AtomicUsize::new(0);
 
 struct RingBufferRx;
 
@@ -51,22 +59,22 @@ impl Read for RingBufferRx {
             return Ok(0);
         }
         let consumer = RX_QUEUE.stream_consumer();
+        let take = |buf: &mut [u8]| {
+            let grant = consumer.read().ok()?;
+            let to_copy = buf.len().min(grant.len());
+            buf[..to_copy].copy_from_slice(&grant[..to_copy]);
+            grant.release(to_copy);
+            RX_QUEUED.fetch_sub(to_copy, Ordering::Relaxed);
+            Some(to_copy)
+        };
         core::future::poll_fn(|cx| {
-            if let Ok(grant) = consumer.read() {
-                let to_copy = buf.len().min(grant.len());
-                buf[..to_copy].copy_from_slice(&grant[..to_copy]);
-                grant.release(to_copy);
-                core::task::Poll::Ready(Ok(to_copy))
-            } else {
-                RX_WAKER.register(cx.waker());
-                if let Ok(grant) = consumer.read() {
-                    let to_copy = buf.len().min(grant.len());
-                    buf[..to_copy].copy_from_slice(&grant[..to_copy]);
-                    grant.release(to_copy);
-                    core::task::Poll::Ready(Ok(to_copy))
-                } else {
-                    core::task::Poll::Pending
-                }
+            if let Some(n) = take(buf) {
+                return core::task::Poll::Ready(Ok(n));
+            }
+            RX_WAKER.register(cx.waker());
+            match take(buf) {
+                Some(n) => core::task::Poll::Ready(Ok(n)),
+                None => core::task::Poll::Pending,
             }
         })
         .await
@@ -82,7 +90,8 @@ impl Read for RingBufferRx {
 /// - `int_raw` / `int_st`: read pending interrupt flags.
 /// - `int_ena`: interrupt mask — `set_bit()` enables, `clear_bit()` disables.
 /// - `int_clr`: write 1 to a bit to acknowledge (clear) the matching flag.
-#[esp_hal::handler(priority = Priority::Priority2)]
+#[esp_hal::ram]
+#[esp_hal::handler(priority = Priority::Priority3)]
 fn uart1_isr() {
     let uart = unsafe { &*UART1::ptr() };
     let raw = uart.int_raw().read();
@@ -100,6 +109,8 @@ fn uart1_isr() {
                     *slot = uart.fifo().read().rxfifo_rd_byte().bits();
                 }
                 grant.commit(count);
+                let queued = RX_QUEUED.fetch_add(count, Ordering::Relaxed) + count;
+                RX_QUEUED_PEAK.fetch_max(queued, Ordering::Relaxed);
                 RX_WAKER.wake();
             } else {
                 // Drop overflow bytes from hardware FIFO so FIFO doesn't lock up
@@ -111,6 +122,16 @@ fn uart1_isr() {
         }
 
         let overflow = uart.int_raw().read().rxfifo_ovf().bit_is_set();
+        if overflow {
+            FIFO_OVERFLOWS.fetch_add(1, Ordering::Relaxed);
+            // As esp-hal and ESP-IDF do: after an overflow the FIFO can't be
+            // trusted: without a reset, every frame after it arrived corrupted.
+            uart.conf0().modify(|_, w| w.rxfifo_rst().set_bit());
+            uart.conf0().modify(|_, w| w.rxfifo_rst().clear_bit());
+            // The S3 latches conf changes through `id.reg_update`.
+            uart.id().modify(|_, w| w.reg_update().set_bit());
+            while uart.id().read().reg_update().bit_is_set() {}
+        }
         // Acknowledge the RX interrupts we handled.
         uart.int_clr().write(|w| {
             if overflow {
@@ -215,6 +236,9 @@ impl Write for RingBufferTx {
     }
 }
 
+/// The UART's rate, shared with the co-processor through the schema.
+const BAUD_RATE: u32 = proto::Limits::BaudRate.0;
+
 /// Shared client transport type for the co-processor RPC link.
 type CoprocessorTransport = alloc::rc::Rc<SharedClient>;
 pub(super) type WifiClient = wifi::Client<CoprocessorTransport>;
@@ -223,8 +247,8 @@ pub(super) type SystemClient = system::Client<CoprocessorTransport>;
 /// Creates a new shared Tether RPC client instance for the onboard co-processor.
 pub fn create_shared_client(boot_id: u32) -> CoprocessorTransport {
     let link_config = LinkConfig {
-        baud_rate: 921_600,
-        max_frame: coprocessor::proto::Limits::MaxFrame.0 as usize,
+        baud_rate: BAUD_RATE,
+        max_frame: proto::Limits::MaxFrame.0 as usize,
         ..Default::default()
     };
     alloc::rc::Rc::new(SharedClient::new(Client::new(boot_id, link_config)))
@@ -237,11 +261,14 @@ pub async fn coprocessor_task(
     rx_pin: GPIO48<'static>,
     client: CoprocessorTransport,
 ) {
-    info!("[COPROCESSOR] Initializing UART1 at 921600 baud with Churrasco BBQueue ISR...");
+    info!(
+        "[COPROCESSOR] Initializing UART1 at {} baud with Churrasco BBQueue ISR...",
+        BAUD_RATE
+    );
 
     let uart_config = Config::default()
-        .with_baudrate(921_600)
-        .with_rx(RxConfig::default().with_fifo_full_threshold(96))
+        .with_baudrate(BAUD_RATE)
+        .with_rx(RxConfig::default().with_fifo_full_threshold(64))
         .with_tx(TxConfig::default().with_fifo_empty_threshold(32));
     let mut uart = match Uart::new(uart, uart_config) {
         Ok(u) => u.with_tx(tx_pin).with_rx(rx_pin),
@@ -254,7 +281,12 @@ pub async fn coprocessor_task(
     uart.set_interrupt_handler(uart1_isr);
     uart.listen(UartInterrupt::RxFifoFull | UartInterrupt::RxTimeout);
 
-    match run_client(&client, RingBufferRx, RingBufferTx).await {
+    let link = run_client(&client, RingBufferRx, RingBufferTx);
+    let result = match select(link, log_link_stats_every(&client, LINK_STATS_INTERVAL)).await {
+        Either::First(result) => result,
+    };
+    log_link_stats(&client);
+    match result {
         Ok(state) => {
             warn!("[COPROCESSOR] Link ended: {:?}, rebooting S3...", defmt::Debug2Format(&state))
         }
@@ -264,6 +296,33 @@ pub async fn coprocessor_task(
     }
 
     esp_hal::system::software_reset();
+}
+
+/// How often the link's health is logged, like the co-processor's heartbeat.
+const LINK_STATS_INTERVAL: Duration = Duration::from_secs(10);
+
+async fn log_link_stats_every(client: &SharedClient, interval: Duration) -> ! {
+    loop {
+        Timer::after(interval).await;
+        log_link_stats(client);
+    }
+}
+
+fn log_link_stats(client: &SharedClient) {
+    let link = client.link_stats();
+    debug!(
+        "[COPROCESSOR] link: frames tx={} rx={}, retransmits={}, crc errors={}, cobs errors={}; uart: fifo overflows={}, dropped={}B, queued={}B (peak {}B of {}B)",
+        link.frames_tx,
+        link.frames_rx,
+        link.retransmits,
+        link.crc_errors,
+        link.cobs_errors,
+        FIFO_OVERFLOWS.load(Ordering::Relaxed),
+        DROPPED_BYTES.load(Ordering::Relaxed),
+        RX_QUEUED.load(Ordering::Relaxed),
+        RX_QUEUED_PEAK.load(Ordering::Relaxed),
+        RX_RING_BUFFER_SIZE,
+    );
 }
 
 /// Follows the co-processor's system events: Wi-Fi state for the system menu,
