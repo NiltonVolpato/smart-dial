@@ -54,7 +54,8 @@ Connection: close
 
  private:
   void start() override {
-    http_.send(speaker_, request_.bytes(), Callback(this, &Unsubscribe::done));
+    http_.send(speaker_, request_.bytes(),
+               tether::Callback(this, &Unsubscribe::done));
   }
 
   void done() {
@@ -141,7 +142,7 @@ GenaSubscription::~GenaSubscription() {
   }
 }
 
-void GenaSubscription::refresh(Callback done) {
+void GenaSubscription::refresh(tether::Callback done) {
   done_ = done;
   send(subscribed() ? Step::Renew : Step::Subscribe);
 }
@@ -184,7 +185,7 @@ Connection: close
                     kRequestedSeconds);
   }
   http_.send(speaker_, request_.bytes(),
-             Callback(this, &GenaSubscription::sent), this);
+             tether::Callback(this, &GenaSubscription::sent), this);
 }
 
 void GenaSubscription::on_header(std::string_view name,
@@ -239,7 +240,7 @@ void GenaSubscription::sent() {
   }
   log_heap(step_ == Step::Subscribe ? "GENA subscribe done"
                                     : "GENA renew done");
-  Callback done = std::exchange(done_, Callback{});
+  tether::Callback done = std::exchange(done_, tether::Callback{});
   done();  // Last: it may destroy this subscription.
 }
 

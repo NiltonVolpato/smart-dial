@@ -12,7 +12,8 @@
 #include <string>
 #include <string_view>
 
-#include "async/callback.h"
+#include "tether/callback.h"
+
 #include "async/reactor.h"
 #include "net/connection_permits.h"
 #include "net/ipv4.h"
@@ -93,7 +94,7 @@ class HttpClient {
   /// inside send(), and last, so it may destroy the client or start the next
   /// exchange; it reads the outcome from result().
   void send(const Endpoint& endpoint, std::span<const char> request,
-            Callback done, HttpResponseSink* sink = nullptr);
+            tether::Callback done, HttpResponseSink* sink = nullptr);
 
   /// The last exchange's outcome, once its `done` ran.
   [[nodiscard]] const HttpResult& result() const { return result_; }
@@ -136,7 +137,9 @@ class HttpClient {
   void complete(HttpResult result);
   void release();
 
-  Callback callback(void (HttpClient::*method)()) { return {this, method}; }
+  tether::Callback callback(void (HttpClient::*method)()) {
+    return {this, method};
+  }
 
   Reactor& reactor_;
   ConnectionPermits& permits_;
@@ -147,7 +150,7 @@ class HttpClient {
   Reactor::TimerId timer_ = 0;
   Reactor::Clock::time_point timer_at_;  // When timer_ fires.
   Reactor::Clock::time_point deadline_;
-  Callback done_;
+  tether::Callback done_;
   HttpResponseSink* sink_ = nullptr;
   // Chunked transfer coding: where in it the body is.
   enum class Chunked : uint8_t { No, Size, Extension, Data, DataEnd, Done };

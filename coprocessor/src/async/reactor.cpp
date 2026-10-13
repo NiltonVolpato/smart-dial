@@ -84,7 +84,7 @@ Reactor::~Reactor() {
 
 void Reactor::start(BaseHandler* handler) {
   log_heap("Handler created");
-  post(Callback(handler, &BaseHandler::start));
+  post(tether::Callback(handler, &BaseHandler::start));
 }
 
 void Reactor::stop() {
@@ -95,7 +95,7 @@ void Reactor::stop() {
   wake();
 }
 
-void Reactor::post(Callback callback) {
+void Reactor::post(tether::Callback callback) {
   bool was_empty = false;
   {
     std::scoped_lock lock(mutex_);
@@ -113,7 +113,7 @@ void Reactor::post(Callback callback) {
   }
 }
 
-bool Reactor::pop(Callback* callback) {
+bool Reactor::pop(tether::Callback* callback) {
   std::scoped_lock lock(mutex_);
   if (inbox_size_ == 0) {
     return false;
@@ -206,13 +206,14 @@ void Reactor::run_inbox() {
   }
   // Only what was there when the iteration began; the lock is released while
   // each callback runs, so other tasks never wait on it.
-  Callback callback;
+  tether::Callback callback;
   for (std::size_t i = 0; i < count && pop(&callback); ++i) {
     callback();
   }
 }
 
-Reactor::TimerId Reactor::after(Clock::duration delay, Callback callback) {
+Reactor::TimerId Reactor::after(Clock::duration delay,
+                                tether::Callback callback) {
   if (free_timers_.empty()) {
     ESP_LOGE(TAG, "Too many timers (%u)",
              static_cast<unsigned>(timers_.size()));
@@ -307,11 +308,11 @@ void Reactor::remove_timer(std::size_t slot) {
   free_timers_.push_back(slot);
 }
 
-void Reactor::when_readable(int fd, Callback callback) {
+void Reactor::when_readable(int fd, tether::Callback callback) {
   watch_slot(fd).readable = callback;
 }
 
-void Reactor::when_writable(int fd, Callback callback) {
+void Reactor::when_writable(int fd, tether::Callback callback) {
   watch_slot(fd).writable = callback;
 }
 
@@ -374,11 +375,11 @@ void Reactor::dispatch_fds(const fd_set& readable, const fd_set& writable) {
       if (fd < 0 || !FD_ISSET(fd, want_read ? &readable : &writable)) {
         continue;
       }
-      Callback& slot = want_read ? watch.readable : watch.writable;
+      tether::Callback& slot = want_read ? watch.readable : watch.writable;
       if (!slot) {
         continue;
       }
-      Callback callback = std::exchange(slot, Callback{});
+      tether::Callback callback = std::exchange(slot, tether::Callback{});
       if (!watch.readable && !watch.writable) {
         watch = {};
       }
@@ -400,7 +401,7 @@ void Reactor::run_timers() {
     if (timer.deadline > now || is_new) {
       return;
     }
-    Callback callback = timer.callback;
+    tether::Callback callback = timer.callback;
     remove_timer(slot);
     callback();
   }

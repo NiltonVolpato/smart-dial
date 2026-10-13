@@ -11,7 +11,7 @@
 #include <mutex>
 #include <vector>
 
-#include "async/callback.h"
+#include "tether/callback.h"
 
 namespace coprocessor {
 
@@ -53,7 +53,7 @@ class Reactor {
   void start(BaseHandler* handler);
   /// Runs `callback` on the reactor, in posting order. It can't be taken
   /// back: its object must live until it runs.
-  void post(Callback callback);
+  void post(tether::Callback callback);
   /// Makes run() return after its current iteration.
   void stop();
 
@@ -66,15 +66,15 @@ class Reactor {
   void run_once(Clock::duration max_wait);
 
   /// Runs `callback` once, after `delay`.
-  TimerId after(Clock::duration delay, Callback callback);
+  TimerId after(Clock::duration delay, tether::Callback callback);
   /// No-op for a timer that already fired or was cancelled.
   void cancel_timer(TimerId id);
 
   /// One-shot: runs `callback` once `fd` is readable, at EOF or in error.
-  void when_readable(int fd, Callback callback);
+  void when_readable(int fd, tether::Callback callback);
   /// One-shot: runs `callback` once `fd` is writable or in error (e.g. a
   /// non-blocking connect finished).
-  void when_writable(int fd, Callback callback);
+  void when_writable(int fd, tether::Callback callback);
   /// Drops `fd`'s pending callbacks. Call before closing it. A watch may still
   /// fire spuriously for a reused fd number, so I/O must tolerate EAGAIN.
   void forget(int fd);
@@ -82,18 +82,18 @@ class Reactor {
  private:
   struct Watch {
     int fd = -1;  // -1: a free slot.
-    Callback readable;
-    Callback writable;
+    tether::Callback readable;
+    tether::Callback writable;
   };
   struct Timer {
     Clock::time_point deadline;
     TimerId id = 0;              // 0: a free slot.
     uint32_t sequence = 0;       // Breaks deadline ties in arming order.
     std::size_t heap_index = 0;  // Where heap_ refers to this slot.
-    Callback callback;
+    tether::Callback callback;
   };
 
-  bool pop(Callback* callback);
+  bool pop(tether::Callback* callback);
   void run_inbox();
   void wake();
   void drain_wake();
@@ -119,10 +119,10 @@ class Reactor {
   // Handed over and not run yet, in order: a ring allocated once, at
   // construction. Each iteration runs only what was there when it began, so
   // work posting more work can't starve the loop.
-  std::vector<Callback> inbox_;  // Guarded by mutex_.
-  std::size_t inbox_head_ = 0;   // Guarded by mutex_.
-  std::size_t inbox_size_ = 0;   // Guarded by mutex_.
-  bool stopped_ = false;         // Guarded by mutex_.
+  std::vector<tether::Callback> inbox_;  // Guarded by mutex_.
+  std::size_t inbox_head_ = 0;           // Guarded by mutex_.
+  std::size_t inbox_size_ = 0;           // Guarded by mutex_.
+  bool stopped_ = false;                 // Guarded by mutex_.
 
   // Reactor task only from here on.
 

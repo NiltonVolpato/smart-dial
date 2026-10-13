@@ -11,7 +11,8 @@
 #include <thread>
 #include <vector>
 
-#include "async/callback.h"
+#include "tether/callback.h"
+
 #include "async/reactor.h"
 
 namespace coprocessor {
@@ -40,7 +41,7 @@ struct Recorder {
   std::vector<int> log;
   void one() { log.push_back(1); }
   void two() { log.push_back(2); }
-  Callback callback(void (Recorder::*method)()) { return {this, method}; }
+  tether::Callback callback(void (Recorder::*method)()) { return {this, method}; }
 };
 
 TEST(ReactorTest, PostedCallbacksRunInOrder) {

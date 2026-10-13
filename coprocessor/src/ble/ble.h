@@ -10,8 +10,7 @@
 #include "host/ble_gap.h"
 #include "host/ble_gatt.h"
 #include "nimble/nimble_npl.h"
-
-#include "async/callback.h"
+#include "tether/callback.h"
 
 namespace coprocessor {
 
@@ -82,7 +81,7 @@ const char* ble_device_name();
 /// A one-shot timer whose callback runs on the host task. Host task.
 class BleTimer {
  public:
-  explicit BleTimer(Callback callback);
+  explicit BleTimer(tether::Callback callback);
   ~BleTimer();
   BleTimer(const BleTimer&) = delete;
   BleTimer& operator=(const BleTimer&) = delete;
@@ -95,7 +94,7 @@ class BleTimer {
   static void fire(ble_npl_event* event);
 
   ble_npl_callout callout_{};
-  Callback callback_;
+  tether::Callback callback_;
 };
 
 }  // namespace coprocessor

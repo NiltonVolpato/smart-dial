@@ -237,7 +237,7 @@ int ble_gatt_access(uint16_t conn_handle, uint16_t attr_handle,
 
 const char* ble_device_name() { return ble_svc_gap_device_name(); }
 
-BleTimer::BleTimer(Callback callback) : callback_(callback) {
+BleTimer::BleTimer(tether::Callback callback) : callback_(callback) {
   ble_npl_callout_init(&callout_, nimble_port_get_dflt_eventq(), &fire, this);
 }
 

@@ -4,14 +4,13 @@
 #pragma once
 
 #include <atomic>
-#include <chrono>
 #include <expected>
 #include <optional>
 #include <utility>
 
+#include "tether/callback.h"
 #include "tether/typed.h"
 
-#include "async/callback.h"
 #include "async/handler.h"
 #include "async/reactor.h"
 #include "log.h"
@@ -21,17 +20,43 @@ namespace coprocessor {
 
 /// A handler feeding one stream: it sends items until it's done, or a send
 /// finds the stream Closed (the client cancelled), then finishes.
+///
+/// A send that finds no room (no_room()) is retried in ready(), which runs
+/// once there may be: tether calls back when an ack frees its send queue or
+/// the client grants credit. It also calls back when the client cancels (or
+/// the link goes down): then ready() if a send was waiting, else on_closed().
 template <class Item>
 class StreamHandler : public BaseHandler {
  protected:
+  /// On any task (see BaseHandler), but while the call is open, i.e. in its
+  /// dispatch: a cancel before on_ready() would go unnoticed.
   StreamHandler(Reactor& reactor, tether::Sink<Item> sink)
-      : BaseHandler(reactor), sink_(sink) {}
+      : BaseHandler(reactor), sink_(sink) {
+    sink_.on_ready(tether::Callback(this, &StreamHandler::post_ready));
+  }
 
-  /// One item. On Closed, finish; on QueueFull/NoCredit, retry later.
+  /// Whether a send failed for want of room, to retry in ready(): in the link
+  /// (QueueFull) or with the client (NoCredit).
+  [[nodiscard]] static bool no_room(tether::CallError error) {
+    return error == tether::CallError::QueueFull ||
+           error == tether::CallError::NoCredit;
+  }
+
+  /// One item. On Closed, finish; on no_room(), ready() follows.
   template <class Build>
   std::expected<void, tether::CallError> send(Build&& build) {
-    return sink_.send(std::forward<Build>(build));
+    auto result = sink_.send(std::forward<Build>(build));
+    waiting_ = !result && no_room(result.error());
+    return result;
   }
+
+  /// Reactor: after a send found no room, there may be some now, or the
+  /// stream closed: send again, and its result tells which.
+  virtual void ready() = 0;
+
+  /// Reactor: the client cancelled while no send was waiting; closed() is
+  /// true. By default nothing: the next send finds Closed.
+  virtual void on_closed() {}
 
   /// Whether the client is gone: once true, stays true.
   [[nodiscard]] bool closed() const { return sink_.closed(); }
@@ -47,8 +72,40 @@ class StreamHandler : public BaseHandler {
     finish();
   }
 
+  /// Deletes this handler, now or, if a ready() is on its way to the reactor,
+  /// once it gets there: touch nothing of it afterwards.
+  void finish() {
+    sink_.on_ready({});  // No ready() is handed over after this.
+    if (ready_posted_) {
+      finishing_ = true;
+      return;
+    }
+    BaseHandler::finish();
+  }
+
  private:
+  // Tether's I/O task, holding the server's lock: hands ready() over.
+  void post_ready() {
+    if (!ready_posted_.exchange(true)) {
+      this->reactor().post(tether::Callback(this, &StreamHandler::run_ready));
+    }
+  }
+
+  void run_ready() {
+    ready_posted_ = false;
+    if (finishing_) {
+      BaseHandler::finish();
+    } else if (std::exchange(waiting_, false)) {
+      ready();  // Not if a send went through meanwhile.
+    } else if (closed()) {
+      on_closed();
+    }
+  }
+
   tether::Sink<Item> sink_;
+  std::atomic<bool> ready_posted_{false};
+  bool finishing_ = false;
+  bool waiting_ = false;  // The last send found no room.
 };
 
 /// A stream fed by GENA NOTIFYs. They're parsed inline on the web server's
@@ -70,21 +127,13 @@ class NotifiedStreamHandler : public StreamHandler<Item>,
   /// NOTIFYs arrive before it does.
   void request_flush() {
     if (!flush_pending_.exchange(true)) {
-      this->reactor().post(Callback(this, &NotifiedStreamHandler::run_flush));
+      this->reactor().post(
+          tether::Callback(this, &NotifiedStreamHandler::run_flush));
     }
   }
 
   /// Reactor: sends what NOTIFYs brought.
   virtual void flush() = 0;
-
-  /// Reactor: checks every kClosedCheck whether the client cancelled, and
-  /// stops then. Its subscriptions and clients would otherwise wait for the
-  /// next send to find out, and a quiet speaker may not NOTIFY for long.
-  /// Call from start().
-  void stop_when_closed() {
-    closed_timer_ = this->reactor().after(
-        kClosedCheck, Callback(this, &NotifiedStreamHandler::check_closed));
-  }
 
   /// Reactor: stops NOTIFYs, then ends the stream with `status` (if the
   /// client is still there) and finishes. Nothing of this handler should
@@ -94,26 +143,18 @@ class NotifiedStreamHandler : public StreamHandler<Item>,
       return;
     }
     stopping_ = true;
-    this->reactor().cancel_timer(closed_timer_);
     status_ = status;
     registry_.remove(this);
-    this->reactor().post(Callback(this, &NotifiedStreamHandler::finish_now));
+    this->reactor().post(
+        tether::Callback(this, &NotifiedStreamHandler::finish_now));
   }
 
   [[nodiscard]] bool stopping() const { return stopping_; }
 
  private:
-  // 10 ticks of FreeRTOS (CONFIG_FREERTOS_HZ=100): a flag read each time.
-  static constexpr std::chrono::milliseconds kClosedCheck{100};
-
-  void check_closed() {
-    closed_timer_ = 0;
-    if (this->closed()) {
-      stop(std::nullopt);
-    } else {
-      stop_when_closed();
-    }
-  }
+  // Subscriptions and clients go at once: a quiet speaker may not NOTIFY for
+  // long, so the next send could be far off.
+  void on_closed() override { stop(std::nullopt); }
 
   void run_flush() {
     flush_pending_ = false;
@@ -134,7 +175,6 @@ class NotifiedStreamHandler : public StreamHandler<Item>,
   std::atomic<bool> flush_pending_{false};
   bool stopping_ = false;
   std::optional<tether::WireStatus> status_;
-  Reactor::TimerId closed_timer_ = 0;
 };
 
 }  // namespace coprocessor

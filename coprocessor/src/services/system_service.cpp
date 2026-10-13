@@ -6,7 +6,7 @@
 #include <sys/time.h>
 
 #include <bit>
-#include <chrono>
+#include <optional>
 #include <utility>
 
 #include "esp_log.h"
@@ -30,9 +30,6 @@ using CoprocessorProto::WifiState;
 using tether::CallError;
 
 constexpr const char* TAG = "system_svc";
-
-// How long to wait before sending again, when the stream had no room.
-constexpr std::chrono::milliseconds kSendRetry{50};
 
 const char* name(WifiState state) {
   switch (state) {
@@ -158,7 +155,7 @@ void SystemServiceHandler::watch(
 
 void SystemServiceHandler::request_flush() {
   if (!flush_posted_.exchange(true)) {
-    reactor_.post(Callback(this, &SystemServiceHandler::run_flush));
+    reactor_.post(tether::Callback(this, &SystemServiceHandler::run_flush));
   }
 }
 
@@ -167,28 +164,31 @@ void SystemServiceHandler::run_flush() {
   flush();
 }
 
-void SystemServiceHandler::run_retry() {
-  retry_timer_ = 0;
-  flush();
-}
-
 void SystemServiceHandler::flush() {
   Wifi wifi;
   ProvisioningState provisioning{};
+  std::optional<tether::Sink<SystemEvent>> new_sink;
   {
     std::scoped_lock lock(mutex_);
-    if (new_sink_) {
-      // One watcher: the newest. Ending fails as Closed if the old one is
-      // gone already, or as QueueFull: then its client times out.
-      (void)sink_.end(tether::WireStatus::ABORTED);
-      sink_ = *new_sink_;
-      new_sink_.reset();
+    new_sink = std::exchange(new_sink_, std::nullopt);
+    if (new_sink) {
       unsent_ = kWifi | kProvisioning | (time_synced_ ? kTime : 0);
     }
     unsent_ |= changed_;
     changed_ = 0;
     wifi = wifi_;
     provisioning = provisioning_;
+  }
+  // Out of mutex_: the sink takes the server's lock, which watch() holds
+  // while it takes mutex_.
+  if (new_sink) {
+    // One watcher: the newest. Ending fails as Closed if the old one is gone
+    // already, or as QueueFull: then its client times out.
+    (void)sink_.end(tether::WireStatus::ABORTED);
+    sink_.on_ready({});
+    sink_ = *new_sink;
+    sink_.on_ready(
+        tether::Callback(this, &SystemServiceHandler::request_flush));
   }
 
   while (unsent_ != 0) {
@@ -225,11 +225,7 @@ void SystemServiceHandler::flush() {
       switch (result.error()) {
         case CallError::QueueFull:
         case CallError::NoCredit:
-          if (retry_timer_ == 0) {
-            retry_timer_ = reactor_.after(
-                kSendRetry, Callback(this, &SystemServiceHandler::run_retry));
-          }
-          return;
+          return;  // on_ready: request_flush().
         case CallError::Closed:
           // Nobody's watching: the next Watch gets every kind anyway.
           unsent_ = 0;

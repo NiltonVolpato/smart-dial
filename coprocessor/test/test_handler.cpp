@@ -10,7 +10,8 @@
 #include <string>
 #include <vector>
 
-#include "async/callback.h"
+#include "tether/callback.h"
+
 #include "async/handler.h"
 #include "async/reactor.h"
 
@@ -40,13 +41,13 @@ class Probe final : public BaseHandler {
         finish();
         return;
       case Wait::Timer:
-        reactor().after(milliseconds(10), Callback(this, &Probe::woke));
+        reactor().after(milliseconds(10), tether::Callback(this, &Probe::woke));
         return;
       case Wait::Fd:
-        reactor().when_readable(fd_, Callback(this, &Probe::woke));
+        reactor().when_readable(fd_, tether::Callback(this, &Probe::woke));
         return;
       case Wait::Inbox:
-        reactor().post(Callback(this, &Probe::woke));
+        reactor().post(tether::Callback(this, &Probe::woke));
         return;
     }
   }

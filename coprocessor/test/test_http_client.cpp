@@ -17,7 +17,8 @@
 #include <utility>
 #include <vector>
 
-#include "async/callback.h"
+#include "tether/callback.h"
+
 #include "async/reactor.h"
 #include "net/http_client.h"
 #include "net/http_request.h"
@@ -110,7 +111,7 @@ class Exchange final : public HttpResponseSink {
   [[nodiscard]] bool finished() const { return result.has_value(); }
 
   void send(const Endpoint& endpoint, std::string_view request) {
-    client_.send(endpoint, request, Callback(this, &Exchange::done), this);
+    client_.send(endpoint, request, tether::Callback(this, &Exchange::done), this);
   }
 
   std::optional<HttpResult> result;
@@ -287,7 +288,7 @@ class PausingExchange final : public HttpResponseSink {
         client_(reactor, plenty_of_permits(), {.idle = milliseconds(100)}) {}
 
   void send(const Endpoint& endpoint, std::string_view request) {
-    client_.send(endpoint, request, Callback(this, &PausingExchange::done),
+    client_.send(endpoint, request, tether::Callback(this, &PausingExchange::done),
                  this);
   }
 
@@ -306,7 +307,7 @@ class PausingExchange final : public HttpResponseSink {
       paused_ = true;
       client_.pause();
       timer_ = reactor_.after(milliseconds(300),
-                              Callback(this, &PausingExchange::resume));
+                              tether::Callback(this, &PausingExchange::resume));
     }
     return true;
   }
@@ -429,7 +430,7 @@ class ClientOwner {
 
   void send(const Endpoint& endpoint, bool destroy_in_done) {
     destroy_in_done_ = destroy_in_done;
-    client->send(endpoint, kRequest, Callback(this, &ClientOwner::done));
+    client->send(endpoint, kRequest, tether::Callback(this, &ClientOwner::done));
   }
 
   std::unique_ptr<HttpClient> client;

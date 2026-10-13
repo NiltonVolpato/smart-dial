@@ -31,20 +31,12 @@ using CoprocessorProto::GroupT;
 using CoprocessorProto::StateUpdate;
 using CoprocessorProto::StateUpdateT;
 using CoprocessorProto::TopologyUpdate;
-using std::chrono::milliseconds;
 using std::chrono::seconds;
 using tether::CallError;
 using tether::WireStatus;
 
-// How long to wait before sending again, when the stream had no room.
-constexpr milliseconds kSendRetry{50};
 // How long to wait before renewing again, after a failed renewal.
 constexpr seconds kRenewRetry{30};
-
-// A send that didn't go through: whether to retry (no room), or stop.
-bool should_retry(CallError error) {
-  return error == CallError::QueueFull || error == CallError::NoCredit;
-}
 
 // --- Topology --------------------------------------------------------------
 
@@ -62,15 +54,12 @@ class WatchTopologyHandler final
                       {.ip = seed, .port = kSonosPort},
                       "/ZoneGroupTopology/Event") {}
 
-  ~WatchTopologyHandler() override {
-    reactor().cancel_timer(renew_timer_);
-    reactor().cancel_timer(send_timer_);
-  }
+  ~WatchTopologyHandler() override { reactor().cancel_timer(renew_timer_); }
 
  private:
   void start() override {
-    stop_when_closed();
-    subscription_.refresh(Callback(this, &WatchTopologyHandler::refreshed));
+    subscription_.refresh(
+        tether::Callback(this, &WatchTopologyHandler::refreshed));
   }
 
   void refreshed() {
@@ -80,13 +69,13 @@ class WatchTopologyHandler final
         return;
       }
       renew_timer_ = reactor().after(
-          kRenewRetry, Callback(this, &WatchTopologyHandler::renew));
+          kRenewRetry, tether::Callback(this, &WatchTopologyHandler::renew));
       return;
     }
     ever_subscribed_ = true;
     renew_timer_ =
         reactor().after(subscription_.renew_after(),
-                        Callback(this, &WatchTopologyHandler::renew));
+                        tether::Callback(this, &WatchTopologyHandler::renew));
   }
 
   void renew() {
@@ -95,7 +84,8 @@ class WatchTopologyHandler final
       stop(std::nullopt);  // Its destructor unsubscribes.
       return;
     }
-    subscription_.refresh(Callback(this, &WatchTopologyHandler::refreshed));
+    subscription_.refresh(
+        tether::Callback(this, &WatchTopologyHandler::refreshed));
   }
 
   // Web server task.
@@ -133,14 +123,14 @@ class WatchTopologyHandler final
       has_pending_ = false;
     }
     // A newer household replaces one still being sent.
-    reactor().cancel_timer(send_timer_);
     ++sequence_;
     next_ = 0;
     send_groups();
   }
 
+  void ready() override { send_groups(); }
+
   void send_groups() {
-    send_timer_ = 0;
     const auto total = static_cast<uint16_t>(sending_.size());
     if (total == 0) {
       send_one(nullptr, 0, 0);  // No groups: still news.
@@ -166,22 +156,18 @@ class WatchTopologyHandler final
     if (result) {
       return true;
     }
-    if (should_retry(result.error())) {
-      send_timer_ = reactor().after(
-          kSendRetry, Callback(this, &WatchTopologyHandler::send_groups));
-    } else if (result.error() == CallError::Closed) {
+    if (result.error() == CallError::Closed) {
       stop(std::nullopt);
-    } else {
+    } else if (!no_room(result.error())) {
       ESP_LOGE(TAG, "Topology group %u doesn't fit a message: skipped",
                static_cast<unsigned>(index));
       return true;
     }
-    return false;
+    return false;  // Stopped, or ready() sends the rest.
   }
 
   GenaSubscription subscription_;
   Reactor::TimerId renew_timer_ = 0;
-  Reactor::TimerId send_timer_ = 0;
   bool ever_subscribed_ = false;
 
   std::optional<TopologyParser> parser_;  // Web server task only.
@@ -230,16 +216,10 @@ class WatchPlaybackHandler final : public NotifiedStreamHandler<StateUpdate>,
                    "/MediaRenderer/RenderingControl/Event"),
         position_http_(reactor, permits) {}
 
-  ~WatchPlaybackHandler() override {
-    reactor().cancel_timer(renew_timer_);
-    reactor().cancel_timer(send_timer_);
-  }
+  ~WatchPlaybackHandler() override { reactor().cancel_timer(renew_timer_); }
 
  private:
-  void start() override {
-    stop_when_closed();
-    renew();
-  }
+  void start() override { renew(); }
 
   // Both subscriptions, one after the other.
   void renew() {
@@ -248,7 +228,8 @@ class WatchPlaybackHandler final : public NotifiedStreamHandler<StateUpdate>,
       stop(std::nullopt);  // The subscriptions' destructors unsubscribe.
       return;
     }
-    transport_.refresh(Callback(this, &WatchPlaybackHandler::transport_done));
+    transport_.refresh(
+        tether::Callback(this, &WatchPlaybackHandler::transport_done));
   }
 
   void transport_done() {
@@ -256,7 +237,8 @@ class WatchPlaybackHandler final : public NotifiedStreamHandler<StateUpdate>,
       stop(WireStatus::UNAVAILABLE);  // The coordinator doesn't answer.
       return;
     }
-    rendering_.refresh(Callback(this, &WatchPlaybackHandler::rendering_done));
+    rendering_.refresh(
+        tether::Callback(this, &WatchPlaybackHandler::rendering_done));
   }
 
   void rendering_done() {
@@ -265,7 +247,7 @@ class WatchPlaybackHandler final : public NotifiedStreamHandler<StateUpdate>,
     renew_timer_ = reactor().after(
         both ? std::min(transport_.renew_after(), rendering_.renew_after())
              : kRenewRetry,
-        Callback(this, &WatchPlaybackHandler::renew));
+        tether::Callback(this, &WatchPlaybackHandler::renew));
   }
 
   // Web server task: AVTransport's and RenderingControl's NOTIFYs alike.
@@ -316,9 +298,9 @@ class WatchPlaybackHandler final : public NotifiedStreamHandler<StateUpdate>,
     position_parser_.emplace();
     position_request_ = soap_request(coordinator_, kAvTransport,
                                      "GetPositionInfo", InstanceArgs{});
-    position_http_.send(coordinator_, position_request_.bytes(),
-                        Callback(this, &WatchPlaybackHandler::position_known),
-                        this);
+    position_http_.send(
+        coordinator_, position_request_.bytes(),
+        tether::Callback(this, &WatchPlaybackHandler::position_known), this);
   }
 
   // The GetPositionInfo body.
@@ -344,8 +326,9 @@ class WatchPlaybackHandler final : public NotifiedStreamHandler<StateUpdate>,
     send_state();
   }
 
+  void ready() override { send_state(); }
+
   void send_state() {
-    send_timer_ = 0;
     if (!has_outgoing_) {
       return;
     }
@@ -356,12 +339,9 @@ class WatchPlaybackHandler final : public NotifiedStreamHandler<StateUpdate>,
     if (result) {
       outgoing_ = {};
       has_outgoing_ = false;
-    } else if (should_retry(result.error())) {
-      send_timer_ = reactor().after(
-          kSendRetry, Callback(this, &WatchPlaybackHandler::send_state));
     } else if (result.error() == CallError::Closed) {
       stop(std::nullopt);
-    } else {
+    } else if (!no_room(result.error())) {  // Otherwise ready() sends it.
       ESP_LOGE(TAG, "State update doesn't fit a message: dropped");
       outgoing_ = {};
       has_outgoing_ = false;
@@ -372,7 +352,6 @@ class WatchPlaybackHandler final : public NotifiedStreamHandler<StateUpdate>,
   GenaSubscription transport_;
   GenaSubscription rendering_;
   Reactor::TimerId renew_timer_ = 0;
-  Reactor::TimerId send_timer_ = 0;
   bool ever_subscribed_ = false;
 
   std::optional<LastChangeParser> parser_;  // Web server task only.

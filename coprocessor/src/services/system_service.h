@@ -67,12 +67,12 @@ class SystemServiceHandler final : public CoprocessorProto::system::Handler {
   void on_wifi_event(esp_event_base_t base, int32_t id, const void* data);
 
   // Any task: has the reactor run flush(), once however many changes come
-  // before it does.
+  // before it does. Also sink_'s on_ready: a send that found no room may go
+  // through now.
   void request_flush();
 
   // Reactor.
   void run_flush();
-  void run_retry();
   void flush();
 
   Reactor& reactor_;
@@ -93,7 +93,6 @@ class SystemServiceHandler final : public CoprocessorProto::system::Handler {
   // Reactor only.
   tether::Sink<CoprocessorProto::SystemEvent> sink_;  // Closed: no watcher.
   uint8_t unsent_ = 0;                                // Kinds owed to sink_.
-  Reactor::TimerId retry_timer_ = 0;
 };
 
 }  // namespace coprocessor

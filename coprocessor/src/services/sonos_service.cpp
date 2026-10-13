@@ -43,14 +43,6 @@ using std::chrono::milliseconds;
 using tether::CallError;
 using tether::WireStatus;
 
-// How long to wait before sending again, when a stream had no room.
-constexpr milliseconds kSendRetry{50};
-
-// A send that didn't go through: whether to retry (no room), or stop.
-bool should_retry(CallError error) {
-  return error == CallError::QueueFull || error == CallError::NoCredit;
-}
-
 WireStatus to_wire_status(const HttpResult& result) {
   switch (result.error) {
     case HttpError::None:
@@ -94,7 +86,7 @@ class SoapCommandHandler : public UnaryHandler<Empty> {
       return;
     }
     http_.send(endpoint_, request_.bytes(),
-               Callback(this, &SoapCommandHandler::executed));
+               tether::Callback(this, &SoapCommandHandler::executed));
   }
 
   void executed() {
@@ -149,7 +141,7 @@ class ActionHandler final : public SoapCommandHandler, HttpResponseSink {
                               InstanceArgs{});
       parser_.emplace(kTransportState, AppendText{&state_});
       http_.send(endpoint_, request_.bytes(),
-                 Callback(this, &ActionHandler::state_known), this);
+                 tether::Callback(this, &ActionHandler::state_known), this);
     } else {
       run(action_type_);
     }
@@ -298,7 +290,8 @@ class GroupsSummaryHandler final : public StreamHandler<GroupSummary> {
       request_ = soap_request(endpoint_, kAvTransport, action, InstanceArgs{});
       parser_.emplace<xq::XmlParser<XmlQuery, AppendText>>(query,
                                                            AppendText{out});
-      http_.send(endpoint_, request_.bytes(), Callback(this, next), this);
+      http_.send(endpoint_, request_.bytes(), tether::Callback(this, next),
+                 this);
     }
 
     bool on_body(std::string_view chunk, bool last) override {
@@ -369,6 +362,8 @@ class GroupsSummaryHandler final : public StreamHandler<GroupSummary> {
 
   void query_done() { send_group(); }
 
+  void ready() override { send_group(); }
+
   void send_group() {
     auto result = send([&](flatbuffers::FlatBufferBuilder& fbb) {
       return CoprocessorProto::CreateGroupSummaryDirect(
@@ -382,10 +377,7 @@ class GroupsSummaryHandler final : public StreamHandler<GroupSummary> {
     switch (result.error()) {
       case CallError::QueueFull:
       case CallError::NoCredit:
-        // Nothing else runs meanwhile: it can't finish with this pending.
-        reactor().after(kSendRetry,
-                        Callback(this, &GroupsSummaryHandler::send_group));
-        return;
+        return;  // ready() sends it again.
       case CallError::Closed:
         finish();
         return;
@@ -441,7 +433,7 @@ Connection: close
     }
     started_ = Reactor::Clock::now();
     http_.send(endpoint_, request_.bytes(),
-               Callback(this, &AlbumArtHandler::downloaded), this);
+               tether::Callback(this, &AlbumArtHandler::downloaded), this);
   }
 
   // One line per download: what it took, and how often the stream had no
@@ -484,16 +476,13 @@ Connection: close
     }
   }
 
-  void retry_send() {
-    retry_timer_ = 0;
-    after_send(send_ready());
-  }
+  void ready() override { after_send(send_ready()); }
 
   // Outside the download's callbacks: the stream may end here.
   void after_send(bool sendable) {
     if (!sendable) {
       finish();
-    } else if (download_done_ && staged_ == 0 && retry_timer_ == 0) {
+    } else if (download_done_ && staged_ == 0) {
       log_outcome("sent");
       end_and_finish(WireStatus::OK);
     }
@@ -514,16 +503,12 @@ Connection: close
         return CoprocessorProto::CreateAlbumArtChunk(fbb, total, data);
       });
       if (!result) {
-        if (should_retry(result.error())) {
+        if (no_room(result.error())) {
           ++(result.error() == CallError::QueueFull ? queue_full_ : no_credit_);
           if (!paused_since_) {
             paused_since_ = Reactor::Clock::now();
           }
-          http_.pause();
-          if (retry_timer_ == 0) {
-            retry_timer_ = reactor().after(
-                kSendRetry, Callback(this, &AlbumArtHandler::retry_send));
-          }
+          http_.pause();  // Until ready().
           return true;
         }
         gone_ = true;  // Closed, or a chunk that can't fit: a bug.
@@ -555,7 +540,6 @@ Connection: close
   bool first_ = true;
   bool download_done_ = false;
   bool gone_ = false;  // The client cancelled, while downloading.
-  Reactor::TimerId retry_timer_ = 0;
   // For log_outcome().
   Reactor::Clock::time_point started_;
   std::optional<Reactor::Clock::time_point> paused_since_;

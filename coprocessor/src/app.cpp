@@ -84,14 +84,13 @@ struct App {
 
   // First: handlers below keep references to these. Sized from what tether
   // bounds (calls, streams):
-  // - inbox: a start per call and per UNSUBSCRIBE, per stream a flush and a
-  //   finish, and System.Watch's flush;
-  // - timers: one per HttpClient, per stream a renewal, a resend and a
-  //   check for cancellation, and System.Watch's resend.
+  // - inbox: a start per call and per UNSUBSCRIBE, per stream a flush, a
+  //   ready() and a finish, and System.Watch's flush;
+  // - timers: one per HttpClient, and per stream a renewal.
   Reactor reactor{{
-      .inbox = kMaxCalls + kMaxSubscriptions + 2 * kMaxStreams + 1,
+      .inbox = kMaxCalls + kMaxSubscriptions + 3 * kMaxStreams + 1,
       .watches = kMaxConnections,
-      .timers = kMaxHttpClients + 3 * kMaxStreams + 1,
+      .timers = kMaxHttpClients + kMaxStreams,
   }};
   ConnectionPermits connections{kMaxConnections, kMaxHttpClients};
   GenaRegistry gena{kMaxSubscriptions};

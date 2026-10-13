@@ -119,8 +119,8 @@ class ImprovSession final : public BleProfile {
   std::array<ble_gatt_chr_def, 6> characteristics_;
   std::array<ble_gatt_svc_def, 2> services_;
 
-  BleTimer window_{Callback(this, &ImprovSession::on_window_end)};
-  BleTimer grace_{Callback(this, &ImprovSession::on_grace_end)};
+  BleTimer window_{tether::Callback(this, &ImprovSession::on_window_end)};
+  BleTimer grace_{tether::Callback(this, &ImprovSession::on_grace_end)};
   esp_event_handler_instance_t got_ip_handler_ = nullptr;
   esp_event_handler_instance_t gave_up_handler_ = nullptr;
 };

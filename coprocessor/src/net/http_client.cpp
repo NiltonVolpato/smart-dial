@@ -84,7 +84,7 @@ HttpClient::HttpClient(Reactor& reactor, ConnectionPermits& permits,
 HttpClient::~HttpClient() { release(); }
 
 void HttpClient::send(const Endpoint& endpoint, std::span<const char> request,
-                      Callback done, HttpResponseSink* sink) {
+                      tether::Callback done, HttpResponseSink* sink) {
   if (done_) {
     ESP_LOGE(TAG, "send() while an exchange is in progress");
     std::abort();
@@ -485,7 +485,7 @@ void HttpClient::complete(HttpResult result) {
   log_heap("HTTP exchange done");
   result_ = result;
   sink_ = nullptr;
-  Callback done = std::exchange(done_, Callback{});
+  tether::Callback done = std::exchange(done_, tether::Callback{});
   done();  // Last: it may destroy this client.
 }
 

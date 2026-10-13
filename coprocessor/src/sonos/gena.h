@@ -14,7 +14,8 @@
 #include <string_view>
 #include <vector>
 
-#include "async/callback.h"
+#include "tether/callback.h"
+
 #include "async/reactor.h"
 #include "net/connection_permits.h"
 #include "net/http_client.h"
@@ -94,7 +95,7 @@ class GenaSubscription final : public HttpResponseSink {
 
   /// Subscribes, or renews if subscribed (subscribing anew if the speaker
   /// forgot us: HTTP 412). `done` runs once it's over; check subscribed().
-  void refresh(Callback done);
+  void refresh(tether::Callback done);
 
   [[nodiscard]] bool subscribed() const { return !sid().empty(); }
   /// When to renew: half the timeout the speaker granted.
@@ -120,7 +121,7 @@ class GenaSubscription final : public HttpResponseSink {
   HttpClient http_;
   FixedRequest<512> request_;
   Step step_ = Step::Subscribe;
-  Callback done_;
+  tether::Callback done_;
 
   std::array<char, 96> sid_{};  // Empty while not subscribed.
   std::size_t sid_size_ = 0;
