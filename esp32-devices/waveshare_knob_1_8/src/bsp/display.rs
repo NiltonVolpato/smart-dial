@@ -19,13 +19,13 @@ use esp_hal::{Async, dma_tx_buffer};
 use super::board::DisplayPeripherals;
 
 // Native display dimensions.
-pub const DISPLAY_WIDTH: u16 = 360;
-pub const DISPLAY_HEIGHT: u16 = 360;
+const DISPLAY_WIDTH: u16 = 360;
+const DISPLAY_HEIGHT: u16 = 360;
 
 // Rendering dimensions (1:1 native resolution).
-pub const RENDER_WIDTH: u16 = 360;
-pub const RENDER_HEIGHT: u16 = 360;
-pub const RENDER_STRIDE: usize = 360;
+pub(crate) const RENDER_WIDTH: u16 = 360;
+pub(crate) const RENDER_HEIGHT: u16 = 360;
+pub(crate) const RENDER_STRIDE: usize = 360;
 
 const COMMAND_BUFFER_BYTES: usize = 64;
 const FRAMEBUFFER_DMA_DESCRIPTORS_COUNT: usize = 8;
@@ -38,17 +38,17 @@ const CMD_RAMWRC: u32 = 0x3C;
 const CMD_CASET: u8 = 0x2A;
 const CMD_RASET: u8 = 0x2B;
 
-pub use common::{BigEndianRgb565, NativeRgb565};
+use common::BigEndianRgb565;
 
 #[derive(Clone, Copy, Debug)]
-pub struct DirtyRect {
+pub(crate) struct DirtyRect {
     pub x: u16,
     pub y: u16,
     pub width: u16,
     pub height: u16,
 }
 
-pub struct Framebuffer(pub &'static mut [BigEndianRgb565]);
+pub(crate) struct Framebuffer(pub(crate) &'static mut [BigEndianRgb565]);
 unsafe impl Send for Framebuffer {}
 
 impl core::fmt::Debug for Framebuffer {
@@ -57,22 +57,23 @@ impl core::fmt::Debug for Framebuffer {
     }
 }
 
-pub struct FlushJob {
+pub(crate) struct FlushJob {
     pub fb: Framebuffer,
     pub rects: heapless::Vec<DirtyRect, 4>,
     pub render_cycles: u32,
 }
 
-pub enum DisplayCommand {
+pub(crate) enum DisplayCommand {
     Flush(FlushJob),
     SetBrightness(u8),
     DisplayOff,
     DisplayOn,
 }
 
-pub static DISPLAY_COMMAND_CHANNEL: Channel<CriticalSectionRawMutex, DisplayCommand, 2> =
+pub(crate) static DISPLAY_COMMAND_CHANNEL: Channel<CriticalSectionRawMutex, DisplayCommand, 2> =
     Channel::new();
-pub static FLUSH_RETURN_CHANNEL: Channel<CriticalSectionRawMutex, Framebuffer, 2> = Channel::new();
+pub(crate) static FLUSH_RETURN_CHANNEL: Channel<CriticalSectionRawMutex, Framebuffer, 2> =
+    Channel::new();
 
 #[inline(always)]
 fn cycle_count() -> u32 {

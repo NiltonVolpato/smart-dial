@@ -216,9 +216,9 @@ impl Write for RingBufferTx {
 }
 
 /// Shared client transport type for the co-processor RPC link.
-pub type CoprocessorTransport = alloc::rc::Rc<SharedClient>;
-pub type WifiClient = wifi::Client<CoprocessorTransport>;
-pub type SystemClient = system::Client<CoprocessorTransport>;
+type CoprocessorTransport = alloc::rc::Rc<SharedClient>;
+pub(super) type WifiClient = wifi::Client<CoprocessorTransport>;
+pub(super) type SystemClient = system::Client<CoprocessorTransport>;
 
 /// Creates a new shared Tether RPC client instance for the onboard co-processor.
 pub fn create_shared_client(boot_id: u32) -> CoprocessorTransport {

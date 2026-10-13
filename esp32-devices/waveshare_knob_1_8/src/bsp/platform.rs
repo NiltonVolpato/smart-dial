@@ -7,34 +7,36 @@ extern crate alloc;
 use alloc::rc::Rc;
 
 use common::event::ScreenEvent;
-pub use common::{EspPlatform, WindowHolder};
-use common::{FeedbackSink, run_event_loop as run_common_event_loop};
+use common::{
+    BigEndianRgb565, EspPlatform, FeedbackSink, WindowHolder,
+    run_event_loop as run_common_event_loop,
+};
 use slint::PhysicalSize;
 use slint::platform::software_renderer::MinimalSoftwareWindow;
 
 use super::display::{
-    BigEndianRgb565, DISPLAY_COMMAND_CHANNEL, DirtyRect, DisplayCommand, FLUSH_RETURN_CHANNEL,
-    FlushJob, Framebuffer, RENDER_HEIGHT, RENDER_STRIDE, RENDER_WIDTH,
+    DISPLAY_COMMAND_CHANNEL, DirtyRect, DisplayCommand, FLUSH_RETURN_CHANNEL, FlushJob,
+    Framebuffer, RENDER_HEIGHT, RENDER_STRIDE, RENDER_WIDTH,
 };
 use super::haptics;
 
 pub struct WaveshareFeedback(pub Rc<haptics::HapticChannel>);
 impl FeedbackSink for WaveshareFeedback {
     fn on_dial_step_forward(&self) {
-        let _ = self.0.try_send(haptics::Feedback::DialStepForward);
+        let _ = self.0.try_send(app_shell::Feedback::DialStepForward);
     }
     fn on_dial_step_backward(&self) {
-        let _ = self.0.try_send(haptics::Feedback::DialStepBackward);
+        let _ = self.0.try_send(app_shell::Feedback::DialStepBackward);
     }
     fn on_click(&self) {
-        let _ = self.0.try_send(haptics::Feedback::Click);
+        let _ = self.0.try_send(app_shell::Feedback::Click);
     }
     fn on_long_press(&self) {
-        let _ = self.0.try_send(haptics::Feedback::Haptic);
+        let _ = self.0.try_send(app_shell::Feedback::Haptic);
     }
 }
 
-pub fn create_platform() -> (EspPlatform, WindowHolder) {
+pub(crate) fn create_platform() -> (EspPlatform, WindowHolder) {
     EspPlatform::with_config(
         Some(PhysicalSize::new(RENDER_WIDTH as u32, RENDER_HEIGHT as u32)),
         Some(1.0), // Native 1:1 scaling for crisp, unaliased rendering

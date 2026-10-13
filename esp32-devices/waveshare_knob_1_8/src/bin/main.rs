@@ -6,6 +6,7 @@ use alloc::boxed::Box;
 
 use app_launcher::LauncherAppFactory;
 use app_shell::AppShell;
+use common::simd;
 use defmt::info;
 use embassy_executor::Spawner;
 use esp_hal::clock::CpuClock;
@@ -16,7 +17,7 @@ use esp_hal::timer::timg::TimerGroup;
 use panic_rtt_target as _;
 use waveshare_knob_1_8::bsp::{
     Board, Bsp, Core1Peripherals, Sh8601, battery_task, coprocessor_task, create_shared_client,
-    display_task, haptic_task, rotary_task, run_event_loop, simd, system_task, touch_task,
+    display_task, haptic_task, rotary_task, run_event_loop, system_task, touch_task,
 };
 use waveshare_knob_1_8::tasks::{PROFILER_ENABLED, profiler_task, screensaver_task};
 
@@ -147,8 +148,8 @@ async fn main(spawner: Spawner) -> ! {
     )));
     let launcher = LauncherAppFactory::default_apps_with_sonos(sonos_factory);
     let platform = alloc::rc::Rc::new(common::EspAppShellPlatform::new(
-        Some(waveshare_knob_1_8::bsp::rtc::current_timestamp),
-        Some(waveshare_knob_1_8::bsp::rtc::current_zoned),
+        Some(waveshare_knob_1_8::bsp::current_timestamp),
+        Some(waveshare_knob_1_8::bsp::current_zoned),
         Some(feedback_channel.clone()),
     ));
     let shell = AppShell::new(spawner, platform, Box::new(launcher));

@@ -15,7 +15,7 @@ const TIMEZONE: jiff::tz::TimeZone = jiff::tz::get!("America/Los_Angeles");
 static RTC: Mutex<RefCell<Option<Rtc<'static>>>> = Mutex::new(RefCell::new(None));
 
 /// Initializes the hardware RTC peripheral and registers the system time provider.
-pub fn init(lpwr: LPWR<'static>) {
+pub(crate) fn init(lpwr: LPWR<'static>) {
     let rtc = Rtc::new(lpwr);
 
     // Display initial hardware RTC time before network synchronization
@@ -33,7 +33,7 @@ pub fn init(lpwr: LPWR<'static>) {
 }
 
 /// Synchronizes the hardware RTC with UTC epoch seconds and microsecond fraction received over UART.
-pub fn sync_rtc(epoch_seconds: u64, subsec_micros: u32) {
+pub(crate) fn sync_rtc(epoch_seconds: u64, subsec_micros: u32) {
     critical_section::with(|cs| {
         let guard = RTC.borrow(cs);
         if let Some(ref rtc) = *guard.borrow() {

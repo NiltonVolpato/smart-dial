@@ -5,7 +5,7 @@
 
 use alloc::rc::Rc;
 
-pub use app_shell::Feedback;
+use app_shell::Feedback;
 pub use common::FeedbackChannel as HapticChannel;
 use drv2605::Drv2605;
 

@@ -11,18 +11,18 @@ use esp_hal::gpio::Input;
 
 /// Per-channel debounce state machine from Waveshare bidi_switch_knob reference.
 #[derive(Clone, Copy, Debug)]
-pub struct ChannelDebounce {
+struct ChannelDebounce {
     prev_level: bool,
     debounce_cnt: u8,
 }
 
 impl ChannelDebounce {
-    pub const fn new(initial: bool) -> Self {
+    const fn new(initial: bool) -> Self {
         Self { prev_level: initial, debounce_cnt: 0 }
     }
 
     /// Processes level sample every 3ms. Returns true when a debounced transition completes.
-    pub fn process(&mut self, current_level: bool) -> bool {
+    fn process(&mut self, current_level: bool) -> bool {
         let mut triggered = false;
         if !current_level {
             // Level is low (switch closed)
