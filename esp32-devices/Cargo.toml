@@ -59,6 +59,7 @@ rtt-target = { version = "0.6.2", features = ["defmt"] }
 jiff = { version = "0.2.10", default-features = false, features = ["static"] }
 
 app-launcher = { path = "../portable/apps/launcher", default-features = false, features = ["apps"] }
+album-art = { path = "../portable/crates/album-art" }
 app-sonos = { path = "../portable/apps/sonos", default-features = false, features = ["defmt"] }
 app-shell = { path = "../portable/crates/app-shell", default-features = false }
 detent-decoder = { path = "../portable/crates/detent-decoder" }

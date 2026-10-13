@@ -25,6 +25,42 @@ impl Pack for fb::coprocessor_proto::ActionRequestT {
     }
 }
 
+impl Table for fb::coprocessor_proto::AlbumArtChunk<'static> {
+    type View<'a> = fb::coprocessor_proto::AlbumArtChunk<'a>;
+    fn verify(
+        buf: &[u8],
+    ) -> Result<fb::coprocessor_proto::AlbumArtChunk<'_>, flatbuffers::InvalidFlatbuffer> {
+        flatbuffers::root::<fb::coprocessor_proto::AlbumArtChunk>(buf)
+    }
+}
+
+impl Pack for fb::coprocessor_proto::AlbumArtChunkT {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut fbb = flatbuffers::FlatBufferBuilder::new();
+        let root = self.pack(&mut fbb);
+        fbb.finish(root, None);
+        fbb.finished_data().to_vec()
+    }
+}
+
+impl Table for fb::coprocessor_proto::AlbumArtRequest<'static> {
+    type View<'a> = fb::coprocessor_proto::AlbumArtRequest<'a>;
+    fn verify(
+        buf: &[u8],
+    ) -> Result<fb::coprocessor_proto::AlbumArtRequest<'_>, flatbuffers::InvalidFlatbuffer> {
+        flatbuffers::root::<fb::coprocessor_proto::AlbumArtRequest>(buf)
+    }
+}
+
+impl Pack for fb::coprocessor_proto::AlbumArtRequestT {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut fbb = flatbuffers::FlatBufferBuilder::new();
+        let root = self.pack(&mut fbb);
+        fbb.finish(root, None);
+        fbb.finished_data().to_vec()
+    }
+}
+
 impl Table for fb::coprocessor_proto::BatteryStatus<'static> {
     type View<'a> = fb::coprocessor_proto::BatteryStatus<'a>;
     fn verify(
@@ -269,6 +305,7 @@ pub mod coprocessor_proto {
                 Some(tether::MethodInfo { name: "Action", streaming: false }),
                 Some(tether::MethodInfo { name: "SetVolume", streaming: false }),
                 Some(tether::MethodInfo { name: "GetGroupsSummary", streaming: true }),
+                Some(tether::MethodInfo { name: "GetAlbumArt", streaming: true }),
             ],
         }),
     ];
@@ -294,6 +331,8 @@ pub mod coprocessor_proto {
         pub const SET_VOLUME: MethodId = MethodId::new(ID, 3);
         /// `CoprocessorProto.Sonos/GetGroupsSummary`
         pub const GET_GROUPS_SUMMARY: MethodId = MethodId::new(ID, 4);
+        /// `CoprocessorProto.Sonos/GetAlbumArt`
+        pub const GET_ALBUM_ART: MethodId = MethodId::new(ID, 5);
 
         pub struct Client<X>(pub X);
 
@@ -334,6 +373,15 @@ pub mod coprocessor_proto {
             ) -> Channel<X::Channel, fb::coprocessor_proto::GroupSummary<'static>> {
                 Channel::new(self.0.open(GET_GROUPS_SUMMARY, &req.to_bytes(), capacity))
             }
+            /// Streams the image at `uri` on the speaker, then ends; or ends with an
+            /// error (NOT_FOUND, UNAVAILABLE, ...). Only paths on the speaker.
+            pub fn get_album_art(
+                &self,
+                req: &fb::coprocessor_proto::AlbumArtRequestT,
+                capacity: u16,
+            ) -> Channel<X::Channel, fb::coprocessor_proto::AlbumArtChunk<'static>> {
+                Channel::new(self.0.open(GET_ALBUM_ART, &req.to_bytes(), capacity))
+            }
         }
 
         pub trait Handler<S: ServerTypes> {
@@ -364,6 +412,13 @@ pub mod coprocessor_proto {
                 &mut self,
                 sink: Sink<S::Sink, fb::coprocessor_proto::GroupSummaryT>,
                 req: fb::coprocessor_proto::GroupsSummaryRequest<'_>,
+            );
+            /// Streams the image at `uri` on the speaker, then ends; or ends with an
+            /// error (NOT_FOUND, UNAVAILABLE, ...). Only paths on the speaker.
+            fn get_album_art(
+                &mut self,
+                sink: Sink<S::Sink, fb::coprocessor_proto::AlbumArtChunkT>,
+                req: fb::coprocessor_proto::AlbumArtRequest<'_>,
             );
             /// The client dropped `call` before it finished.
             fn cancelled(&mut self, _call: CallId) {}
@@ -406,6 +461,11 @@ pub mod coprocessor_proto {
                         request,
                     ) {
                         Ok(req) => self.0.get_groups_summary(Sink::new(sink), req),
+                        Err(_) => sink.end(Err(Status::InvalidArgument)),
+                    },
+                    5 => match flatbuffers::root::<fb::coprocessor_proto::AlbumArtRequest>(request)
+                    {
+                        Ok(req) => self.0.get_album_art(Sink::new(sink), req),
                         Err(_) => sink.end(Err(Status::InvalidArgument)),
                     },
                     _ => sink.end(Err(Status::Unimplemented)),

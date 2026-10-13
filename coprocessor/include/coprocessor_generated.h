@@ -93,6 +93,14 @@ struct GroupSummary;
 struct GroupSummaryBuilder;
 struct GroupSummaryT;
 
+struct AlbumArtRequest;
+struct AlbumArtRequestBuilder;
+struct AlbumArtRequestT;
+
+struct AlbumArtChunk;
+struct AlbumArtChunkBuilder;
+struct AlbumArtChunkT;
+
 enum class WifiState : uint8_t {
   /// No network to join.
   Disconnected = 0,
@@ -378,17 +386,21 @@ inline const char *EnumNameActionType(ActionType e) {
 /// Link limits both ends must agree on. An enum only to carry constants into
 /// the generated code, until tether takes the max payload from the schema.
 enum class Limits : uint32_t {
+  /// The most image data an AlbumArtChunk carries: room to spare in the
+  /// payload, for less RAM per send.
+  MaxAlbumArtChunk = 768,
   /// The largest RPC payload, requests and responses alike.
   MaxPayload = 1024,
   /// The largest COBS frame for MaxPayload, delimiter excluded: tether's
   /// max_wire_size(MaxPayload) - 1 (CRC, header and padding, then COBS).
   MaxFrame = 1104,
-  MIN = MaxPayload,
+  MIN = MaxAlbumArtChunk,
   MAX = MaxFrame
 };
 
-inline const Limits (&EnumValuesLimits())[2] {
+inline const Limits (&EnumValuesLimits())[3] {
   static const Limits values[] = {
+    Limits::MaxAlbumArtChunk,
     Limits::MaxPayload,
     Limits::MaxFrame
   };
@@ -397,6 +409,7 @@ inline const Limits (&EnumValuesLimits())[2] {
 
 inline const char *EnumNameLimits(Limits e) {
   switch (e) {
+    case Limits::MaxAlbumArtChunk: return "MaxAlbumArtChunk";
     case Limits::MaxPayload: return "MaxPayload";
     case Limits::MaxFrame: return "MaxFrame";
     default: return "";
@@ -2068,6 +2081,170 @@ inline ::flatbuffers::Offset<GroupSummary> CreateGroupSummaryDirect(
 
 ::flatbuffers::Offset<GroupSummary> CreateGroupSummary(::flatbuffers::FlatBufferBuilder &_fbb, const GroupSummaryT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
+struct AlbumArtRequestT : public ::flatbuffers::NativeTable {
+  typedef AlbumArtRequest TableType;
+  uint32_t endpoint_ip = 0;
+  std::string uri{};
+};
+
+struct AlbumArtRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef AlbumArtRequestT NativeTableType;
+  typedef AlbumArtRequestBuilder Builder;
+  struct Traits;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_ENDPOINT_IP = 4,
+    VT_URI = 6
+  };
+  uint32_t endpoint_ip() const {
+    return GetField<uint32_t>(VT_ENDPOINT_IP, 0);
+  }
+  const ::flatbuffers::String *uri() const {
+    return GetPointer<const ::flatbuffers::String *>(VT_URI);
+  }
+  template <bool B = false>
+  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint32_t>(verifier, VT_ENDPOINT_IP, 4) &&
+           VerifyOffset(verifier, VT_URI) &&
+           verifier.VerifyString(uri()) &&
+           verifier.EndTable();
+  }
+  AlbumArtRequestT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(AlbumArtRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<AlbumArtRequest> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const AlbumArtRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct AlbumArtRequestBuilder {
+  typedef AlbumArtRequest Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_endpoint_ip(uint32_t endpoint_ip) {
+    fbb_.AddElement<uint32_t>(AlbumArtRequest::VT_ENDPOINT_IP, endpoint_ip, 0);
+  }
+  void add_uri(::flatbuffers::Offset<::flatbuffers::String> uri) {
+    fbb_.AddOffset(AlbumArtRequest::VT_URI, uri);
+  }
+  explicit AlbumArtRequestBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<AlbumArtRequest> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<AlbumArtRequest>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<AlbumArtRequest> CreateAlbumArtRequest(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    uint32_t endpoint_ip = 0,
+    ::flatbuffers::Offset<::flatbuffers::String> uri = 0) {
+  AlbumArtRequestBuilder builder_(_fbb);
+  builder_.add_uri(uri);
+  builder_.add_endpoint_ip(endpoint_ip);
+  return builder_.Finish();
+}
+
+struct AlbumArtRequest::Traits {
+  using type = AlbumArtRequest;
+  static auto constexpr Create = CreateAlbumArtRequest;
+};
+
+inline ::flatbuffers::Offset<AlbumArtRequest> CreateAlbumArtRequestDirect(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    uint32_t endpoint_ip = 0,
+    const char *uri = nullptr) {
+  auto uri__ = uri ? _fbb.CreateString(uri) : 0;
+  return CoprocessorProto::CreateAlbumArtRequest(
+      _fbb,
+      endpoint_ip,
+      uri__);
+}
+
+::flatbuffers::Offset<AlbumArtRequest> CreateAlbumArtRequest(::flatbuffers::FlatBufferBuilder &_fbb, const AlbumArtRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
+struct AlbumArtChunkT : public ::flatbuffers::NativeTable {
+  typedef AlbumArtChunk TableType;
+  uint32_t total_size = 0;
+  std::vector<uint8_t> data{};
+};
+
+struct AlbumArtChunk FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef AlbumArtChunkT NativeTableType;
+  typedef AlbumArtChunkBuilder Builder;
+  struct Traits;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_TOTAL_SIZE = 4,
+    VT_DATA = 6
+  };
+  uint32_t total_size() const {
+    return GetField<uint32_t>(VT_TOTAL_SIZE, 0);
+  }
+  const ::flatbuffers::Vector<uint8_t> *data() const {
+    return GetPointer<const ::flatbuffers::Vector<uint8_t> *>(VT_DATA);
+  }
+  template <bool B = false>
+  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint32_t>(verifier, VT_TOTAL_SIZE, 4) &&
+           VerifyOffset(verifier, VT_DATA) &&
+           verifier.VerifyVector(data()) &&
+           verifier.EndTable();
+  }
+  AlbumArtChunkT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(AlbumArtChunkT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<AlbumArtChunk> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const AlbumArtChunkT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct AlbumArtChunkBuilder {
+  typedef AlbumArtChunk Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_total_size(uint32_t total_size) {
+    fbb_.AddElement<uint32_t>(AlbumArtChunk::VT_TOTAL_SIZE, total_size, 0);
+  }
+  void add_data(::flatbuffers::Offset<::flatbuffers::Vector<uint8_t>> data) {
+    fbb_.AddOffset(AlbumArtChunk::VT_DATA, data);
+  }
+  explicit AlbumArtChunkBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<AlbumArtChunk> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<AlbumArtChunk>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<AlbumArtChunk> CreateAlbumArtChunk(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    uint32_t total_size = 0,
+    ::flatbuffers::Offset<::flatbuffers::Vector<uint8_t>> data = 0) {
+  AlbumArtChunkBuilder builder_(_fbb);
+  builder_.add_data(data);
+  builder_.add_total_size(total_size);
+  return builder_.Finish();
+}
+
+struct AlbumArtChunk::Traits {
+  using type = AlbumArtChunk;
+  static auto constexpr Create = CreateAlbumArtChunk;
+};
+
+inline ::flatbuffers::Offset<AlbumArtChunk> CreateAlbumArtChunkDirect(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    uint32_t total_size = 0,
+    const std::vector<uint8_t> *data = nullptr) {
+  auto data__ = data ? _fbb.CreateVector<uint8_t>(*data) : 0;
+  return CoprocessorProto::CreateAlbumArtChunk(
+      _fbb,
+      total_size,
+      data__);
+}
+
+::flatbuffers::Offset<AlbumArtChunk> CreateAlbumArtChunk(::flatbuffers::FlatBufferBuilder &_fbb, const AlbumArtChunkT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
 inline EmptyT *Empty::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
   auto _o = std::make_unique<EmptyT>();
   UnPackTo(_o.get(), _resolver);
@@ -2706,6 +2883,64 @@ inline ::flatbuffers::Offset<GroupSummary> GroupSummary::Pack(::flatbuffers::Fla
       _coordinator_ip,
       _is_playing,
       _title);
+}
+
+inline AlbumArtRequestT *AlbumArtRequest::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<AlbumArtRequestT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void AlbumArtRequest::UnPackTo(AlbumArtRequestT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = endpoint_ip(); _o->endpoint_ip = _e; }
+  { auto _e = uri(); if (_e) _o->uri = _e->str(); }
+}
+
+inline ::flatbuffers::Offset<AlbumArtRequest> CreateAlbumArtRequest(::flatbuffers::FlatBufferBuilder &_fbb, const AlbumArtRequestT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return AlbumArtRequest::Pack(_fbb, _o, _rehasher);
+}
+
+inline ::flatbuffers::Offset<AlbumArtRequest> AlbumArtRequest::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const AlbumArtRequestT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const AlbumArtRequestT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _endpoint_ip = _o->endpoint_ip;
+  auto _uri = _o->uri.empty() ? 0 : _fbb.CreateString(_o->uri);
+  return CoprocessorProto::CreateAlbumArtRequest(
+      _fbb,
+      _endpoint_ip,
+      _uri);
+}
+
+inline AlbumArtChunkT *AlbumArtChunk::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<AlbumArtChunkT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void AlbumArtChunk::UnPackTo(AlbumArtChunkT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = total_size(); _o->total_size = _e; }
+  { auto _e = data(); if (_e) { _o->data.resize(_e->size()); std::copy(_e->begin(), _e->end(), _o->data.begin()); } }
+}
+
+inline ::flatbuffers::Offset<AlbumArtChunk> CreateAlbumArtChunk(::flatbuffers::FlatBufferBuilder &_fbb, const AlbumArtChunkT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return AlbumArtChunk::Pack(_fbb, _o, _rehasher);
+}
+
+inline ::flatbuffers::Offset<AlbumArtChunk> AlbumArtChunk::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const AlbumArtChunkT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const AlbumArtChunkT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _total_size = _o->total_size;
+  auto _data = _o->data.size() ? _fbb.CreateVector(_o->data) : 0;
+  return CoprocessorProto::CreateAlbumArtChunk(
+      _fbb,
+      _total_size,
+      _data);
 }
 
 template <bool B>

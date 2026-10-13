@@ -18,6 +18,7 @@
 #include "esp_log.h"
 
 #include "net/http_client.h"
+#include "net/http_request.h"
 #include "net/ipv4.h"
 #include "services/rpc.h"
 #include "services/sonos_streams.h"
@@ -34,6 +35,7 @@ namespace {
 constexpr const char* TAG = "sonos_svc";
 
 using CoprocessorProto::ActionType;
+using CoprocessorProto::AlbumArtChunk;
 using CoprocessorProto::Empty;
 using CoprocessorProto::GroupSummary;
 using CoprocessorProto::TransportState;
@@ -44,12 +46,19 @@ using tether::WireStatus;
 // How long to wait before sending again, when a stream had no room.
 constexpr milliseconds kSendRetry{50};
 
+// A send that didn't go through: whether to retry (no room), or stop.
+bool should_retry(CallError error) {
+  return error == CallError::QueueFull || error == CallError::NoCredit;
+}
+
 WireStatus to_wire_status(const HttpResult& result) {
   switch (result.error) {
     case HttpError::None:
       // A UPnP fault (e.g. 701 "transition not available") comes as 500.
-      return result.status == 500 ? WireStatus::FAILED_PRECONDITION
-                                  : WireStatus::UNKNOWN;
+      if (result.status == 500) {
+        return WireStatus::FAILED_PRECONDITION;
+      }
+      return result.status == 404 ? WireStatus::NOT_FOUND : WireStatus::UNKNOWN;
     case HttpError::BadAddress:
       return WireStatus::INVALID_ARGUMENT;
     case HttpError::Connect:
@@ -394,6 +403,169 @@ class GroupsSummaryHandler final : public StreamHandler<GroupSummary> {
   Group group_;                     // The one being queried or sent.
 };
 
+// Streams an image on the speaker as it downloads, in chunks of at most
+// Limits.MaxAlbumArtChunk bytes; the first carries the image's size, if
+// known. While the stream has no room the download waits, so a chunk at most
+// is held here whatever the image's size.
+class AlbumArtHandler final : public StreamHandler<AlbumArtChunk>,
+                              HttpResponseSink {
+ public:
+  // Tether I/O task: builds the request out of the call's frame.
+  AlbumArtHandler(Reactor& reactor, ConnectionPermits& permits,
+                  tether::Sink<AlbumArtChunk> sink,
+                  const CoprocessorProto::AlbumArtRequest& request)
+      : StreamHandler(reactor, sink),
+        http_(reactor, permits),
+        endpoint_{.ip = Ipv4{request.endpoint_ip()}, .port = kSonosPort} {
+    const std::string_view uri =
+        request.uri() != nullptr ? request.uri()->string_view() : "";
+    valid_ = uri.starts_with('/');  // Only paths on the speaker, for now.
+    request_.append(R"(GET {} HTTP/1.1
+HOST: {}:{}
+Connection: close
+
+)",
+                    uri, endpoint_.ip, endpoint_.port);
+  }
+
+ private:
+  static constexpr std::size_t kMaxChunk =
+      static_cast<std::size_t>(CoprocessorProto::Limits::MaxAlbumArtChunk);
+  // Fits the speaker's /getaa paths, which carry the track's URI.
+  using ArtRequest = FixedRequest<640>;
+
+  void start() override {
+    if (!valid_ || !request_.fits()) {
+      end_and_finish(WireStatus::INVALID_ARGUMENT);
+      return;
+    }
+    started_ = Reactor::Clock::now();
+    http_.send(endpoint_, request_.bytes(),
+               Callback(this, &AlbumArtHandler::downloaded), this);
+  }
+
+  // One line per download: what it took, and how often the stream had no
+  // room (QueueFull: the link; NoCredit: the client).
+  void log_outcome(const char* outcome) const {
+    const auto elapsed = std::chrono::duration_cast<milliseconds>(
+        Reactor::Clock::now() - started_);
+    ESP_LOGI(
+        TAG,
+        "Album art %s: %u B in %u chunks, %u ms; retries: %u queue full, "
+        "%u no credit; longest pause %u ms",
+        outcome, static_cast<unsigned>(received_),
+        static_cast<unsigned>(chunks_), static_cast<unsigned>(elapsed.count()),
+        static_cast<unsigned>(queue_full_), static_cast<unsigned>(no_credit_),
+        static_cast<unsigned>(longest_pause_.count()));
+  }
+
+  // Returning false aborts the download: the client is gone.
+  bool on_body(std::string_view chunk, bool /*last*/) override {
+    std::ranges::copy(chunk, staging_.begin() + staged_);
+    staged_ += chunk.size();
+    received_ += chunk.size();
+    return send_ready();
+  }
+
+  void downloaded() {
+    const HttpResult& result = http_.result();
+    if (gone_) {
+      log_outcome("cancelled");
+      finish();
+    } else if (!result.ok()) {
+      ESP_LOGW(TAG, "Album art from %s -> HTTP %d (error %d)",
+               endpoint_.ip.to_string().c_str(), result.status,
+               static_cast<int>(result.error));
+      log_outcome("failed");
+      end_and_finish(to_wire_status(result));
+    } else {
+      download_done_ = true;
+      after_send(send_ready());
+    }
+  }
+
+  void retry_send() {
+    retry_timer_ = 0;
+    after_send(send_ready());
+  }
+
+  // Outside the download's callbacks: the stream may end here.
+  void after_send(bool sendable) {
+    if (!sendable) {
+      finish();
+    } else if (download_done_ && staged_ == 0 && retry_timer_ == 0) {
+      log_outcome("sent");
+      end_and_finish(WireStatus::OK);
+    }
+  }
+
+  // Sends whole chunks, and the rest once the download is done. Pauses the
+  // download while the stream has no room, and resumes it once there's room
+  // again for another read. False once the stream is gone.
+  bool send_ready() {
+    while (staged_ >= kMaxChunk || (download_done_ && staged_ > 0)) {
+      const std::size_t size = std::min(staged_, kMaxChunk);
+      auto result = send([&](flatbuffers::FlatBufferBuilder& fbb) {
+        auto data = fbb.CreateVector(
+            reinterpret_cast<const uint8_t*>(staging_.data()), size);
+        const auto total =
+            first_ ? static_cast<uint32_t>(http_.content_length().value_or(0))
+                   : 0U;
+        return CoprocessorProto::CreateAlbumArtChunk(fbb, total, data);
+      });
+      if (!result) {
+        if (should_retry(result.error())) {
+          ++(result.error() == CallError::QueueFull ? queue_full_ : no_credit_);
+          if (!paused_since_) {
+            paused_since_ = Reactor::Clock::now();
+          }
+          http_.pause();
+          if (retry_timer_ == 0) {
+            retry_timer_ = reactor().after(
+                kSendRetry, Callback(this, &AlbumArtHandler::retry_send));
+          }
+          return true;
+        }
+        gone_ = true;  // Closed, or a chunk that can't fit: a bug.
+        return false;
+      }
+      first_ = false;
+      ++chunks_;
+      std::copy(staging_.begin() + size, staging_.begin() + staged_,
+                staging_.begin());
+      staged_ -= size;
+    }
+    if (paused_since_) {
+      longest_pause_ =
+          std::max(longest_pause_, std::chrono::duration_cast<milliseconds>(
+                                       Reactor::Clock::now() - *paused_since_));
+      paused_since_.reset();
+    }
+    http_.resume();
+    return true;
+  }
+
+  HttpClient http_;
+  Endpoint endpoint_;
+  ArtRequest request_;
+  bool valid_ = false;
+  // A chunk short of full, and what one more read brings.
+  std::array<char, kMaxChunk + HttpClient::kBufferSize> staging_{};
+  std::size_t staged_ = 0;
+  bool first_ = true;
+  bool download_done_ = false;
+  bool gone_ = false;  // The client cancelled, while downloading.
+  Reactor::TimerId retry_timer_ = 0;
+  // For log_outcome().
+  Reactor::Clock::time_point started_;
+  std::optional<Reactor::Clock::time_point> paused_since_;
+  milliseconds longest_pause_{0};
+  std::size_t received_ = 0;
+  std::size_t chunks_ = 0;
+  std::size_t queue_full_ = 0;
+  std::size_t no_credit_ = 0;
+};
+
 }  // namespace
 
 void SonosServiceHandler::watch_topology(
@@ -428,6 +600,14 @@ void SonosServiceHandler::set_volume(
   ESP_LOGI(TAG, "Sonos volume %d (relative=%d)", request.volume(),
            request.is_relative());
   reactor_.start(new SetVolumeHandler(reactor_, permits_, reply, request));
+}
+
+void SonosServiceHandler::get_album_art(
+    tether::Sink<CoprocessorProto::AlbumArtChunk> sink,
+    const CoprocessorProto::AlbumArtRequest& request) {
+  ESP_LOGI(TAG, "Album art from %s",
+           Ipv4{request.endpoint_ip()}.to_string().c_str());
+  reactor_.start(new AlbumArtHandler(reactor_, permits_, sink, request));
 }
 
 void SonosServiceHandler::get_groups_summary(

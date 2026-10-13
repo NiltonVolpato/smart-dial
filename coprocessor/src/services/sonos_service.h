@@ -41,6 +41,9 @@ class SonosServiceHandler final : public CoprocessorProto::sonos::Handler {
   void set_volume(tether::Reply<CoprocessorProto::Empty> reply,
                   const CoprocessorProto::VolumeRequest& request) override;
 
+  void get_album_art(tether::Sink<CoprocessorProto::AlbumArtChunk> sink,
+                     const CoprocessorProto::AlbumArtRequest& request) override;
+
   void get_groups_summary(
       tether::Sink<CoprocessorProto::GroupSummary> sink,
       const CoprocessorProto::GroupsSummaryRequest& request) override;

@@ -25,12 +25,13 @@ inline constexpr std::array<std::optional<tether::MethodInfo>, 2> kCoprocessorPr
     tether::MethodInfo{.name = "ReportBattery", .streaming = false},
 };
 
-inline constexpr std::array<std::optional<tether::MethodInfo>, 5> kCoprocessorProto_SonosMethods{
+inline constexpr std::array<std::optional<tether::MethodInfo>, 6> kCoprocessorProto_SonosMethods{
     tether::MethodInfo{.name = "WatchTopology", .streaming = true},
     tether::MethodInfo{.name = "WatchPlayback", .streaming = true},
     tether::MethodInfo{.name = "Action", .streaming = false},
     tether::MethodInfo{.name = "SetVolume", .streaming = false},
     tether::MethodInfo{.name = "GetGroupsSummary", .streaming = true},
+    tether::MethodInfo{.name = "GetAlbumArt", .streaming = true},
 };
 
 // The services the co-processor serves: wire IDs are fixed in append-only order.
@@ -55,6 +56,8 @@ inline constexpr tether::MethodId kAction{kId, 2};
 inline constexpr tether::MethodId kSetVolume{kId, 3};
 // `CoprocessorProto.Sonos/GetGroupsSummary`
 inline constexpr tether::MethodId kGetGroupsSummary{kId, 4};
+// `CoprocessorProto.Sonos/GetAlbumArt`
+inline constexpr tether::MethodId kGetAlbumArt{kId, 5};
 
 class Handler {
  public:
@@ -66,6 +69,9 @@ class Handler {
   // sending each as soon as it's known; then ends. A speaker that doesn't
   // answer still gets one, as not playing.
   virtual void get_groups_summary(tether::Sink<::CoprocessorProto::GroupSummary> sink, const ::CoprocessorProto::GroupsSummaryRequest& request) = 0;
+  // Streams the image at `uri` on the speaker, then ends; or ends with an
+  // error (NOT_FOUND, UNAVAILABLE, ...). Only paths on the speaker.
+  virtual void get_album_art(tether::Sink<::CoprocessorProto::AlbumArtChunk> sink, const ::CoprocessorProto::AlbumArtRequest& request) = 0;
   // The client dropped `call` before it finished.
   virtual void cancelled(tether::CallId /*call*/) {}
 
@@ -136,6 +142,15 @@ class Service final : public tether::Service {
           return;
         }
         handler_->get_groups_summary(tether::Sink<::CoprocessorProto::GroupSummary>(sink), *message);
+        return;
+      }
+      case 5: {
+        const auto* message = tether::verify<::CoprocessorProto::AlbumArtRequest>(request);
+        if (message == nullptr) {
+          (void)sink.end(tether::WireStatus::INVALID_ARGUMENT);
+          return;
+        }
+        handler_->get_album_art(tether::Sink<::CoprocessorProto::AlbumArtChunk>(sink), *message);
         return;
       }
       default:

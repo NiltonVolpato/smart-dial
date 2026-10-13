@@ -27,6 +27,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "album-art"
+version = "0.1.0"
+dependencies = [
+ "embassy-sync 0.8.0",
+ "jpegdec",
+ "slint",
+]
+
+[[package]]
 name = "allocator-api2"
 version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -176,6 +185,7 @@ dependencies = [
 name = "app-sonos"
 version = "0.1.0"
 dependencies = [
+ "album-art",
  "app-shell",
  "baker",
  "coprocessor",
@@ -183,7 +193,6 @@ dependencies = [
  "embassy-futures",
  "embassy-sync 0.8.0",
  "heapless 0.8.0",
- "jpegdec",
  "slint",
  "tether",
  "tether-core",
@@ -801,6 +810,7 @@ dependencies = [
 name = "common"
 version = "0.1.0"
 dependencies = [
+ "album-art",
  "allocator-api2 0.3.1",
  "app-shell",
  "cc",
@@ -6625,6 +6635,7 @@ dependencies = [
 name = "waveshare_knob_1_8"
 version = "0.1.0"
 dependencies = [
+ "album-art",
  "allocator-api2 0.3.1",
  "app-launcher",
  "app-shell",

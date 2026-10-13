@@ -6,6 +6,7 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+album-art                 = { workspace = true }
 slint                     = { workspace = true }
 i-slint-renderer-software = { workspace = true }
 esp-hal                   = { workspace = true }

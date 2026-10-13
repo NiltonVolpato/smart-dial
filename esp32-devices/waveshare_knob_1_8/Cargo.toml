@@ -21,6 +21,7 @@ slint = { workspace = true }
 i-slint-renderer-software = { workspace = true }
 
 app-launcher = { workspace = true }
+album-art = { workspace = true }
 app-sonos = { workspace = true }
 app-shell = { workspace = true }
 detent-decoder = { workspace = true }

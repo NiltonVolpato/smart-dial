@@ -9,6 +9,7 @@ use app_shell::AppShell;
 use common::simd;
 use defmt::info;
 use embassy_executor::Spawner;
+use embassy_sync::channel::Channel;
 use esp_hal::clock::CpuClock;
 use esp_hal::interrupt::software::{SoftwareInterrupt, SoftwareInterruptControl};
 use esp_hal::system::Stack;
@@ -19,7 +20,9 @@ use waveshare_knob_1_8::bsp::{
     Board, Bsp, Core1Peripherals, Sh8601, battery_task, coprocessor_task, create_shared_client,
     display_task, haptic_task, rotary_task, run_event_loop, system_task, touch_task,
 };
-use waveshare_knob_1_8::tasks::{PROFILER_ENABLED, profiler_task, screensaver_task};
+use waveshare_knob_1_8::tasks::{
+    PROFILER_ENABLED, album_art_task, profiler_task, screensaver_task,
+};
 
 extern crate alloc;
 
@@ -33,8 +36,14 @@ esp_bootloader_esp_idf::esp_app_desc!();
 const APP_CORE_STACK_SIZE: usize = 16 * 1024;
 static mut APP_CORE_STACK: Stack<APP_CORE_STACK_SIZE> = Stack::new();
 
-/// Entry point for Core 1 (`AppCpu`): owns SH8601 display initialization and QSPI DMA transfers.
-fn core1_entry(core1: Core1Peripherals, sw_int2: SoftwareInterrupt<'static, 2>) -> ! {
+/// Entry point for Core 1 (`AppCpu`): owns SH8601 display initialization and QSPI DMA transfers,
+/// and decodes album art below them, off the UI's core.
+fn core1_entry(
+    core1: Core1Peripherals,
+    sw_int2: SoftwareInterrupt<'static, 2>,
+    art_requests: &'static album_art::ArtRequests,
+    art_results: &'static album_art::ArtResults,
+) -> ! {
     simd::enable_pie();
     let display = Sh8601::new(core1.display);
 
@@ -44,7 +53,11 @@ fn core1_entry(core1: Core1Peripherals, sw_int2: SoftwareInterrupt<'static, 2>) 
     send_spawner.spawn(display_task(display).expect("Failed to create display task"));
 
     let executor = Box::leak(Box::new(esp_rtos::embassy::Executor::new()));
-    executor.run(|_spawner| {});
+    executor.run(|spawner| {
+        spawner.spawn(
+            album_art_task(art_requests, art_results).expect("Failed to create album art task"),
+        );
+    });
 }
 
 #[allow(clippy::large_stack_frames)]
@@ -76,13 +89,15 @@ async fn main(spawner: Spawner) -> ! {
     let sw_int = SoftwareInterruptControl::new(board.system.sw_interrupt);
     esp_rtos::start(timg0.timer0, sw_int.software_interrupt0);
 
-    // 4. Start Core 1 (AppCpu) for display and QSPI DMA transfers
+    // 4. Start Core 1 (AppCpu) for display and QSPI DMA transfers, and album art
+    let art_requests: &'static album_art::ArtRequests = Box::leak(Box::new(Channel::new()));
+    let art_results: &'static album_art::ArtResults = Box::leak(Box::new(Channel::new()));
     esp_rtos::start_second_core::<APP_CORE_STACK_SIZE>(
         board.system.cpu_ctrl,
         sw_int.software_interrupt1,
         unsafe { &mut *core::ptr::addr_of_mut!(APP_CORE_STACK) },
         move || {
-            core1_entry(board.core1, sw_int.software_interrupt2);
+            core1_entry(board.core1, sw_int.software_interrupt2, art_requests, art_results);
         },
     );
 
@@ -143,9 +158,10 @@ async fn main(spawner: Spawner) -> ! {
     }
 
     info!("Starting AppShell with Launcher on Core 0...");
-    let sonos_factory = Box::new(app_sonos::SonosAppFactory::new(coprocessor::sonos::Client(
-        coprocessor_client.clone(),
-    )));
+    let sonos_factory = Box::new(app_sonos::SonosAppFactory::new(
+        coprocessor::sonos::Client(coprocessor_client.clone()),
+        album_art::Decoder { requests: art_requests, results: art_results },
+    ));
     let launcher = LauncherAppFactory::default_apps_with_sonos(sonos_factory);
     let platform = alloc::rc::Rc::new(common::EspAppShellPlatform::new(
         Some(waveshare_knob_1_8::bsp::current_timestamp),

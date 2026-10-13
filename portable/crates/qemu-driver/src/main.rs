@@ -134,6 +134,7 @@ fn check_sonos(connector: &mut Connector, seed: Ipv4Addr) -> Result {
     request.coordinator_ips = Some(coordinator_ips.clone());
     let mut summary = sonos::Client(&connector.client).get_groups_summary(&request, 4);
     let mut answered = Vec::new();
+    let mut playing = None;
     connector.pump_until(Duration::from_secs(10), |_| {
         while let Some(msg) = summary.try_recv() {
             let g = msg.get();
@@ -144,18 +145,23 @@ fn check_sonos(connector: &mut Connector, seed: Ipv4Addr) -> Result {
                 g.title()
             );
             answered.push(g.coordinator_ip());
+            if g.is_playing() && playing.is_none() {
+                playing = Some(g.coordinator_ip());
+            }
         }
         summary.end().is_some()
     })?;
     assert_eq!(summary.end(), Some(Ok(())), "The summary must end cleanly");
     assert_eq!(answered, coordinator_ips, "Summary must answer every group, in order");
 
-    // A GENA subscription, whose first NOTIFY carries the state.
-    let coordinator = coordinator_ips[0];
+    // A GENA subscription, whose first NOTIFY carries the state: a playing
+    // group's, if any, for its track and album art.
+    let coordinator = playing.unwrap_or(coordinator_ips[0]);
     println!("Testing SonosService.WatchPlayback on {}...", Ipv4Addr::from(coordinator));
     let mut request = proto::PlaybackRequestT::default();
     request.endpoint_ip = coordinator;
     let mut playback = sonos::Client(&connector.client).watch_playback(&request, 4);
+    let mut album_art_uri = None;
     connector.pump_until(Duration::from_secs(15), |_| {
         let Some(msg) = playback.try_recv() else { return false };
         let update = msg.get();
@@ -168,8 +174,51 @@ fn check_sonos(connector: &mut Connector, seed: Ipv4Addr) -> Result {
             update.track().and_then(|t| t.title())
         );
         assert_eq!(update.endpoint_ip(), coordinator);
+        album_art_uri = update
+            .track()
+            .and_then(|t| t.album_art_uri())
+            .filter(|uri| !uri.is_empty())
+            .map(String::from);
         true
     })?;
+    drop(playback);
+
+    match album_art_uri {
+        Some(uri) => check_album_art(connector, coordinator, &uri),
+        None => {
+            println!("  No album art on {}: skipping GetAlbumArt", Ipv4Addr::from(coordinator));
+            Ok(())
+        }
+    }
+}
+
+/// The whole image, in order: a JPEG of the size the first chunk announced.
+fn check_album_art(connector: &mut Connector, endpoint: u32, uri: &str) -> Result {
+    println!("Testing SonosService.GetAlbumArt {uri}...");
+    let mut request = proto::AlbumArtRequestT::default();
+    request.endpoint_ip = endpoint;
+    request.uri = Some(uri.into());
+    let mut art = sonos::Client(&connector.client).get_album_art(&request, 8);
+    let mut image = Vec::new();
+    let mut total_size = None;
+    let mut chunks = 0;
+    connector.pump_until(Duration::from_secs(20), |_| {
+        while let Some(msg) = art.try_recv() {
+            let chunk = msg.get();
+            total_size.get_or_insert(chunk.total_size());
+            let data = chunk.data().map(|d| d.bytes()).unwrap_or_default();
+            assert!(data.len() <= proto::Limits::MaxAlbumArtChunk.0 as usize, "Chunk too large");
+            image.extend_from_slice(data);
+            chunks += 1;
+        }
+        art.end().is_some()
+    })?;
+    assert_eq!(art.end(), Some(Ok(())), "The album art must end cleanly");
+    println!("  {} bytes in {chunks} chunks (announced {total_size:?})", image.len());
+    assert!(image.starts_with(&[0xFF, 0xD8]), "Not a JPEG");
+    if let Some(size) = total_size.filter(|&size| size != 0) {
+        assert_eq!(image.len(), size as usize, "Size differs from the announced one");
+    }
     Ok(())
 }
 

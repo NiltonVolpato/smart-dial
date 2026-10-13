@@ -106,6 +106,17 @@ table GroupSummary {
     title: string;
 }
 
+table AlbumArtRequest {
+    endpoint_ip: uint32;
+    uri: string;  // TrackMetadata.album_art_uri: a path on the speaker.
+}
+
+// A piece of an album art image, in order.
+table AlbumArtChunk {
+    total_size: uint32;  // In the first chunk: the image's size; 0 if unknown.
+    data: [ubyte];       // At most Limits.MaxAlbumArtChunk bytes.
+}
+
 rpc_service Sonos {
     WatchTopology(TopologyRequest): TopologyUpdate (streaming: "server");
     WatchPlayback(PlaybackRequest): StateUpdate (streaming: "server");
@@ -115,4 +126,7 @@ rpc_service Sonos {
     /// sending each as soon as it's known; then ends. A speaker that doesn't
     /// answer still gets one, as not playing.
     GetGroupsSummary(GroupsSummaryRequest): GroupSummary (streaming: "server");
+    /// Streams the image at `uri` on the speaker, then ends; or ends with an
+    /// error (NOT_FOUND, UNAVAILABLE, ...). Only paths on the speaker.
+    GetAlbumArt(AlbumArtRequest): AlbumArtChunk (streaming: "server");
 }

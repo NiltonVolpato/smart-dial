@@ -604,7 +604,7 @@ pub mod coprocessor_proto {
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
-    pub const ENUM_MIN_LIMITS: u32 = 1024;
+    pub const ENUM_MIN_LIMITS: u32 = 768;
     #[deprecated(
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
@@ -615,7 +615,8 @@ pub mod coprocessor_proto {
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
     #[allow(non_camel_case_types)]
-    pub const ENUM_VALUES_LIMITS: [Limits; 2] = [Limits::MaxPayload, Limits::MaxFrame];
+    pub const ENUM_VALUES_LIMITS: [Limits; 3] =
+        [Limits::MaxAlbumArtChunk, Limits::MaxPayload, Limits::MaxFrame];
 
     /// Link limits both ends must agree on. An enum only to carry constants into
     /// the generated code, until tether takes the max payload from the schema.
@@ -624,18 +625,23 @@ pub mod coprocessor_proto {
     pub struct Limits(pub u32);
     #[allow(non_upper_case_globals)]
     impl Limits {
+        /// The most image data an AlbumArtChunk carries: room to spare in the
+        /// payload, for less RAM per send.
+        pub const MaxAlbumArtChunk: Self = Self(768);
         /// The largest RPC payload, requests and responses alike.
         pub const MaxPayload: Self = Self(1024);
         /// The largest COBS frame for MaxPayload, delimiter excluded: tether's
         /// max_wire_size(MaxPayload) - 1 (CRC, header and padding, then COBS).
         pub const MaxFrame: Self = Self(1104);
 
-        pub const ENUM_MIN: u32 = 1024;
+        pub const ENUM_MIN: u32 = 768;
         pub const ENUM_MAX: u32 = 1104;
-        pub const ENUM_VALUES: &'static [Self] = &[Self::MaxPayload, Self::MaxFrame];
+        pub const ENUM_VALUES: &'static [Self] =
+            &[Self::MaxAlbumArtChunk, Self::MaxPayload, Self::MaxFrame];
         /// Returns the variant's name or "" if unknown.
         pub fn variant_name(self) -> Option<&'static str> {
             match self {
+                Self::MaxAlbumArtChunk => Some("MaxAlbumArtChunk"),
                 Self::MaxPayload => Some("MaxPayload"),
                 Self::MaxFrame => Some("MaxFrame"),
                 _ => None,
@@ -4165,6 +4171,306 @@ pub mod coprocessor_proto {
             let is_playing = self.is_playing;
             let title = self.title.as_ref().map(|x| _fbb.create_string(x));
             GroupSummary::create(_fbb, &GroupSummaryArgs { coordinator_ip, is_playing, title })
+        }
+    }
+    pub enum AlbumArtRequestOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct AlbumArtRequest<'a> {
+        pub _tab: ::flatbuffers::Table<'a>,
+    }
+
+    impl<'a> ::flatbuffers::Follow<'a> for AlbumArtRequest<'a> {
+        type Inner = AlbumArtRequest<'a>;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self { _tab: unsafe { ::flatbuffers::Table::new(buf, loc) } }
+        }
+    }
+
+    impl<'a> AlbumArtRequest<'a> {
+        pub const VT_ENDPOINT_IP: ::flatbuffers::VOffsetT = 4;
+        pub const VT_URI: ::flatbuffers::VOffsetT = 6;
+
+        #[inline]
+        pub unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
+            AlbumArtRequest { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<
+            'bldr: 'args,
+            'args: 'mut_bldr,
+            'mut_bldr,
+            A: ::flatbuffers::Allocator + 'bldr,
+        >(
+            _fbb: &'mut_bldr mut ::flatbuffers::FlatBufferBuilder<'bldr, A>,
+            args: &'args AlbumArtRequestArgs<'args>,
+        ) -> ::flatbuffers::WIPOffset<AlbumArtRequest<'bldr>> {
+            let mut builder = AlbumArtRequestBuilder::new(_fbb);
+            if let Some(x) = args.uri {
+                builder.add_uri(x);
+            }
+            builder.add_endpoint_ip(args.endpoint_ip);
+            builder.finish()
+        }
+
+        pub fn unpack(&self) -> AlbumArtRequestT {
+            let endpoint_ip = self.endpoint_ip();
+            let uri = self.uri().map(|x| alloc::string::ToString::to_string(x));
+            AlbumArtRequestT { endpoint_ip, uri }
+        }
+
+        #[inline]
+        pub fn endpoint_ip(&self) -> u32 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe { self._tab.get::<u32>(AlbumArtRequest::VT_ENDPOINT_IP, Some(0)).unwrap() }
+        }
+        #[inline]
+        pub fn uri(&self) -> Option<&'a str> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<::flatbuffers::ForwardsUOffset<&str>>(AlbumArtRequest::VT_URI, None)
+            }
+        }
+    }
+
+    impl ::flatbuffers::Verifiable for AlbumArtRequest<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut ::flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), ::flatbuffers::InvalidFlatbuffer> {
+            v.visit_table(pos)?
+                .visit_field::<u32>("endpoint_ip", Self::VT_ENDPOINT_IP, false)?
+                .visit_field::<::flatbuffers::ForwardsUOffset<&str>>("uri", Self::VT_URI, false)?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct AlbumArtRequestArgs<'a> {
+        pub endpoint_ip: u32,
+        pub uri: Option<::flatbuffers::WIPOffset<&'a str>>,
+    }
+    impl<'a> Default for AlbumArtRequestArgs<'a> {
+        #[inline]
+        fn default() -> Self {
+            AlbumArtRequestArgs { endpoint_ip: 0, uri: None }
+        }
+    }
+
+    pub struct AlbumArtRequestBuilder<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a> {
+        fbb_: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
+        start_: ::flatbuffers::WIPOffset<::flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a> AlbumArtRequestBuilder<'a, 'b, A> {
+        #[inline]
+        pub fn add_endpoint_ip(&mut self, endpoint_ip: u32) {
+            self.fbb_.push_slot::<u32>(AlbumArtRequest::VT_ENDPOINT_IP, endpoint_ip, 0);
+        }
+        #[inline]
+        pub fn add_uri(&mut self, uri: ::flatbuffers::WIPOffset<&'b str>) {
+            self.fbb_
+                .push_slot_always::<::flatbuffers::WIPOffset<_>>(AlbumArtRequest::VT_URI, uri);
+        }
+        #[inline]
+        pub fn new(
+            _fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
+        ) -> AlbumArtRequestBuilder<'a, 'b, A> {
+            let start = _fbb.start_table();
+            AlbumArtRequestBuilder { fbb_: _fbb, start_: start }
+        }
+        #[inline]
+        pub fn finish(self) -> ::flatbuffers::WIPOffset<AlbumArtRequest<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            ::flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl ::core::fmt::Debug for AlbumArtRequest<'_> {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+            let mut ds = f.debug_struct("AlbumArtRequest");
+            ds.field("endpoint_ip", &self.endpoint_ip());
+            ds.field("uri", &self.uri());
+            ds.finish()
+        }
+    }
+    #[non_exhaustive]
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct AlbumArtRequestT {
+        pub endpoint_ip: u32,
+        pub uri: Option<alloc::string::String>,
+    }
+    impl Default for AlbumArtRequestT {
+        fn default() -> Self {
+            Self { endpoint_ip: 0, uri: None }
+        }
+    }
+    impl AlbumArtRequestT {
+        pub fn pack<'b, A: ::flatbuffers::Allocator + 'b>(
+            &self,
+            _fbb: &mut ::flatbuffers::FlatBufferBuilder<'b, A>,
+        ) -> ::flatbuffers::WIPOffset<AlbumArtRequest<'b>> {
+            let endpoint_ip = self.endpoint_ip;
+            let uri = self.uri.as_ref().map(|x| _fbb.create_string(x));
+            AlbumArtRequest::create(_fbb, &AlbumArtRequestArgs { endpoint_ip, uri })
+        }
+    }
+    pub enum AlbumArtChunkOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct AlbumArtChunk<'a> {
+        pub _tab: ::flatbuffers::Table<'a>,
+    }
+
+    impl<'a> ::flatbuffers::Follow<'a> for AlbumArtChunk<'a> {
+        type Inner = AlbumArtChunk<'a>;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self { _tab: unsafe { ::flatbuffers::Table::new(buf, loc) } }
+        }
+    }
+
+    impl<'a> AlbumArtChunk<'a> {
+        pub const VT_TOTAL_SIZE: ::flatbuffers::VOffsetT = 4;
+        pub const VT_DATA: ::flatbuffers::VOffsetT = 6;
+
+        #[inline]
+        pub unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
+            AlbumArtChunk { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<
+            'bldr: 'args,
+            'args: 'mut_bldr,
+            'mut_bldr,
+            A: ::flatbuffers::Allocator + 'bldr,
+        >(
+            _fbb: &'mut_bldr mut ::flatbuffers::FlatBufferBuilder<'bldr, A>,
+            args: &'args AlbumArtChunkArgs<'args>,
+        ) -> ::flatbuffers::WIPOffset<AlbumArtChunk<'bldr>> {
+            let mut builder = AlbumArtChunkBuilder::new(_fbb);
+            if let Some(x) = args.data {
+                builder.add_data(x);
+            }
+            builder.add_total_size(args.total_size);
+            builder.finish()
+        }
+
+        pub fn unpack(&self) -> AlbumArtChunkT {
+            let total_size = self.total_size();
+            let data = self.data().map(|x| x.into_iter().collect());
+            AlbumArtChunkT { total_size, data }
+        }
+
+        #[inline]
+        pub fn total_size(&self) -> u32 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe { self._tab.get::<u32>(AlbumArtChunk::VT_TOTAL_SIZE, Some(0)).unwrap() }
+        }
+        #[inline]
+        pub fn data(&self) -> Option<::flatbuffers::Vector<'a, u8>> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab.get::<::flatbuffers::ForwardsUOffset<::flatbuffers::Vector<'a, u8>>>(
+                    AlbumArtChunk::VT_DATA,
+                    None,
+                )
+            }
+        }
+    }
+
+    impl ::flatbuffers::Verifiable for AlbumArtChunk<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut ::flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), ::flatbuffers::InvalidFlatbuffer> {
+            v.visit_table(pos)?
+                .visit_field::<u32>("total_size", Self::VT_TOTAL_SIZE, false)?
+                .visit_field::<::flatbuffers::ForwardsUOffset<::flatbuffers::Vector<'_, u8>>>(
+                    "data",
+                    Self::VT_DATA,
+                    false,
+                )?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct AlbumArtChunkArgs<'a> {
+        pub total_size: u32,
+        pub data: Option<::flatbuffers::WIPOffset<::flatbuffers::Vector<'a, u8>>>,
+    }
+    impl<'a> Default for AlbumArtChunkArgs<'a> {
+        #[inline]
+        fn default() -> Self {
+            AlbumArtChunkArgs { total_size: 0, data: None }
+        }
+    }
+
+    pub struct AlbumArtChunkBuilder<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a> {
+        fbb_: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
+        start_: ::flatbuffers::WIPOffset<::flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a> AlbumArtChunkBuilder<'a, 'b, A> {
+        #[inline]
+        pub fn add_total_size(&mut self, total_size: u32) {
+            self.fbb_.push_slot::<u32>(AlbumArtChunk::VT_TOTAL_SIZE, total_size, 0);
+        }
+        #[inline]
+        pub fn add_data(&mut self, data: ::flatbuffers::WIPOffset<::flatbuffers::Vector<'b, u8>>) {
+            self.fbb_
+                .push_slot_always::<::flatbuffers::WIPOffset<_>>(AlbumArtChunk::VT_DATA, data);
+        }
+        #[inline]
+        pub fn new(
+            _fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
+        ) -> AlbumArtChunkBuilder<'a, 'b, A> {
+            let start = _fbb.start_table();
+            AlbumArtChunkBuilder { fbb_: _fbb, start_: start }
+        }
+        #[inline]
+        pub fn finish(self) -> ::flatbuffers::WIPOffset<AlbumArtChunk<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            ::flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl ::core::fmt::Debug for AlbumArtChunk<'_> {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+            let mut ds = f.debug_struct("AlbumArtChunk");
+            ds.field("total_size", &self.total_size());
+            ds.field("data", &self.data());
+            ds.finish()
+        }
+    }
+    #[non_exhaustive]
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct AlbumArtChunkT {
+        pub total_size: u32,
+        pub data: Option<alloc::vec::Vec<u8>>,
+    }
+    impl Default for AlbumArtChunkT {
+        fn default() -> Self {
+            Self { total_size: 0, data: None }
+        }
+    }
+    impl AlbumArtChunkT {
+        pub fn pack<'b, A: ::flatbuffers::Allocator + 'b>(
+            &self,
+            _fbb: &mut ::flatbuffers::FlatBufferBuilder<'b, A>,
+        ) -> ::flatbuffers::WIPOffset<AlbumArtChunk<'b>> {
+            let total_size = self.total_size;
+            let data = self.data.as_ref().map(|x| _fbb.create_vector(x));
+            AlbumArtChunk::create(_fbb, &AlbumArtChunkArgs { total_size, data })
         }
     }
 } // pub mod CoprocessorProto

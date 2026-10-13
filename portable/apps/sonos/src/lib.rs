@@ -15,7 +15,7 @@ use core::cell::RefCell;
 use core::fmt::Write;
 use core::pin::Pin;
 
-use embassy_futures::select::{Either4, select4};
+use embassy_futures::select::{Either, Either4, select, select4};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
 use slint::Model;
@@ -28,14 +28,16 @@ pub type SonosTransport = alloc::rc::Rc<tether_core::client::SharedClient>;
 #[derive(Clone)]
 pub struct SonosAppFactory<T: tether::Transport + Clone + 'static = SonosTransport> {
     transport: Option<T>,
+    art: Option<album_art::Decoder>,
     info: theme::AppInfo,
 }
 
 impl<T: tether::Transport + Clone + 'static> SonosAppFactory<T> {
-    pub fn new(client: coprocessor::sonos::Client<T>) -> Self {
+    /// `art` decodes album art away from the UI's core.
+    pub fn new(client: coprocessor::sonos::Client<T>, art: album_art::Decoder) -> Self {
         let app = SonosApp::new().expect("Failed to create SonosApp");
         let info = app.global::<SonosInfo>().get_info();
-        Self { transport: Some(client.0), info }
+        Self { transport: Some(client.0), art: Some(art), info }
     }
 }
 
@@ -43,7 +45,7 @@ impl SonosAppFactory<SonosTransport> {
     pub fn without_client() -> Self {
         let app = SonosApp::new().expect("Failed to create SonosApp");
         let info = app.global::<SonosInfo>().get_info();
-        Self { transport: None, info }
+        Self { transport: None, art: None, info }
     }
 }
 
@@ -77,111 +79,11 @@ fn format_elapsed_time(elapsed: u32) -> String {
 #[cfg(any(test, feature = "simulator"))]
 const MOCK_ALBUM_ART_JPEG: &[u8] = include_bytes!("../assets/album-art-mock.jpg");
 
-/// Resamples an RGB8 pixel slice of dimensions `(src_w, src_h)` to `(dst_w, dst_h)`
-/// with a center-crop (cover fit) and in-flight dimming factor `dim_percent` (0..=100).
-/// Writes directly into `dst` (which must be at least `dst_w * dst_h * 3` bytes).
-#[allow(dead_code)]
-fn resample_and_dim_rgb8(
-    src: &[u8],
-    src_w: u32,
-    src_h: u32,
-    dst: &mut [u8],
-    dst_w: u32,
-    dst_h: u32,
-    dim_percent: u8,
-) {
-    if src_w == 0 || src_h == 0 || dst_w == 0 || dst_h == 0 {
-        return;
-    }
-    let expected_dst_len = (dst_w as usize) * (dst_h as usize) * 3;
-    if dst.len() < expected_dst_len {
-        return;
-    }
-
-    let side = src_w.min(src_h);
-    let crop_x_fp = (((src_w - side) as u64) << 16) / 2;
-    let crop_y_fp = (((src_h - side) as u64) << 16) / 2;
-    let step_x_fp = ((side as u64) << 16) / (dst_w as u64);
-    let step_y_fp = ((side as u64) << 16) / (dst_h as u64);
-
-    let dim_scale = (dim_percent as u32 * 256) / 100;
-
-    for y in 0..dst_h {
-        let v_fp = crop_y_fp + (y as u64 * step_y_fp);
-        let y0 = ((v_fp >> 16) as usize).min((src_h - 1) as usize);
-        let y1 = (y0 + 1).min((src_h - 1) as usize);
-        let fy = ((v_fp >> 8) & 0xFF) as u32;
-
-        let row_dst_offset = (y as usize * dst_w as usize) * 3;
-        let row0_src_offset = y0 * (src_w as usize) * 3;
-        let row1_src_offset = y1 * (src_w as usize) * 3;
-
-        for x in 0..dst_w {
-            let u_fp = crop_x_fp + (x as u64 * step_x_fp);
-            let x0 = ((u_fp >> 16) as usize).min((src_w - 1) as usize);
-            let x1 = (x0 + 1).min((src_w - 1) as usize);
-            let fx = ((u_fp >> 8) & 0xFF) as u32;
-
-            let p00_idx = row0_src_offset + x0 * 3;
-            let p10_idx = row0_src_offset + x1 * 3;
-            let p01_idx = row1_src_offset + x0 * 3;
-            let p11_idx = row1_src_offset + x1 * 3;
-
-            let dst_idx = row_dst_offset + (x as usize) * 3;
-
-            for c in 0..3 {
-                let p00 = src.get(p00_idx + c).copied().unwrap_or(0) as u32;
-                let p10 = src.get(p10_idx + c).copied().unwrap_or(0) as u32;
-                let p01 = src.get(p01_idx + c).copied().unwrap_or(0) as u32;
-                let p11 = src.get(p11_idx + c).copied().unwrap_or(0) as u32;
-
-                let top = p00 * (256 - fx) + p10 * fx;
-                let bot = p01 * (256 - fx) + p11 * fx;
-                let val = (top * (256 - fy) + bot * fy) >> 16;
-
-                dst[dst_idx + c] = ((val * dim_scale) >> 8).min(255) as u8;
-            }
-        }
-    }
-}
-
-/// Decodes an arbitrary JPEG byte slice and resamples it to `target_size` square with
-/// 35% dimming (65% brightness) directly into a Slint RGB8 SharedPixelBuffer allocated in PSRAM.
-#[allow(dead_code)]
-fn decode_and_resample_album_art(jpeg_bytes: &[u8], target_size: u32) -> Option<slint::Image> {
-    #[cfg(feature = "defmt")]
-    defmt::debug!("decode_and_resample_album_art: start num_bytes={}", jpeg_bytes.len());
-
-    let dims = jpegdec::dimensions(jpeg_bytes).ok()?;
-
-    let mut raw_rgb = alloc::vec![0u8; (dims.width * dims.height * 3) as usize];
-    jpegdec::decode_into(jpeg_bytes, &mut raw_rgb).ok()?;
-    #[cfg(feature = "defmt")]
-    defmt::debug!("decode_and_resample_album_art: decoded {}x{}", dims.width, dims.height);
-
-    let mut pixel_buffer =
-        slint::SharedPixelBuffer::<slint::Rgb8Pixel>::new(target_size, target_size);
-    resample_and_dim_rgb8(
-        &raw_rgb,
-        dims.width,
-        dims.height,
-        pixel_buffer.make_mut_bytes(),
-        target_size,
-        target_size,
-        65,
-    );
-
-    let result = Some(slint::Image::from_rgb8(pixel_buffer));
-    #[cfg(feature = "defmt")]
-    defmt::debug!("decode_and_resample_album_art: resampled");
-    result
-}
-
 /// Loads and prepares the default bundled mock album art for the given screen size.
 fn load_default_album_art(target_size: u32) -> Option<slint::Image> {
     #[cfg(any(test, feature = "simulator"))]
     {
-        decode_and_resample_album_art(MOCK_ALBUM_ART_JPEG, target_size)
+        album_art::decode(MOCK_ALBUM_ART_JPEG, target_size).map(slint::Image::from_rgb8)
     }
     #[cfg(not(any(test, feature = "simulator")))]
     {
@@ -224,6 +126,10 @@ const MOCK_PLAYLIST: [MockTrack; 3] = [
 
 // TODO: Load from NVS / Web dashboard once configuration UI is ready.
 const SONOS_SEED_IP: Option<&str> = option_env!("SONOS_SEED_IP");
+
+/// Album art JPEGs of unknown size get this much up front: the largest
+/// measured was ~120 KB (640×640).
+const ART_JPEG_RESERVE: usize = 192 * 1024;
 
 #[derive(Default, Clone, Copy, Debug)]
 struct PlaybackProgress {
@@ -355,11 +261,21 @@ fn reconcile_topology_groups(
     (sorted_discovered, sorted_cards, action)
 }
 
-enum LoopEvent<TMsg, PMsg, SMsg> {
+enum LoopEvent<TMsg, PMsg, SMsg, AMsg> {
     Topology(Option<TMsg>),
     Playback(Option<PMsg>),
     Summary(Option<SMsg>),
+    AlbumArt(Option<AMsg>),
+    ArtDecoded(album_art::ArtResult),
     Command(SonosUiCommand),
+}
+
+/// The decoder's next result, or never without a decoder.
+async fn next_art(decoder: Option<album_art::Decoder>) -> album_art::ArtResult {
+    match decoder {
+        Some(decoder) => decoder.results.receive().await,
+        None => core::future::pending().await,
+    }
 }
 
 /// The next item of `stream`, or never if there's none open.
@@ -379,6 +295,7 @@ fn setup_sonos<T: tether::Transport + Clone + 'static>(
     app: &SonosApp,
     context: Option<&app_shell::ShellContext>,
     client: Option<coprocessor::sonos::Client<T>>,
+    art: Option<album_art::Decoder>,
 ) -> SonosHandles {
     // 0. Initialize album art in PSRAM sized to match screen dimensions
     let target_size = (app.get_screen_size() / 1.0).max(1.0) as u32;
@@ -757,6 +674,15 @@ fn setup_sonos<T: tether::Transport + Clone + 'static>(
             let mut summary_stream: Option<
                 tether::Channel<T::Channel, coprocessor::proto::GroupSummary<'static>>,
             > = None;
+            // Album art: the track's, downloading here, then decoded by `art`.
+            // The image shown stays until the next one is ready.
+            let mut art_stream: Option<
+                tether::Channel<T::Channel, coprocessor::proto::AlbumArtChunk<'static>>,
+            > = None;
+            let mut art_uri: Option<String> = None; // Shown, or on its way.
+            let mut art_generation: u32 = 0;
+            let mut art_jpeg: Vec<u8> = Vec::new();
+            let mut art_pending: Option<album_art::ArtRequest> = None; // Decoder busy.
 
             let mut current_seq: Option<u32> = None;
             let mut pending_groups: BTreeMap<String, (DiscoveredGroup, SonosGroupCard)> =
@@ -766,18 +692,23 @@ fn setup_sonos<T: tether::Transport + Clone + 'static>(
             let mut last_summary_at: Option<core::time::Duration> = None;
 
             loop {
-                let event = match select4(
-                    command_channel.receive(),
-                    topology_stream.recv(),
-                    next_item(&mut playback_stream),
-                    next_item(&mut summary_stream),
+                let event = match select(
+                    select4(
+                        command_channel.receive(),
+                        topology_stream.recv(),
+                        next_item(&mut playback_stream),
+                        next_item(&mut summary_stream),
+                    ),
+                    select(next_item(&mut art_stream), next_art(art)),
                 )
                 .await
                 {
-                    Either4::First(cmd) => LoopEvent::Command(cmd),
-                    Either4::Second(msg) => LoopEvent::Topology(msg),
-                    Either4::Third(msg) => LoopEvent::Playback(msg),
-                    Either4::Fourth(msg) => LoopEvent::Summary(msg),
+                    Either::First(Either4::First(cmd)) => LoopEvent::Command(cmd),
+                    Either::First(Either4::Second(msg)) => LoopEvent::Topology(msg),
+                    Either::First(Either4::Third(msg)) => LoopEvent::Playback(msg),
+                    Either::First(Either4::Fourth(msg)) => LoopEvent::Summary(msg),
+                    Either::Second(Either::First(msg)) => LoopEvent::AlbumArt(msg),
+                    Either::Second(Either::Second(result)) => LoopEvent::ArtDecoded(result),
                 };
 
                 match event {
@@ -956,6 +887,24 @@ fn setup_sonos<T: tether::Transport + Clone + 'static>(
                             "Sonos: received tether stream:\n{}",
                             defmt::Debug2Format(&update)
                         );
+                        // A new track's art: replacing the stream cancels one
+                        // still downloading.
+                        if let Some(uri) = update
+                            .track()
+                            .and_then(|t| t.album_art_uri())
+                            .filter(|uri| !uri.is_empty())
+                            && art_uri.as_deref() != Some(uri)
+                            && art.is_some()
+                            && let Some(endpoint) = active_coordinator_ip
+                        {
+                            art_uri = Some(String::from(uri));
+                            art_generation = art_generation.wrapping_add(1);
+                            art_jpeg = Vec::new();
+                            let mut req = coprocessor::proto::AlbumArtRequestT::default();
+                            req.endpoint_ip = endpoint;
+                            req.uri = Some(String::from(uri));
+                            art_stream = Some(client.get_album_art(&req, 8));
+                        }
                         let now = context_task.platform().duration_since_boot();
                         if let Some(app) = weak_app.upgrade() {
                             let mut state = app.get_state();
@@ -1067,6 +1016,62 @@ fn setup_sonos<T: tether::Transport + Clone + 'static>(
                             }
                         }
                     }
+                    LoopEvent::AlbumArt(Some(msg)) => {
+                        let chunk = msg.get();
+                        if art_jpeg.capacity() == 0 {
+                            // Speakers send the art chunked, without a size:
+                            // reserve what covers it (PSRAM, freed once decoded)
+                            // rather than grow as it comes.
+                            art_jpeg.reserve_exact(match chunk.total_size() {
+                                0 => ART_JPEG_RESERVE,
+                                size => size as usize,
+                            });
+                        }
+                        if let Some(data) = chunk.data() {
+                            art_jpeg.extend_from_slice(data.bytes());
+                        }
+                    }
+                    LoopEvent::AlbumArt(None) => {
+                        let status = art_stream.as_ref().and_then(|s| s.end());
+                        art_stream = None; // Downloaded, or failed: closed either way.
+                        let jpeg = core::mem::take(&mut art_jpeg);
+                        if let Some(Ok(())) = status
+                            && let Some(decoder) = art
+                        {
+                            let request = album_art::ArtRequest {
+                                generation: art_generation,
+                                jpeg,
+                                size: target_size,
+                            };
+                            // One at a time: if the decoder is busy, this
+                            // waits for its result, replacing an older one.
+                            if let Err(embassy_sync::channel::TrySendError::Full(request)) =
+                                decoder.requests.try_send(request)
+                            {
+                                art_pending = Some(request);
+                            }
+                        } else {
+                            #[cfg(feature = "defmt")]
+                            defmt::warn!(
+                                "Sonos: album art failed: {}",
+                                defmt::Debug2Format(&status)
+                            );
+                        }
+                    }
+                    LoopEvent::ArtDecoded(result) => {
+                        if let Some(request) = art_pending.take()
+                            && let Some(decoder) = art
+                        {
+                            let _ = decoder.requests.try_send(request);
+                        }
+                        if result.generation == art_generation
+                            && let Some(pixels) = result.pixels
+                            && let Some(app) = weak_app.upgrade()
+                        {
+                            app.set_album_art(slint::Image::from_rgb8(pixels));
+                            context_task.platform().wake_event_loop();
+                        }
+                    }
                     LoopEvent::Summary(None) => {
                         let _status = summary_stream.as_ref().and_then(|s| s.end());
                         #[cfg(feature = "defmt")]
@@ -1094,6 +1099,11 @@ fn setup_sonos<T: tether::Transport + Clone + 'static>(
                         SonosUiCommand::SelectGroup(target) => {
                             active_group_id = Some(target.id.clone());
                             active_coordinator_ip = Some(target.coordinator_ip);
+                            // The new group's first update brings its art; the
+                            // previous image stays meanwhile.
+                            art_uri = None;
+                            art_stream = None;
+                            art_generation = art_generation.wrapping_add(1);
                             // Nothing of the previous group's playback: the new watch's
                             // first update carries the whole state, and a speaker with
                             // nothing to play sends no track.
@@ -1165,7 +1175,7 @@ impl<T: tether::Transport + Clone + 'static> app_shell::AppFactory for SonosAppF
     fn launch(&self, context: app_shell::ShellContext) -> Box<dyn Any> {
         let app = SonosApp::new().expect("Failed to create SonosApp");
         let client = self.transport.clone().map(coprocessor::sonos::Client);
-        let handles = setup_sonos(&app, Some(&context), client);
+        let handles = setup_sonos(&app, Some(&context), client, self.art);
         context.connect(&app);
 
         // In Mode 1, edge back and edge quit return to Mode 0 (Groups)
@@ -1225,17 +1235,6 @@ mod tests {
         assert_eq!(format_elapsed_time(45), "00:45");
         assert_eq!(format_elapsed_time(65), "01:05");
         assert_eq!(format_elapsed_time(3600), "60:00");
-    }
-
-    #[test]
-    fn test_resample_and_dim_rgb8() {
-        let src = [255u8; 12]; // 2x2 white RGB
-        let mut dst = [0u8; 3]; // 1x1 output
-        resample_and_dim_rgb8(&src, 2, 2, &mut dst, 1, 1, 65);
-        // 255 * 0.65 = 165.75 -> integer arithmetic gives 165
-        assert_eq!(dst[0], 165);
-        assert_eq!(dst[1], 165);
-        assert_eq!(dst[2], 165);
     }
 
     #[test]

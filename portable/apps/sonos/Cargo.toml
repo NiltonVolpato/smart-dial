@@ -37,7 +37,7 @@ coprocessor = { workspace = true }
 heapless = { workspace = true }
 embassy-sync = { workspace = true }
 embassy-futures = { workspace = true }
-jpegdec = { workspace = true }
+album-art = { workspace = true }
 
 tether = { path = "../../../../../tether-worktree/main/tether" }
 tether-core = { path = "../../../../../tether-worktree/main/core" }

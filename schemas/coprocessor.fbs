@@ -12,6 +12,9 @@ namespace CoprocessorProto;
 /// Link limits both ends must agree on. An enum only to carry constants into
 /// the generated code, until tether takes the max payload from the schema.
 enum Limits : uint {
+    /// The most image data an AlbumArtChunk carries: room to spare in the
+    /// payload, for less RAM per send.
+    MaxAlbumArtChunk = 768,
     /// The largest RPC payload, requests and responses alike.
     MaxPayload = 1024,
     /// The largest COBS frame for MaxPayload, delimiter excluded: tether's
