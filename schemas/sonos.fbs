@@ -106,15 +106,13 @@ table GroupSummary {
     title: string;
 }
 
-// Collection of summaries for all known speaker groups
-table GroupsSummary {
-    groups: [GroupSummary];
-}
-
 rpc_service Sonos {
     WatchTopology(TopologyRequest): TopologyUpdate (streaming: "server");
     WatchPlayback(PlaybackRequest): StateUpdate (streaming: "server");
     Action(ActionRequest): CoprocessorProto.Empty (timeout_ms: "2000");
     SetVolume(VolumeRequest): CoprocessorProto.Empty (timeout_ms: "1000");
-    GetGroupsSummary(GroupsSummaryRequest): GroupsSummary (timeout_ms: "5000");
+    /// Summarizes each coordinator's group, one at a time in request order,
+    /// sending each as soon as it's known; then ends. A speaker that doesn't
+    /// answer still gets one, as not playing.
+    GetGroupsSummary(GroupsSummaryRequest): GroupSummary (streaming: "server");
 }

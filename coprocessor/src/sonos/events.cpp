@@ -65,11 +65,15 @@ struct MemberRow {
   std::string invisible;  // "1" for satellites, stereo pairs' second, ...
 };
 
+// Ends ZoneGroups: the NOTIFY carried a ZoneGroupState, empty or not.
+struct ZoneGroupsEnd {};
+
 // Members arrive before their group: Construct emits each at its end tag,
 // and a group ends after its members.
 struct TopologyRows {
   std::vector<MemberRow> members;  // Of the group being read.
   std::vector<GroupT> groups;
+  bool has_state = false;  // Some NOTIFYs carry other variables only.
 
   void add_group(const GroupRow& row) {
     GroupT group;
@@ -117,7 +121,8 @@ constexpr auto kTopology =
                 xq::Bind(&MemberRow::uuid, xq::Attr("UUID")),
                 xq::Bind(&MemberRow::name, xq::Attr("ZoneName")),
                 xq::Bind(&MemberRow::location, xq::Attr("Location")),
-                xq::Bind(&MemberRow::invisible, xq::Attr("Invisible"))));
+                xq::Bind(&MemberRow::invisible, xq::Attr("Invisible"))),
+        xq::Select("ZoneGroups") | xq::Construct<ZoneGroupsEnd>());
 
 auto topology_parser(TopologyRows* rows) {
   return xq::XmlParser(
@@ -125,6 +130,7 @@ auto topology_parser(TopologyRows* rows) {
       Overloaded{
           [rows](const GroupRow& row) { rows->add_group(row); },
           [rows](const MemberRow& row) { rows->members.push_back(row); },
+          [rows](const ZoneGroupsEnd&) { rows->has_state = true; },
       });
 }
 
@@ -251,7 +257,10 @@ bool TopologyParser::feed(std::string_view chunk, bool last) {
   return impl_->parser.feed(chunk, last) == xq::ParseStatus::Ok;
 }
 
-std::vector<GroupT> TopologyParser::take() {
+std::optional<std::vector<GroupT>> TopologyParser::take() {
+  if (!std::exchange(impl_->rows.has_state, false)) {
+    return std::nullopt;
+  }
   return std::exchange(impl_->rows.groups, {});
 }
 

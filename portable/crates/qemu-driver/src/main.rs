@@ -128,24 +128,26 @@ fn check_sonos(connector: &mut Connector, seed: Ipv4Addr) -> Result {
     })?;
     println!("  Discovered {} Sonos group(s)", coordinator_ips.len());
 
-    // The reactor's HTTP client, permits and XML queries.
+    // The reactor's HTTP client, permits and XML queries; one item per group.
     println!("Testing SonosService.GetGroupsSummary...");
     let mut request = proto::GroupsSummaryRequestT::default();
     request.coordinator_ips = Some(coordinator_ips.clone());
-    let call = sonos::Client(&connector.client).get_groups_summary(&request);
-    let summary = connector
-        .wait_call(call, Duration::from_secs(10))
-        .map_err(|s| format!("GetGroupsSummary failed with status: {s:?}"))?;
-    let groups: Vec<_> = summary.get().groups().into_iter().flatten().collect();
-    for g in &groups {
-        println!(
-            "  Summary: coord_ip={}, playing={}, title={:?}",
-            Ipv4Addr::from(g.coordinator_ip()),
-            g.is_playing(),
-            g.title()
-        );
-    }
-    let answered: Vec<u32> = groups.iter().map(|g| g.coordinator_ip()).collect();
+    let mut summary = sonos::Client(&connector.client).get_groups_summary(&request, 4);
+    let mut answered = Vec::new();
+    connector.pump_until(Duration::from_secs(10), |_| {
+        while let Some(msg) = summary.try_recv() {
+            let g = msg.get();
+            println!(
+                "  Summary: coord_ip={}, playing={}, title={:?}",
+                Ipv4Addr::from(g.coordinator_ip()),
+                g.is_playing(),
+                g.title()
+            );
+            answered.push(g.coordinator_ip());
+        }
+        summary.end().is_some()
+    })?;
+    assert_eq!(summary.end(), Some(Ok(())), "The summary must end cleanly");
     assert_eq!(answered, coordinator_ips, "Summary must answer every group, in order");
 
     // A GENA subscription, whose first NOTIFY carries the state.

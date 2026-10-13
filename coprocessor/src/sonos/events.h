@@ -34,8 +34,10 @@ class TopologyParser {
 
   /// False if the body is malformed: stop feeding then.
   bool feed(std::string_view chunk, bool last);
-  /// The groups, once the last chunk was fed.
-  std::vector<CoprocessorProto::GroupT> take();
+  /// The groups, once the last chunk was fed; none if the NOTIFY carried no
+  /// ZoneGroupState (only other variables, e.g. an alarm's), as opposed to
+  /// an empty one.
+  std::optional<std::vector<CoprocessorProto::GroupT>> take();
 
  private:
   struct Impl;

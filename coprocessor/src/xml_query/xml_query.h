@@ -7,8 +7,11 @@
 
 #include <expat.h>
 
+#include <atomic>
 #include <charconv>
 #include <cstddef>
+#include <cstdlib>
+#include <cstring>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -17,6 +20,92 @@
 #include <utility>
 
 namespace xq {
+
+// ----------------------------------------------------------------------------
+// Memory accounting
+// ----------------------------------------------------------------------------
+
+namespace detail {
+
+// What Expat holds across every parser, and the most since the last reset.
+inline std::atomic<std::size_t> g_in_use{0};
+inline std::atomic<std::size_t> g_peak{0};
+
+// Each block carries its size ahead of it, keeping malloc's alignment.
+inline constexpr std::size_t kSizeHeader = alignof(std::max_align_t);
+static_assert(kSizeHeader >= sizeof(std::size_t));
+
+inline void note_in_use(std::size_t now) {
+  std::size_t peak = g_peak.load(std::memory_order_relaxed);
+  while (now > peak &&
+         !g_peak.compare_exchange_weak(peak, now, std::memory_order_relaxed)) {
+  }
+}
+
+inline void* counted_malloc(std::size_t size) {
+  auto* block = static_cast<unsigned char*>(std::malloc(kSizeHeader + size));
+  if (block == nullptr) {
+    return nullptr;
+  }
+  std::memcpy(block, &size, sizeof size);
+  note_in_use(g_in_use.fetch_add(size, std::memory_order_relaxed) + size);
+  return block + kSizeHeader;
+}
+
+inline void counted_free(void* ptr) {
+  if (ptr == nullptr) {
+    return;
+  }
+  auto* block = static_cast<unsigned char*>(ptr) - kSizeHeader;
+  std::size_t size = 0;
+  std::memcpy(&size, block, sizeof size);
+  g_in_use.fetch_sub(size, std::memory_order_relaxed);
+  std::free(block);
+}
+
+inline void* counted_realloc(void* ptr, std::size_t size) {
+  if (ptr == nullptr) {
+    return counted_malloc(size);
+  }
+  auto* block = static_cast<unsigned char*>(ptr) - kSizeHeader;
+  std::size_t old_size = 0;
+  std::memcpy(&old_size, block, sizeof old_size);
+  auto* grown =
+      static_cast<unsigned char*>(std::realloc(block, kSizeHeader + size));
+  if (grown == nullptr) {
+    return nullptr;  // The old block stays, and so does its count.
+  }
+  std::memcpy(grown, &size, sizeof size);
+  g_in_use.fetch_sub(old_size, std::memory_order_relaxed);
+  note_in_use(g_in_use.fetch_add(size, std::memory_order_relaxed) + size);
+  return grown + kSizeHeader;
+}
+
+inline const XML_Memory_Handling_Suite kCountedMemory{
+    .malloc_fcn = counted_malloc,
+    .realloc_fcn = counted_realloc,
+    .free_fcn = counted_free,
+};
+
+inline XML_Parser create_parser() {
+  return XML_ParserCreate_MM(nullptr, &kCountedMemory, nullptr);
+}
+
+}  // namespace detail
+
+/// Heap Expat holds now, across every parser (each ParseXml() runs one).
+inline std::size_t memory_in_use() noexcept {
+  return detail::g_in_use.load(std::memory_order_relaxed);
+}
+
+/// The most Expat held at once since reset_peak_memory().
+inline std::size_t peak_memory_in_use() noexcept {
+  return detail::g_peak.load(std::memory_order_relaxed);
+}
+
+inline void reset_peak_memory() noexcept {
+  detail::g_peak.store(memory_in_use(), std::memory_order_relaxed);
+}
 
 enum class ParseStatus {
   Ok,
@@ -321,28 +410,43 @@ class ParseXmlSink {
     self->downstream_.on_end(local_name(name));
   }
 
- public:
-  // Built in place, never moved: Expat holds `this` as its user data.
-  template <typename Make>
-  explicit ParseXmlSink(const Make& make)
-      : downstream_(make()), parser_(XML_ParserCreate(nullptr)) {
+  bool start_parser() {
+    parser_ = detail::create_parser();
+    if (parser_ == nullptr) {
+      return false;
+    }
     XML_SetUserData(parser_, this);
     XML_SetStartElementHandler(parser_, start_cb);
     XML_SetCharacterDataHandler(parser_, text_cb);
     XML_SetEndElementHandler(parser_, end_cb);
+    return true;
   }
 
-  ~ParseXmlSink() {
-    if (parser_) {
+  void free_parser() {
+    if (parser_ != nullptr) {
       XML_ParserFree(parser_);
+      parser_ = nullptr;
     }
   }
+
+ public:
+  // Built in place, never moved: Expat holds `this` as its user data. Each
+  // nested document gets an Expat parser of its own, freed as soon as the
+  // document ends: Expat keeps its buffers across a reset.
+  template <typename Make>
+  explicit ParseXmlSink(const Make& make) : downstream_(make()) {}
+
+  ~ParseXmlSink() { free_parser(); }
 
   ParseXmlSink(const ParseXmlSink&) = delete;
   ParseXmlSink& operator=(const ParseXmlSink&) = delete;
 
   void receive(std::string_view chunk) {
     if (failed_) return;
+    if (parser_ == nullptr && !start_parser()) {
+      failed_ = true;
+      return;
+    }
     if (XML_Parse(parser_, chunk.data(), static_cast<int>(chunk.size()),
                   XML_FALSE) == XML_STATUS_ERROR) {
       failed_ = true;
@@ -350,16 +454,13 @@ class ParseXmlSink {
   }
 
   void done() {
+    // An empty document is malformed too, as Expat would say.
     if (!failed_ &&
-        XML_Parse(parser_, nullptr, 0, XML_TRUE) == XML_STATUS_ERROR) {
+        (parser_ == nullptr ||
+         XML_Parse(parser_, nullptr, 0, XML_TRUE) == XML_STATUS_ERROR)) {
       failed_ = true;
     }
-    XML_ParserReset(parser_, nullptr);
-    // Reset preserves handlers but clears user data on some Expat versions.
-    XML_SetUserData(parser_, this);
-    XML_SetStartElementHandler(parser_, start_cb);
-    XML_SetCharacterDataHandler(parser_, text_cb);
-    XML_SetEndElementHandler(parser_, end_cb);
+    free_parser();
   }
 
   void reset_target(auto& obj) { downstream_.reset_target(obj); }
@@ -840,7 +941,7 @@ class XmlParser {
   // so construct it where it lives (e.g. optional::emplace(query, fn)).
   XmlParser(const Query& query, Fn fn)
       : sink_(query.build(detail::MakeInvokeSink<Fn>{&fn})),
-        parser_(XML_ParserCreate(nullptr)) {
+        parser_(detail::create_parser()) {
     XML_SetUserData(parser_, this);
     XML_SetStartElementHandler(parser_, start_cb);
     XML_SetCharacterDataHandler(parser_, text_cb);

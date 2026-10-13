@@ -93,10 +93,6 @@ struct GroupSummary;
 struct GroupSummaryBuilder;
 struct GroupSummaryT;
 
-struct GroupsSummary;
-struct GroupsSummaryBuilder;
-struct GroupsSummaryT;
-
 enum class WifiState : uint8_t {
   /// No network to join.
   Disconnected = 0,
@@ -2072,80 +2068,6 @@ inline ::flatbuffers::Offset<GroupSummary> CreateGroupSummaryDirect(
 
 ::flatbuffers::Offset<GroupSummary> CreateGroupSummary(::flatbuffers::FlatBufferBuilder &_fbb, const GroupSummaryT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
-struct GroupsSummaryT : public ::flatbuffers::NativeTable {
-  typedef GroupsSummary TableType;
-  std::vector<std::unique_ptr<CoprocessorProto::GroupSummaryT>> groups{};
-  GroupsSummaryT() = default;
-  GroupsSummaryT(const GroupsSummaryT &o);
-  GroupsSummaryT(GroupsSummaryT&&) FLATBUFFERS_NOEXCEPT = default;
-  GroupsSummaryT &operator=(GroupsSummaryT o) FLATBUFFERS_NOEXCEPT;
-};
-
-struct GroupsSummary FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef GroupsSummaryT NativeTableType;
-  typedef GroupsSummaryBuilder Builder;
-  struct Traits;
-  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_GROUPS = 4
-  };
-  const ::flatbuffers::Vector<::flatbuffers::Offset<CoprocessorProto::GroupSummary>> *groups() const {
-    return GetPointer<const ::flatbuffers::Vector<::flatbuffers::Offset<CoprocessorProto::GroupSummary>> *>(VT_GROUPS);
-  }
-  template <bool B = false>
-  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
-    return VerifyTableStart(verifier) &&
-           VerifyOffset(verifier, VT_GROUPS) &&
-           verifier.VerifyVector(groups()) &&
-           verifier.VerifyVectorOfTables(groups()) &&
-           verifier.EndTable();
-  }
-  GroupsSummaryT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
-  void UnPackTo(GroupsSummaryT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
-  static ::flatbuffers::Offset<GroupsSummary> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const GroupsSummaryT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
-};
-
-struct GroupsSummaryBuilder {
-  typedef GroupsSummary Table;
-  ::flatbuffers::FlatBufferBuilder &fbb_;
-  ::flatbuffers::uoffset_t start_;
-  void add_groups(::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<CoprocessorProto::GroupSummary>>> groups) {
-    fbb_.AddOffset(GroupsSummary::VT_GROUPS, groups);
-  }
-  explicit GroupsSummaryBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
-        : fbb_(_fbb) {
-    start_ = fbb_.StartTable();
-  }
-  ::flatbuffers::Offset<GroupsSummary> Finish() {
-    const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<GroupsSummary>(end);
-    return o;
-  }
-};
-
-inline ::flatbuffers::Offset<GroupsSummary> CreateGroupsSummary(
-    ::flatbuffers::FlatBufferBuilder &_fbb,
-    ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<CoprocessorProto::GroupSummary>>> groups = 0) {
-  GroupsSummaryBuilder builder_(_fbb);
-  builder_.add_groups(groups);
-  return builder_.Finish();
-}
-
-struct GroupsSummary::Traits {
-  using type = GroupsSummary;
-  static auto constexpr Create = CreateGroupsSummary;
-};
-
-inline ::flatbuffers::Offset<GroupsSummary> CreateGroupsSummaryDirect(
-    ::flatbuffers::FlatBufferBuilder &_fbb,
-    const std::vector<::flatbuffers::Offset<CoprocessorProto::GroupSummary>> *groups = nullptr) {
-  auto groups__ = groups ? _fbb.CreateVector<::flatbuffers::Offset<CoprocessorProto::GroupSummary>>(*groups) : 0;
-  return CoprocessorProto::CreateGroupsSummary(
-      _fbb,
-      groups__);
-}
-
-::flatbuffers::Offset<GroupsSummary> CreateGroupsSummary(::flatbuffers::FlatBufferBuilder &_fbb, const GroupsSummaryT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
-
 inline EmptyT *Empty::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
   auto _o = std::make_unique<EmptyT>();
   UnPackTo(_o.get(), _resolver);
@@ -2784,42 +2706,6 @@ inline ::flatbuffers::Offset<GroupSummary> GroupSummary::Pack(::flatbuffers::Fla
       _coordinator_ip,
       _is_playing,
       _title);
-}
-
-inline GroupsSummaryT::GroupsSummaryT(const GroupsSummaryT &o) {
-  groups.reserve(o.groups.size());
-  for (const auto &groups_ : o.groups) { groups.emplace_back((groups_) ? new CoprocessorProto::GroupSummaryT(*groups_) : nullptr); }
-}
-
-inline GroupsSummaryT &GroupsSummaryT::operator=(GroupsSummaryT o) FLATBUFFERS_NOEXCEPT {
-  std::swap(groups, o.groups);
-  return *this;
-}
-
-inline GroupsSummaryT *GroupsSummary::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
-  auto _o = std::make_unique<GroupsSummaryT>();
-  UnPackTo(_o.get(), _resolver);
-  return _o.release();
-}
-
-inline void GroupsSummary::UnPackTo(GroupsSummaryT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
-  (void)_o;
-  (void)_resolver;
-  { auto _e = groups(); if (_e) { _o->groups.resize(_e->size()); for (::flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { if(_o->groups[_i]) { _e->Get(_i)->UnPackTo(_o->groups[_i].get(), _resolver); } else { _o->groups[_i] = std::unique_ptr<CoprocessorProto::GroupSummaryT>(_e->Get(_i)->UnPack(_resolver)); } } } else { _o->groups.resize(0); } }
-}
-
-inline ::flatbuffers::Offset<GroupsSummary> CreateGroupsSummary(::flatbuffers::FlatBufferBuilder &_fbb, const GroupsSummaryT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
-  return GroupsSummary::Pack(_fbb, _o, _rehasher);
-}
-
-inline ::flatbuffers::Offset<GroupsSummary> GroupsSummary::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const GroupsSummaryT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
-  (void)_rehasher;
-  (void)_o;
-  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const GroupsSummaryT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
-  auto _groups = _o->groups.size() ? _fbb.CreateVector<::flatbuffers::Offset<CoprocessorProto::GroupSummary>> (_o->groups.size(), [](size_t i, _VectorArgs *__va) { return CreateGroupSummary(*__va->__fbb, __va->__o->groups[i].get(), __va->__rehasher); }, &_va ) : 0;
-  return CoprocessorProto::CreateGroupsSummary(
-      _fbb,
-      _groups);
 }
 
 template <bool B>

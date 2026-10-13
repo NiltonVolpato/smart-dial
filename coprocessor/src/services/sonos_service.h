@@ -19,8 +19,8 @@ namespace coprocessor {
 /// next send (and streams check while renewing their subscriptions).
 class SonosServiceHandler final : public CoprocessorProto::sonos::Handler {
  public:
-  /// HttpClients a call may use at once (GetGroupsSummary's queries;
-  /// WatchPlayback's two subscriptions and its position queries).
+  /// HttpClients a call may use at once (WatchPlayback's two subscriptions
+  /// and its position queries).
   static constexpr std::size_t kMaxHttpClientsPerCall = 3;
 
   SonosServiceHandler(Reactor& reactor, ConnectionPermits& permits,
@@ -42,7 +42,7 @@ class SonosServiceHandler final : public CoprocessorProto::sonos::Handler {
                   const CoprocessorProto::VolumeRequest& request) override;
 
   void get_groups_summary(
-      tether::Reply<CoprocessorProto::GroupsSummary> reply,
+      tether::Sink<CoprocessorProto::GroupSummary> sink,
       const CoprocessorProto::GroupsSummaryRequest& request) override;
 
  private:

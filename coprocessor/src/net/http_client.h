@@ -144,7 +144,7 @@ class HttpClient {
   std::size_t body_received_ = 0;
 
   // Holds the response head while it arrives, then body chunks.
-  std::array<char, 1024> buffer_{};
+  std::array<char, 512> buffer_{};
   std::size_t buffered_ = 0;
 };
 

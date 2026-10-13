@@ -46,7 +46,9 @@ TEST(SonosEventsTest, TopologyNotify) {
   TopologyParser parser;
   ASSERT_TRUE(
       feed_in_chunks(parser, fixture("notify_zone_group_topology.xml")));
-  std::vector<CoprocessorProto::GroupT> groups = parser.take();
+  std::optional<std::vector<CoprocessorProto::GroupT>> taken = parser.take();
+  ASSERT_TRUE(taken.has_value());
+  std::vector<CoprocessorProto::GroupT>& groups = *taken;
   ASSERT_EQ(groups.size(), 4U);
 
   EXPECT_EQ(groups[0].name, "Office");
@@ -73,7 +75,32 @@ TEST(SonosEventsTest, TopologyNotifyInOneChunk) {
   TopologyParser parser;
   std::string body = fixture("notify_zone_group_topology.xml");
   ASSERT_TRUE(parser.feed(body, true));
-  EXPECT_EQ(parser.take().size(), 4U);
+  EXPECT_EQ(parser.take().value().size(), 4U);
+}
+
+// Speakers also send ZoneGroupTopology NOTIFYs of other variables only: no
+// topology news, unlike a household with no groups.
+TEST(SonosEventsTest, TopologyNotifyWithoutZoneGroupState) {
+  TopologyParser parser;
+  ASSERT_TRUE(parser.feed(
+      R"(<e:propertyset xmlns:e="urn:schemas-upnp-org:event-1-0">)"
+      R"(<e:property><AlarmRunSequence>1</AlarmRunSequence></e:property>)"
+      R"(</e:propertyset>)",
+      true));
+  EXPECT_EQ(parser.take(), std::nullopt);
+}
+
+TEST(SonosEventsTest, TopologyNotifyWithNoGroups) {
+  TopologyParser parser;
+  ASSERT_TRUE(parser.feed(
+      R"(<e:propertyset xmlns:e="urn:schemas-upnp-org:event-1-0">)"
+      R"(<e:property><ZoneGroupState>&lt;ZoneGroupState&gt;)"
+      R"(&lt;ZoneGroups&gt;&lt;/ZoneGroups&gt;&lt;/ZoneGroupState&gt;)"
+      R"(</ZoneGroupState></e:property></e:propertyset>)",
+      true));
+  std::optional<std::vector<CoprocessorProto::GroupT>> groups = parser.take();
+  ASSERT_TRUE(groups.has_value());
+  EXPECT_TRUE(groups->empty());
 }
 
 TEST(SonosEventsTest, AvTransportPlaying) {

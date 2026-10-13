@@ -8,6 +8,7 @@
 #include <string>
 
 #include "esp_event.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_netif.h"
 #include "esp_random.h"
@@ -84,12 +85,12 @@ struct App {
   // bounds (calls, streams):
   // - inbox: a start per call and per UNSUBSCRIBE, per stream a flush and a
   //   finish, and System.Watch's flush;
-  // - timers: one per HttpClient, per stream a renewal and a resend, and
-  //   System.Watch's resend.
+  // - timers: one per HttpClient, per stream a renewal, a resend and a
+  //   check for cancellation, and System.Watch's resend.
   Reactor reactor{{
       .inbox = kMaxCalls + kMaxSubscriptions + 2 * kMaxStreams + 1,
       .watches = kMaxConnections,
-      .timers = kMaxHttpClients + 2 * kMaxStreams + 1,
+      .timers = kMaxHttpClients + 3 * kMaxStreams + 1,
   }};
   ConnectionPermits connections{kMaxConnections, kMaxHttpClients};
   GenaRegistry gena{kMaxSubscriptions};
@@ -111,6 +112,11 @@ void heartbeat(TimerHandle_t /*timer*/) {
       static_cast<unsigned long>(esp_timer_get_time() / 1'000'000);
   const auto free_heap_kb =
       static_cast<unsigned long>(esp_get_free_heap_size() / 1024);
+  // Fragmentation shows as the largest block shrinking while the total holds.
+  const auto largest_block_kb = static_cast<unsigned long>(
+      heap_caps_get_largest_free_block(MALLOC_CAP_8BIT) / 1024);
+  const auto min_free_heap_kb =
+      static_cast<unsigned long>(esp_get_minimum_free_heap_size() / 1024);
   const std::string ssid = wifi_get_ssid();
   int8_t rssi = 0;
   wifi_ap_record_t ap_info{};
@@ -118,11 +124,12 @@ void heartbeat(TimerHandle_t /*timer*/) {
     rssi = ap_info.rssi;
   }
   ESP_LOGI(TAG,
-           "[Heartbeat] uptime=%lus, heap=%luKB, network=%s (ip=%s, "
+           "[Heartbeat] uptime=%lus, heap=%luKB (largest block %luKB, min "
+           "%luKB), network=%s (ip=%s, "
            "ssid='%s', rssi=%d), provisioning=%s",
-           uptime_sec, free_heap_kb, network_is_up() ? "up" : "down",
-           network_ip().to_string().c_str(), ssid.c_str(), rssi,
-           provisioning_is_active() ? "active" : "off");
+           uptime_sec, free_heap_kb, largest_block_kb, min_free_heap_kb,
+           network_is_up() ? "up" : "down", network_ip().to_string().c_str(),
+           ssid.c_str(), rssi, provisioning_is_active() ? "active" : "off");
 }
 
 void reactor_task(void* arg) {
@@ -130,15 +137,18 @@ void reactor_task(void* arg) {
   vTaskDelete(nullptr);
 }
 
+// Serves one link, then reboots: everything here is per S3 session, and a
+// reboot is the one reset that misses nothing (handlers, subscriptions, the
+// heap). The S3 reboots when its link ends too.
 [[noreturn]] void tether_io(void* arg) {
   App& app = *static_cast<App*>(arg);
-  for (;;) {
-    ESP_LOGI(TAG, "Tether link serving, boot id %08lx",
-             static_cast<unsigned long>(app.server.link().boot_id()));
-    app.io.serve(app.server);
-    ESP_LOGW(TAG, "Tether link closed, restarting with new boot id");
-    app.server.restart(new_boot_id());
-  }
+  ESP_LOGI(TAG, "Tether link serving, boot id %08lx",
+           static_cast<unsigned long>(app.server.link().boot_id()));
+  const tether::LinkState state = app.io.serve(app.server);
+  ESP_LOGW(TAG, "Tether link ended (%s): rebooting",
+           state == tether::LinkState::PeerRebooted ? "the S3 rebooted"
+                                                    : "the S3 is lost");
+  esp_restart();
 }
 
 }  // namespace

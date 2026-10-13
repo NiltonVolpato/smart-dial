@@ -16,6 +16,8 @@
 #include <string_view>
 #include <utility>
 
+#include "heap_log.h"
+
 #include "log.h"
 
 namespace coprocessor {
@@ -339,6 +341,7 @@ void HttpClient::fail_pending() {
 
 void HttpClient::complete(HttpResult result) {
   release();
+  log_heap("HTTP exchange done");
   result_ = result;
   sink_ = nullptr;
   Callback done = std::exchange(done_, Callback{});

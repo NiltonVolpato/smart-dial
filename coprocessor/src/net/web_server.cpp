@@ -22,6 +22,7 @@
 #include "esp_timer.h"
 #include "esp_wifi.h"
 #include "format.h"
+#include "heap_log.h"
 
 #include "coprocessor_generated.h"
 #include "net/network.h"
@@ -402,6 +403,39 @@ esp_err_t ws_handler(httpd_req_t* req) {
   return ESP_OK;
 }
 
+// GET /api/log?tag=heap&level=debug: sets a log tag's level at runtime, e.g.
+// to turn on heap logging (heap_log.h) without reflashing. Levels: none,
+// error, warn, info, debug, verbose.
+esp_err_t log_level_handler(httpd_req_t* req) {
+  std::array<char, 96> query = {};
+  std::array<char, 32> tag = {};
+  std::array<char, 16> level = {};
+  if (httpd_req_get_url_query_str(req, query.data(), query.size()) != ESP_OK ||
+      httpd_query_key_value(query.data(), "tag", tag.data(), tag.size()) !=
+          ESP_OK ||
+      httpd_query_key_value(query.data(), "level", level.data(),
+                            level.size()) != ESP_OK) {
+    return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST,
+                               "usage: /api/log?tag=<tag>&level=<level>");
+  }
+  constexpr std::array<std::pair<std::string_view, esp_log_level_t>, 6> kLevels{
+      {{"none", ESP_LOG_NONE},
+       {"error", ESP_LOG_ERROR},
+       {"warn", ESP_LOG_WARN},
+       {"info", ESP_LOG_INFO},
+       {"debug", ESP_LOG_DEBUG},
+       {"verbose", ESP_LOG_VERBOSE}}};
+  const auto* it =
+      std::ranges::find(kLevels, std::string_view(level.data()),
+                        &std::pair<std::string_view, esp_log_level_t>::first);
+  if (it == kLevels.end()) {
+    return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "unknown level");
+  }
+  esp_log_level_set(tag.data(), it->second);  // Copies the tag.
+  ESP_LOGI(TAG, "Log level of '%s' set to %s", tag.data(), level.data());
+  return httpd_resp_send(req, "ok", HTTPD_RESP_USE_STRLEN);
+}
+
 // Spam guard state for the GENA NOTIFY endpoint (rate detection only, no
 // throttling).
 uint32_t g_notify_window_start_ms = 0;
@@ -428,6 +462,11 @@ esp_err_t media_notify_handler(httpd_req_t* req) {
       ESP_OK) {
     sid[0] = '\0';
   }
+
+  std::array<char, 48> where = {};
+  std::snprintf(where.data(), where.size(), "NOTIFY received (%d B)",
+                req->content_len);
+  coprocessor::log_heap(where.data());
 
   // The listener parses the body inline, as it streams in, under the
   // registry's lock: its handler can't go away meanwhile.
@@ -459,6 +498,8 @@ esp_err_t media_notify_handler(httpd_req_t* req) {
           first = false;
         }
       });
+
+  coprocessor::log_heap("NOTIFY handled");
 
   if (!known) {
     // An old or foreign subscription: 412 tells the speaker to drop it.
@@ -525,6 +566,15 @@ esp_err_t web_server_start() {
   };
   httpd_register_uri_handler(g_server, &status_uri);
 
+  httpd_uri_t log_uri = {
+      .uri = "/api/log",
+      .method = HTTP_GET,
+      .handler = log_level_handler,
+      .user_ctx = nullptr,
+      .is_websocket = false,
+  };
+  httpd_register_uri_handler(g_server, &log_uri);
+
   httpd_uri_t ws_uri = {
       .uri = "/ws",
       .method = HTTP_GET,
@@ -547,8 +597,8 @@ esp_err_t web_server_start() {
   httpd_register_uri_handler(g_server, &notify_uri);
 
   ESP_LOGI(TAG,
-           "Web server running: /, /api/status, /ws (WebSocket), /media/notify "
-           "(GENA)");
+           "Web server running: /, /api/status, /api/log, /ws (WebSocket), "
+           "/media/notify (GENA)");
   return ESP_OK;
 }
 

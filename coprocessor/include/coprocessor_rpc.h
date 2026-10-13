@@ -30,7 +30,7 @@ inline constexpr std::array<std::optional<tether::MethodInfo>, 5> kCoprocessorPr
     tether::MethodInfo{.name = "WatchPlayback", .streaming = true},
     tether::MethodInfo{.name = "Action", .streaming = false},
     tether::MethodInfo{.name = "SetVolume", .streaming = false},
-    tether::MethodInfo{.name = "GetGroupsSummary", .streaming = false},
+    tether::MethodInfo{.name = "GetGroupsSummary", .streaming = true},
 };
 
 // The services the co-processor serves: wire IDs are fixed in append-only order.
@@ -62,7 +62,10 @@ class Handler {
   virtual void watch_playback(tether::Sink<::CoprocessorProto::StateUpdate> sink, const ::CoprocessorProto::PlaybackRequest& request) = 0;
   virtual void action(tether::Reply<::CoprocessorProto::Empty> reply, const ::CoprocessorProto::ActionRequest& request) = 0;
   virtual void set_volume(tether::Reply<::CoprocessorProto::Empty> reply, const ::CoprocessorProto::VolumeRequest& request) = 0;
-  virtual void get_groups_summary(tether::Reply<::CoprocessorProto::GroupsSummary> reply, const ::CoprocessorProto::GroupsSummaryRequest& request) = 0;
+  // Summarizes each coordinator's group, one at a time in request order,
+  // sending each as soon as it's known; then ends. A speaker that doesn't
+  // answer still gets one, as not playing.
+  virtual void get_groups_summary(tether::Sink<::CoprocessorProto::GroupSummary> sink, const ::CoprocessorProto::GroupsSummaryRequest& request) = 0;
   // The client dropped `call` before it finished.
   virtual void cancelled(tether::CallId /*call*/) {}
 
@@ -98,15 +101,6 @@ class Service final : public tether::Service {
         handler_->set_volume(tether::Reply<::CoprocessorProto::Empty>(reply), *message);
         return;
       }
-      case 4: {
-        const auto* message = tether::verify<::CoprocessorProto::GroupsSummaryRequest>(request);
-        if (message == nullptr) {
-          (void)reply.fail(tether::WireStatus::INVALID_ARGUMENT);
-          return;
-        }
-        handler_->get_groups_summary(tether::Reply<::CoprocessorProto::GroupsSummary>(reply), *message);
-        return;
-      }
       default:
         (void)reply.fail(tether::WireStatus::UNIMPLEMENTED);
         return;
@@ -133,6 +127,15 @@ class Service final : public tether::Service {
           return;
         }
         handler_->watch_playback(tether::Sink<::CoprocessorProto::StateUpdate>(sink), *message);
+        return;
+      }
+      case 4: {
+        const auto* message = tether::verify<::CoprocessorProto::GroupsSummaryRequest>(request);
+        if (message == nullptr) {
+          (void)sink.end(tether::WireStatus::INVALID_ARGUMENT);
+          return;
+        }
+        handler_->get_groups_summary(tether::Sink<::CoprocessorProto::GroupSummary>(sink), *message);
         return;
       }
       default:

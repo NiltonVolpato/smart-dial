@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -20,6 +21,7 @@
 #include "net/ipv4.h"
 #include "services/rpc.h"
 #include "services/sonos_streams.h"
+#include "services/stream_handler.h"
 #include "services/unary_handler.h"
 #include "sonos/events.h"
 #include "sonos/soap.h"
@@ -33,9 +35,14 @@ constexpr const char* TAG = "sonos_svc";
 
 using CoprocessorProto::ActionType;
 using CoprocessorProto::Empty;
-using CoprocessorProto::GroupsSummary;
+using CoprocessorProto::GroupSummary;
 using CoprocessorProto::TransportState;
+using std::chrono::milliseconds;
+using tether::CallError;
 using tether::WireStatus;
+
+// How long to wait before sending again, when a stream had no room.
+constexpr milliseconds kSendRetry{50};
 
 WireStatus to_wire_status(const HttpResult& result) {
   switch (result.error) {
@@ -149,6 +156,7 @@ class ActionHandler final : public SoapCommandHandler, HttpResponseSink {
     if (http_.result().ok()) {
       state = parse_transport_state(state_.c_str());
     }
+    parser_.reset();
     if (!state) {
       ESP_LOGW(TAG, "GetTransportInfo failed, toggling to Play");
     }
@@ -230,29 +238,26 @@ void truncate_utf8(std::string& text, std::size_t size) {
   text.resize(size);
 }
 
-// Summarizes groups by coordinator, a few at a time: each query slot takes
-// the next coordinator as it frees up. A group whose speaker fails to answer
-// is still listed, as not playing.
-class GroupsSummaryHandler final : public UnaryHandler<GroupsSummary> {
+// Summarizes groups by coordinator, one at a time, sending each as soon as
+// it's known: the client shows them as they come. A group whose speaker
+// fails to answer is still sent, as not playing. Ends after the last.
+class GroupsSummaryHandler final : public StreamHandler<GroupSummary> {
  public:
   // Tether I/O task: copies the request out of its frame.
   GroupsSummaryHandler(Reactor& reactor, ConnectionPermits& permits,
-                       tether::Reply<GroupsSummary> reply,
+                       tether::Sink<GroupSummary> sink,
                        const CoprocessorProto::GroupsSummaryRequest& request)
-      : UnaryHandler(reactor, reply),
-        queries_{{{reactor, permits, *this},
-                  {reactor, permits, *this},
-                  {reactor, permits, *this}}} {
+      : StreamHandler(reactor, sink), query_(reactor, permits, *this) {
     if (const auto* ips = request.coordinator_ips()) {
-      groups_.reserve(ips->size());
+      coordinators_.reserve(ips->size());
       for (uint32_t ip : *ips) {
-        groups_.push_back({.coordinator = Ipv4{ip}});
+        coordinators_.push_back(Ipv4{ip});
       }
     }
   }
 
  private:
-  // Keeps the reply within tether's payload: ten groups fit comfortably.
+  // Bounds an item's size.
   static constexpr std::size_t kMaxTitle = 48;
 
   struct Group {
@@ -309,20 +314,22 @@ class GroupsSummaryHandler final : public UnaryHandler<GroupsSummary> {
       group_->is_playing =
           result.ok() &&
           parse_transport_state(state_.c_str()) == TransportState::Playing;
+      parser_ = std::monostate{};
       if (!group_->is_playing) {
-        handler_.query_done(*this);  // Last: it may delete us all.
+        handler_.query_done();  // Last: it may delete us all.
         return;
       }
       send("GetPositionInfo", kTrackTitle, &group_->title, &Query::title_known);
     }
 
     void title_known() {
+      parser_ = std::monostate{};
       if (http_.result().ok()) {
         truncate_utf8(group_->title, kMaxTitle);
       } else {
         group_->title.clear();  // A failed parse may have left part of it.
       }
-      handler_.query_done(*this);  // Last: it may delete us all.
+      handler_.query_done();  // Last: it may delete us all.
     }
 
     GroupsSummaryHandler& handler_;
@@ -335,45 +342,56 @@ class GroupsSummaryHandler final : public UnaryHandler<GroupsSummary> {
         parser_;
   };
 
-  void start() override {
-    for (Query& query : queries_) {
-      if (next_ == groups_.size()) {
-        break;
-      }
-      ++active_;
-      query.start(groups_[next_++]);
+  void start() override { next(); }
+
+  // Queries the next coordinator, or ends the stream after the last.
+  void next() {
+    if (closed()) {
+      finish();  // The client cancelled.
+      return;
     }
-    if (active_ == 0) {
-      reply();  // No groups.
+    if (next_ == coordinators_.size()) {
+      end_and_finish(WireStatus::OK);
+      return;
     }
+    group_ = Group{.coordinator = coordinators_[next_++]};
+    query_.start(group_);
   }
 
-  // A slot finished its group: give it the next one, or answer when all are.
-  void query_done(Query& query) {
-    if (next_ < groups_.size()) {
-      query.start(groups_[next_++]);
-    } else if (--active_ == 0) {
-      reply();
-    }
-  }
+  void query_done() { send_group(); }
 
-  void reply() {
-    reply_and_finish([&](flatbuffers::FlatBufferBuilder& fbb) {
-      std::vector<flatbuffers::Offset<CoprocessorProto::GroupSummary>> offsets;
-      offsets.reserve(groups_.size());
-      for (const Group& group : groups_) {
-        offsets.push_back(CoprocessorProto::CreateGroupSummaryDirect(
-            fbb, group.coordinator.value, group.is_playing,
-            group.title.c_str()));
-      }
-      return CoprocessorProto::CreateGroupsSummaryDirect(fbb, &offsets);
+  void send_group() {
+    auto result = send([&](flatbuffers::FlatBufferBuilder& fbb) {
+      return CoprocessorProto::CreateGroupSummaryDirect(
+          fbb, group_.coordinator.value, group_.is_playing,
+          group_.title.c_str());
     });
+    if (result) {
+      next();
+      return;
+    }
+    switch (result.error()) {
+      case CallError::QueueFull:
+      case CallError::NoCredit:
+        // Nothing else runs meanwhile: it can't finish with this pending.
+        reactor().after(kSendRetry,
+                        Callback(this, &GroupsSummaryHandler::send_group));
+        return;
+      case CallError::Closed:
+        finish();
+        return;
+      case CallError::TooLarge:
+        ESP_LOGE(TAG, "Summary of %s doesn't fit a message: skipped",
+                 group_.coordinator.to_string().c_str());
+        next();
+        return;
+    }
   }
 
-  std::array<Query, SonosServiceHandler::kMaxHttpClientsPerCall> queries_;
-  std::vector<Group> groups_;  // Answered in request order.
-  std::size_t next_ = 0;       // The next group to query.
-  std::size_t active_ = 0;     // Slots with a query in flight.
+  Query query_;
+  std::vector<Ipv4> coordinators_;  // Summarized in request order.
+  std::size_t next_ = 0;            // The next coordinator to query.
+  Group group_;                     // The one being queried or sent.
 };
 
 }  // namespace
@@ -413,9 +431,9 @@ void SonosServiceHandler::set_volume(
 }
 
 void SonosServiceHandler::get_groups_summary(
-    tether::Reply<CoprocessorProto::GroupsSummary> reply,
+    tether::Sink<CoprocessorProto::GroupSummary> sink,
     const CoprocessorProto::GroupsSummaryRequest& request) {
-  reactor_.start(new GroupsSummaryHandler(reactor_, permits_, reply, request));
+  reactor_.start(new GroupsSummaryHandler(reactor_, permits_, sink, request));
 }
 
 }  // namespace coprocessor

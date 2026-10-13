@@ -4,6 +4,7 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
 #include <expected>
 #include <optional>
 #include <utility>
@@ -76,6 +77,15 @@ class NotifiedStreamHandler : public StreamHandler<Item>,
   /// Reactor: sends what NOTIFYs brought.
   virtual void flush() = 0;
 
+  /// Reactor: checks every kClosedCheck whether the client cancelled, and
+  /// stops then. Its subscriptions and clients would otherwise wait for the
+  /// next send to find out, and a quiet speaker may not NOTIFY for long.
+  /// Call from start().
+  void stop_when_closed() {
+    closed_timer_ = this->reactor().after(
+        kClosedCheck, Callback(this, &NotifiedStreamHandler::check_closed));
+  }
+
   /// Reactor: stops NOTIFYs, then ends the stream with `status` (if the
   /// client is still there) and finishes. Nothing of this handler should
   /// run afterwards, so return at once.
@@ -84,6 +94,7 @@ class NotifiedStreamHandler : public StreamHandler<Item>,
       return;
     }
     stopping_ = true;
+    this->reactor().cancel_timer(closed_timer_);
     status_ = status;
     registry_.remove(this);
     this->reactor().post(Callback(this, &NotifiedStreamHandler::finish_now));
@@ -92,6 +103,18 @@ class NotifiedStreamHandler : public StreamHandler<Item>,
   [[nodiscard]] bool stopping() const { return stopping_; }
 
  private:
+  // 10 ticks of FreeRTOS (CONFIG_FREERTOS_HZ=100): a flag read each time.
+  static constexpr std::chrono::milliseconds kClosedCheck{100};
+
+  void check_closed() {
+    closed_timer_ = 0;
+    if (this->closed()) {
+      stop(std::nullopt);
+    } else {
+      stop_when_closed();
+    }
+  }
+
   void run_flush() {
     flush_pending_ = false;
     if (!stopping_) {
@@ -111,6 +134,7 @@ class NotifiedStreamHandler : public StreamHandler<Item>,
   std::atomic<bool> flush_pending_{false};
   bool stopping_ = false;
   std::optional<tether::WireStatus> status_;
+  Reactor::TimerId closed_timer_ = 0;
 };
 
 }  // namespace coprocessor

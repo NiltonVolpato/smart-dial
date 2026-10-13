@@ -18,6 +18,8 @@
 #include "esp_vfs_eventfd.h"
 #endif
 
+#include "heap_log.h"
+
 #include "async/handler.h"
 #include "log.h"
 
@@ -81,6 +83,7 @@ Reactor::~Reactor() {
 }
 
 void Reactor::start(BaseHandler* handler) {
+  log_heap("Handler created");
   post(Callback(handler, &BaseHandler::start));
 }
 

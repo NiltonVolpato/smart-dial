@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "heap_log.h"
+
 namespace coprocessor {
 
 class Reactor;
@@ -33,7 +35,10 @@ class BaseHandler {
   virtual void start() = 0;
 
   /// Deletes this handler: touch nothing of it afterwards.
-  void finish() { delete this; }
+  void finish() {
+    delete this;
+    log_heap("Handler finished");
+  }
 
   [[nodiscard]] Reactor& reactor() const { return reactor_; }
 

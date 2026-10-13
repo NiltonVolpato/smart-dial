@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "esp_log.h"
+#include "heap_log.h"
 
 #include "net/http_client.h"
 #include "net/ipv4.h"
@@ -68,6 +69,7 @@ class WatchTopologyHandler final
 
  private:
   void start() override {
+    stop_when_closed();
     subscription_.refresh(Callback(this, &WatchTopologyHandler::refreshed));
   }
 
@@ -99,18 +101,24 @@ class WatchTopologyHandler final
   // Web server task.
   bool on_notify(std::string_view chunk, bool first, bool last) override {
     if (first) {
+      log_heap("Topology NOTIFY: before parse");
       parser_.emplace();
     }
     if (!parser_->feed(chunk, last)) {
       return false;
     }
     if (last) {
-      {
-        std::scoped_lock lock(mutex_);
-        pending_ = parser_->take();
-        has_pending_ = true;
+      log_heap("Topology NOTIFY: parsed");
+      std::optional<std::vector<GroupT>> groups = parser_->take();
+      parser_.reset();  // Its memory is the heap's until the next NOTIFY.
+      if (groups) {     // Else no topology news: nothing to send.
+        {
+          std::scoped_lock lock(mutex_);
+          pending_ = std::move(*groups);
+          has_pending_ = true;
+        }
+        request_flush();
       }
-      request_flush();
     }
     return true;
   }
@@ -228,7 +236,10 @@ class WatchPlaybackHandler final : public NotifiedStreamHandler<StateUpdate>,
   }
 
  private:
-  void start() override { renew(); }
+  void start() override {
+    stop_when_closed();
+    renew();
+  }
 
   // Both subscriptions, one after the other.
   void renew() {
@@ -260,17 +271,20 @@ class WatchPlaybackHandler final : public NotifiedStreamHandler<StateUpdate>,
   // Web server task: AVTransport's and RenderingControl's NOTIFYs alike.
   bool on_notify(std::string_view chunk, bool first, bool last) override {
     if (first) {
+      log_heap("Playback NOTIFY: before parse");
       parser_.emplace();
     }
     if (!parser_->feed(chunk, last)) {
       return false;
     }
     if (last) {
+      log_heap("Playback NOTIFY: parsed");
       {
         std::scoped_lock lock(mutex_);
         merge(pending_, parser_->take());
         has_pending_ = true;
       }
+      parser_.reset();  // Its memory is the heap's until the next NOTIFY.
       request_flush();
     }
     return true;
@@ -326,6 +340,7 @@ class WatchPlaybackHandler final : public NotifiedStreamHandler<StateUpdate>,
         outgoing_.track->duration_seconds = *duration;
       }
     }
+    position_parser_.reset();
     send_state();
   }
 

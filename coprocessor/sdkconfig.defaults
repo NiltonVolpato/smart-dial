@@ -18,3 +18,6 @@ CONFIG_LWIP_MAX_SOCKETS=16
 CONFIG_ESP_NETIF_IP_LOST_TIMER_INTERVAL=5
 # Event handlers send FlatBuffers to the S3 (services/wifi_service.cpp).
 CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE=4096
+# Debug logs are built in but off: raise a tag at runtime with the web
+# server's /api/log (e.g. heap: heap_log.h).
+CONFIG_LOG_MAXIMUM_LEVEL_DEBUG=y

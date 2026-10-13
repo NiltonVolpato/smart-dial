@@ -61,16 +61,16 @@ impl Pack for fb::coprocessor_proto::EmptyT {
     }
 }
 
-impl Table for fb::coprocessor_proto::GroupsSummary<'static> {
-    type View<'a> = fb::coprocessor_proto::GroupsSummary<'a>;
+impl Table for fb::coprocessor_proto::GroupSummary<'static> {
+    type View<'a> = fb::coprocessor_proto::GroupSummary<'a>;
     fn verify(
         buf: &[u8],
-    ) -> Result<fb::coprocessor_proto::GroupsSummary<'_>, flatbuffers::InvalidFlatbuffer> {
-        flatbuffers::root::<fb::coprocessor_proto::GroupsSummary>(buf)
+    ) -> Result<fb::coprocessor_proto::GroupSummary<'_>, flatbuffers::InvalidFlatbuffer> {
+        flatbuffers::root::<fb::coprocessor_proto::GroupSummary>(buf)
     }
 }
 
-impl Pack for fb::coprocessor_proto::GroupsSummaryT {
+impl Pack for fb::coprocessor_proto::GroupSummaryT {
     fn to_bytes(&self) -> Vec<u8> {
         let mut fbb = flatbuffers::FlatBufferBuilder::new();
         let root = self.pack(&mut fbb);
@@ -268,7 +268,7 @@ pub mod coprocessor_proto {
                 Some(tether::MethodInfo { name: "WatchPlayback", streaming: true }),
                 Some(tether::MethodInfo { name: "Action", streaming: false }),
                 Some(tether::MethodInfo { name: "SetVolume", streaming: false }),
-                Some(tether::MethodInfo { name: "GetGroupsSummary", streaming: false }),
+                Some(tether::MethodInfo { name: "GetGroupsSummary", streaming: true }),
             ],
         }),
     ];
@@ -324,11 +324,15 @@ pub mod coprocessor_proto {
             ) -> Call<X::Call, fb::coprocessor_proto::Empty<'static>> {
                 Call::new(self.0.call(SET_VOLUME, &req.to_bytes(), 1000))
             }
+            /// Summarizes each coordinator's group, one at a time in request order,
+            /// sending each as soon as it's known; then ends. A speaker that doesn't
+            /// answer still gets one, as not playing.
             pub fn get_groups_summary(
                 &self,
                 req: &fb::coprocessor_proto::GroupsSummaryRequestT,
-            ) -> Call<X::Call, fb::coprocessor_proto::GroupsSummary<'static>> {
-                Call::new(self.0.call(GET_GROUPS_SUMMARY, &req.to_bytes(), 5000))
+                capacity: u16,
+            ) -> Channel<X::Channel, fb::coprocessor_proto::GroupSummary<'static>> {
+                Channel::new(self.0.open(GET_GROUPS_SUMMARY, &req.to_bytes(), capacity))
             }
         }
 
@@ -353,9 +357,12 @@ pub mod coprocessor_proto {
                 reply: Reply<S::Reply, fb::coprocessor_proto::EmptyT>,
                 req: fb::coprocessor_proto::VolumeRequest<'_>,
             );
+            /// Summarizes each coordinator's group, one at a time in request order,
+            /// sending each as soon as it's known; then ends. A speaker that doesn't
+            /// answer still gets one, as not playing.
             fn get_groups_summary(
                 &mut self,
-                reply: Reply<S::Reply, fb::coprocessor_proto::GroupsSummaryT>,
+                sink: Sink<S::Sink, fb::coprocessor_proto::GroupSummaryT>,
                 req: fb::coprocessor_proto::GroupsSummaryRequest<'_>,
             );
             /// The client dropped `call` before it finished.
@@ -379,12 +386,6 @@ pub mod coprocessor_proto {
                         Ok(req) => self.0.set_volume(Reply::new(reply), req),
                         Err(_) => reply.send(Err(Status::InvalidArgument)),
                     },
-                    4 => match flatbuffers::root::<fb::coprocessor_proto::GroupsSummaryRequest>(
-                        request,
-                    ) {
-                        Ok(req) => self.0.get_groups_summary(Reply::new(reply), req),
-                        Err(_) => reply.send(Err(Status::InvalidArgument)),
-                    },
                     _ => reply.send(Err(Status::Unimplemented)),
                 }
             }
@@ -399,6 +400,12 @@ pub mod coprocessor_proto {
                     1 => match flatbuffers::root::<fb::coprocessor_proto::PlaybackRequest>(request)
                     {
                         Ok(req) => self.0.watch_playback(Sink::new(sink), req),
+                        Err(_) => sink.end(Err(Status::InvalidArgument)),
+                    },
+                    4 => match flatbuffers::root::<fb::coprocessor_proto::GroupsSummaryRequest>(
+                        request,
+                    ) {
+                        Ok(req) => self.0.get_groups_summary(Sink::new(sink), req),
                         Err(_) => sink.end(Err(Status::InvalidArgument)),
                     },
                     _ => sink.end(Err(Status::Unimplemented)),

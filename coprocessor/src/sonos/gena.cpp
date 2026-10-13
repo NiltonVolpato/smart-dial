@@ -11,6 +11,8 @@
 #include <string_view>
 #include <utility>
 
+#include "heap_log.h"
+
 #include "async/handler.h"
 #include "log.h"
 #include "net/network.h"
@@ -235,6 +237,8 @@ void GenaSubscription::sent() {
              static_cast<int>(sid().size()), sid().data(),
              static_cast<unsigned>(granted_seconds_));
   }
+  log_heap(step_ == Step::Subscribe ? "GENA subscribe done"
+                                    : "GENA renew done");
   Callback done = std::exchange(done_, Callback{});
   done();  // Last: it may destroy this subscription.
 }
