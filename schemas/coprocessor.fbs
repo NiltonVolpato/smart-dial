@@ -22,7 +22,7 @@ enum Limits : uint {
     MaxFrame = 1104,
     /// The UART's rate, 8N1. Faster leaves less time for interrupt latency
     /// before the receive FIFOs overflow (32-64 bytes past their thresholds).
-    BaudRate = 1500000,
+    BaudRate = 2000000,
 }
 
 /// The services the co-processor serves: wire IDs are fixed in append-only order.

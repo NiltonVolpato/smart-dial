@@ -609,7 +609,7 @@ pub mod coprocessor_proto {
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
-    pub const ENUM_MAX_LIMITS: u32 = 1500000;
+    pub const ENUM_MAX_LIMITS: u32 = 2000000;
     #[deprecated(
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
@@ -635,10 +635,10 @@ pub mod coprocessor_proto {
         pub const MaxFrame: Self = Self(1104);
         /// The UART's rate, 8N1. Faster leaves less time for interrupt latency
         /// before the receive FIFOs overflow (32-64 bytes past their thresholds).
-        pub const BaudRate: Self = Self(1500000);
+        pub const BaudRate: Self = Self(2000000);
 
         pub const ENUM_MIN: u32 = 768;
-        pub const ENUM_MAX: u32 = 1500000;
+        pub const ENUM_MAX: u32 = 2000000;
         pub const ENUM_VALUES: &'static [Self] =
             &[Self::MaxAlbumArtChunk, Self::MaxPayload, Self::MaxFrame, Self::BaudRate];
         /// Returns the variant's name or "" if unknown.

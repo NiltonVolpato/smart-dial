@@ -396,7 +396,7 @@ enum class Limits : uint32_t {
   MaxFrame = 1104,
   /// The UART's rate, 8N1. Faster leaves less time for interrupt latency
   /// before the receive FIFOs overflow (32-64 bytes past their thresholds).
-  BaudRate = 1500000,
+  BaudRate = 2000000,
   MIN = MaxAlbumArtChunk,
   MAX = BaudRate
 };
