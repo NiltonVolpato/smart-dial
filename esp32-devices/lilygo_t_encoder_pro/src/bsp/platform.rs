@@ -83,13 +83,19 @@ pub async fn run_event_loop(
         .try_send(fb_b)
         .expect("FLUSH_RETURN_CHANNEL full while seeding framebuffer B, buffer lost");
 
-    let base_brightness: u8 = 255;
+    let settings = common::storage::init().await;
+    let brightness_percent = settings.brightness_percent as i32;
+    // TODO: brightness as a float fraction end to end (Slint, settings, display
+    // driver), each driver scaling it to its own register, instead of casts
+    // between percents in i32 and u8 and levels in u8. The AMOLED's 0x51 level
+    // is linear in 0x00..=0xFF.
+    let base_brightness = (u32::from(settings.brightness_percent) * 255 / 100) as u8;
 
     run_common_event_loop(
         window_holder,
         feedback,
         shell,
-        100, // Brightness percent: full, as base_brightness.
+        brightness_percent,
         sources,
         async |screen_event| match screen_event {
             ScreenEvent::DimRelative(ratio) => {
