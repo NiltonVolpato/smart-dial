@@ -12,9 +12,13 @@
 //!
 //! This keeps the async executor from ever blocking on UART I/O.
 
+use alloc::rc::Rc;
+use alloc::string::ToString;
+use core::net::Ipv4Addr;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 use bbqueue::nicknames::Churrasco;
+use coprocessor::proto::SystemEventKind;
 use coprocessor::{proto, system, wifi};
 use defmt::{error, info, warn};
 use embassy_sync::waitqueue::AtomicWaker;
@@ -218,7 +222,11 @@ pub type SystemClient = system::Client<CoprocessorTransport>;
 
 /// Creates a new shared Tether RPC client instance for the onboard co-processor.
 pub fn create_shared_client(boot_id: u32) -> CoprocessorTransport {
-    let link_config = LinkConfig { baud_rate: 921_600, max_frame: 1104, ..Default::default() };
+    let link_config = LinkConfig {
+        baud_rate: 921_600,
+        max_frame: coprocessor::proto::Limits::MaxFrame.0 as usize,
+        ..Default::default()
+    };
     alloc::rc::Rc::new(SharedClient::new(Client::new(boot_id, link_config)))
 }
 
@@ -258,43 +266,57 @@ pub async fn coprocessor_task(
     esp_hal::system::software_reset();
 }
 
+/// Follows the co-processor's system events: Wi-Fi state for the system menu,
+/// and SNTP syncs for the RTC.
 #[embassy_executor::task]
-pub async fn network_sync_task(wifi_client: WifiClient, system_client: SystemClient) {
+pub async fn system_task(
+    system_client: SystemClient,
+    wifi: Rc<common::WifiSignal>,
+    provisioning: Rc<common::ProvisioningSignal>,
+) {
     loop {
-        let mut stream = wifi_client.watch(&proto::EmptyT::default(), 2);
+        let mut stream = system_client.watch(&proto::EmptyT::default(), 2);
         while let Some(msg) = stream.recv().await {
-            let status = msg.get();
-            let connected = status.connected();
-            let mut s = heapless::String::new();
-            if let Some(ssid) = status.ssid() {
-                let _ = s.push_str(ssid);
-            }
-            // TODO: consider a better approach than calling a function that modifies global state.
-            theme::update_system_menu_state(|menu| {
-                menu.wifi_connected = connected;
-                menu.wifi_ssid = s;
-            });
-            info!(
-                "[COPROCESSOR] Wi-Fi Status: connected={}, ssid={}, ip={}, rssi={}",
-                connected,
-                status.ssid().unwrap_or(""),
-                status.ip().unwrap_or(""),
-                status.rssi()
-            );
-            if connected {
-                let mut time_stream = system_client.watch_time(&proto::EmptyT::default(), 1);
-                if let Some(time_msg) = time_stream.recv().await {
-                    let sync = time_msg.get();
-                    info!(
-                        "[COPROCESSOR] Time sync received: epoch={}, subsec={}",
-                        sync.epoch_seconds(),
-                        sync.subsec_micros()
-                    );
-                    crate::bsp::rtc::sync_rtc(sync.epoch_seconds(), sync.subsec_micros());
+            let event = msg.get();
+            match event.event_type() {
+                SystemEventKind::WifiStatus => {
+                    on_wifi_status(&event.event_as_wifi_status().unwrap(), &wifi)
                 }
-            }
+                SystemEventKind::TimeSynced => {
+                    let ts = event.event_as_time_synced().and_then(|t| t.timestamp()).unwrap();
+                    crate::bsp::rtc::sync_rtc(ts.epoch_seconds(), ts.subsec_micros());
+                    info!(
+                        "[COPROCESSOR] Time synced: epoch={}, subsec={}",
+                        ts.epoch_seconds(),
+                        ts.subsec_micros()
+                    );
+                }
+                SystemEventKind::ProvisioningStatus => {
+                    let state = event.event_as_provisioning_status().unwrap().state();
+                    info!("[COPROCESSOR] Provisioning: {}", state.variant_name().unwrap_or("?"));
+                    provisioning.signal(state == proto::ProvisioningState::Active);
+                }
+                _ => {}
+            };
         }
-        warn!("[COPROCESSOR] Wi-Fi watch stream ended, retrying in 500ms...");
+        warn!("[COPROCESSOR] System watch ended, retrying in 500ms...");
         Timer::after_millis(500).await;
     }
+}
+
+fn on_wifi_status(status: &proto::WifiStatus<'_>, wifi: &common::WifiSignal) {
+    let state = match status.state() {
+        proto::WifiState::Connecting => theme::WifiState::Connecting,
+        proto::WifiState::Connected => theme::WifiState::Connected,
+        proto::WifiState::Failed => theme::WifiState::Failed,
+        _ => theme::WifiState::Disconnected,
+    };
+    wifi.signal(common::Wifi { state, ssid: status.ssid().unwrap_or("").into() });
+    info!(
+        "[COPROCESSOR] Wi-Fi: state={}, ssid={}, ip={}, rssi={}",
+        status.state().variant_name().unwrap_or("?"),
+        status.ssid().unwrap_or(""),
+        Ipv4Addr::from_bits(status.ip()).to_string().as_str(),
+        status.rssi()
+    );
 }
