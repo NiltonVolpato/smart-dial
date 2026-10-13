@@ -1,7 +1,37 @@
+#include <cstddef>
 #include <cstdint>
+#include <new>
+
 #include "JPEGDEC.h"
 
+// The decoder is ~18 KB: callers hand it memory (a workspace) rather than
+// take it out of a task's stack.
+static_assert(alignof(JPEGDEC) <= 8, "the workspace is 8-aligned");
+
+namespace {
+
+// Builds a decoder in `workspace`, and destroys it at the end of the scope.
+class WorkspaceDecoder {
+ public:
+  explicit WorkspaceDecoder(void *workspace) : decoder_(new (workspace) JPEGDEC()) {}
+  ~WorkspaceDecoder() {
+    decoder_->close();
+    decoder_->~JPEGDEC();
+  }
+  WorkspaceDecoder(const WorkspaceDecoder &) = delete;
+  WorkspaceDecoder &operator=(const WorkspaceDecoder &) = delete;
+
+  JPEGDEC *operator->() const { return decoder_; }
+
+ private:
+  JPEGDEC *decoder_;
+};
+
+}  // namespace
+
 extern "C" {
+
+size_t jpegdec_workspace_size() { return sizeof(JPEGDEC); }
 
 struct JpegDecodeContext {
     uint8_t *output;
@@ -35,36 +65,35 @@ static int jpeg_draw_callback(JPEGDRAW *pDraw) {
     return 1;
 }
 
-int jpegdec_get_dimensions(const uint8_t *data, int size, int *width, int *height) {
-    JPEGDEC decoder;
-    if (decoder.openRAM(const_cast<uint8_t *>(data), size, nullptr) != 1) {
+int jpegdec_get_dimensions(void *workspace, const uint8_t *data, int size, int *width,
+                           int *height) {
+    WorkspaceDecoder decoder(workspace);
+    if (decoder->openRAM(const_cast<uint8_t *>(data), size, nullptr) != 1) {
         return 0;
     }
-    *width = decoder.getWidth();
-    *height = decoder.getHeight();
-    decoder.close();
+    *width = decoder->getWidth();
+    *height = decoder->getHeight();
     return 1;
 }
 
-int jpegdec_decode_rgb8(const uint8_t *data, int size, uint8_t *output, int *width, int *height) {
-    JPEGDEC decoder;
-    if (decoder.openRAM(const_cast<uint8_t *>(data), size, jpeg_draw_callback) != 1) {
+int jpegdec_decode_rgb8(void *workspace, const uint8_t *data, int size, uint8_t *output,
+                        int *width, int *height) {
+    WorkspaceDecoder decoder(workspace);
+    if (decoder->openRAM(const_cast<uint8_t *>(data), size, jpeg_draw_callback) != 1) {
         return 0;
     }
 
-    decoder.setPixelType(RGB8888);
+    decoder->setPixelType(RGB8888);
 
     JpegDecodeContext ctx;
     ctx.output = output;
-    ctx.width = decoder.getWidth();
-    decoder.setUserPointer(&ctx);
+    ctx.width = decoder->getWidth();
+    decoder->setUserPointer(&ctx);
 
     *width = ctx.width;
-    *height = decoder.getHeight();
+    *height = decoder->getHeight();
 
-    const int rc = decoder.decode(0, 0, 0);
-    decoder.close();
-    return rc;
+    return decoder->decode(0, 0, 0);
 }
 
 } // extern "C"
