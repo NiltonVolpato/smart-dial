@@ -16,6 +16,8 @@ test = false
 
 [features]
 default = ["simulator"]
+defmt = ["dep:defmt"]
+
 simulator = [
     "slint/renderer-software",
     "slint/software-renderer-path",
@@ -29,8 +31,16 @@ simulator = [
 [dependencies]
 slint = { workspace = true }
 theme = { workspace = true }
+defmt = { workspace = true, optional = true }
 app-shell = { workspace = true }
+coprocessor = { workspace = true }
+heapless = { workspace = true }
+embassy-sync = { workspace = true }
+embassy-futures = { workspace = true }
 jpegdec = { workspace = true }
+
+tether = { path = "../../../../../tether-worktree/main/tether" }
+tether-core = { path = "../../../../../tether-worktree/main/core" }
 
 [build-dependencies]
 baker = { workspace = true }
