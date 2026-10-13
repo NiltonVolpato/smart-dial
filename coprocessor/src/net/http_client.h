@@ -30,7 +30,7 @@ enum class HttpError : uint8_t {
   Connect,     // Connection refused, unreachable, ...
   Timeout,     // Connecting, or no progress for too long.
   Io,          // send/recv failed.
-  Protocol,    // Malformed or unsupported response (e.g. chunked encoding).
+  Protocol,    // Malformed or unsupported response (e.g. a gzip encoding).
   Aborted,     // The sink's on_body asked to stop.
 };
 
@@ -72,6 +72,9 @@ class HttpResponseSink {
 /// back its permit (or leaves the line).
 class HttpClient {
  public:
+  /// The most body one on_body call delivers.
+  static constexpr std::size_t kBufferSize = 512;
+
   struct Timeouts {
     std::chrono::milliseconds connect{3000};
     /// Without any progress, once connected.
@@ -95,6 +98,18 @@ class HttpClient {
   /// The last exchange's outcome, once its `done` ran.
   [[nodiscard]] const HttpResult& result() const { return result_; }
 
+  /// The response's Content-Length, from its head on (e.g. in on_body).
+  [[nodiscard]] std::optional<std::size_t> content_length() const {
+    return content_length_;
+  }
+
+  /// Stops reading the response's body until resume(): on_body isn't called
+  /// meanwhile, and the idle timeout waits too. E.g. from on_body, when what
+  /// it got can't go anywhere yet.
+  void pause();
+  /// Reads the body again; a no-op once the exchange is done.
+  void resume();
+
  private:
   friend class ConnectionPermits;
 
@@ -107,9 +122,13 @@ class HttpClient {
   void send_some();
   void receive_head();
   void receive_body();
+  // Reads the next piece of the body, unless paused.
+  void read_body();
   // These return false if they completed the exchange: return at once.
   bool parse_head(std::size_t head_size);
   bool deliver(std::string_view chunk, bool eof);
+  bool deliver_chunked(std::string_view raw, bool eof);
+  bool size_line_ended();
   void extend_deadline(std::chrono::milliseconds timeout);
   void check_deadline();
   void fail_soon(HttpError error);
@@ -130,6 +149,13 @@ class HttpClient {
   Reactor::Clock::time_point deadline_;
   Callback done_;
   HttpResponseSink* sink_ = nullptr;
+  // Chunked transfer coding: where in it the body is.
+  enum class Chunked : uint8_t { No, Size, Extension, Data, DataEnd, Done };
+  Chunked chunked_ = Chunked::No;
+  std::size_t chunk_left_ = 0;    // The size being read, then the data left.
+  bool chunk_size_seen_ = false;  // A digit of the size line came.
+  bool paused_ = false;
+  bool read_pending_ = false;  // A body read waits for resume().
   HttpResult result_;
   HttpError pending_error_ = HttpError::None;  // For fail_soon().
 
@@ -144,7 +170,7 @@ class HttpClient {
   std::size_t body_received_ = 0;
 
   // Holds the response head while it arrives, then body chunks.
-  std::array<char, 512> buffer_{};
+  std::array<char, kBufferSize> buffer_{};
   std::size_t buffered_ = 0;
 };
 

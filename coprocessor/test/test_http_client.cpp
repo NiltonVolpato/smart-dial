@@ -220,7 +220,26 @@ TEST(HttpClientTest, TruncatedBodyIsProtocolError) {
   EXPECT_EQ(exchange.result->error, HttpError::Protocol);
 }
 
-TEST(HttpClientTest, ChunkedEncodingIsRejected) {
+TEST(HttpClientTest, ChunkedBodyIsDecoded) {
+  // Sizes in hex, an extension, and lines split across reads.
+  ScriptedServer server({
+      {.bytes = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r",
+       .pause = milliseconds(10)},
+      {.bytes = "\nhello\r\nB;ext=1\r\n world, h", .pause = milliseconds(10)},
+      {.bytes = "i!\r\n0\r\n\r\n"},
+  });
+  Reactor reactor(kCapacity);
+  Exchange exchange(reactor);
+  exchange.send(server.endpoint(), kRequest);
+  run_until_done(reactor, exchange);
+
+  ASSERT_TRUE(exchange.result);
+  EXPECT_TRUE(exchange.result->ok());
+  EXPECT_EQ(exchange.body, "hello world, hi!");
+  EXPECT_EQ(exchange.last_calls, 1);
+}
+
+TEST(HttpClientTest, TruncatedChunkedBodyIsProtocolError) {
   ScriptedServer server({{.bytes =
                               "HTTP/1.1 200 OK\r\n"
                               "Transfer-Encoding: chunked\r\n\r\n5\r\nhello"}});
@@ -231,6 +250,97 @@ TEST(HttpClientTest, ChunkedEncodingIsRejected) {
 
   ASSERT_TRUE(exchange.result);
   EXPECT_EQ(exchange.result->error, HttpError::Protocol);
+}
+
+TEST(HttpClientTest, MalformedChunkSizeIsProtocolError) {
+  ScriptedServer server({{.bytes =
+                              "HTTP/1.1 200 OK\r\n"
+                              "Transfer-Encoding: chunked\r\n\r\nzz\r\n"}});
+  Reactor reactor(kCapacity);
+  Exchange exchange(reactor);
+  exchange.send(server.endpoint(), kRequest);
+  run_until_done(reactor, exchange);
+
+  ASSERT_TRUE(exchange.result);
+  EXPECT_EQ(exchange.result->error, HttpError::Protocol);
+}
+
+TEST(HttpClientTest, UnknownTransferEncodingIsRejected) {
+  ScriptedServer server({{.bytes =
+                              "HTTP/1.1 200 OK\r\n"
+                              "Transfer-Encoding: gzip\r\n\r\nxx"}});
+  Reactor reactor(kCapacity);
+  Exchange exchange(reactor);
+  exchange.send(server.endpoint(), kRequest);
+  run_until_done(reactor, exchange);
+
+  ASSERT_TRUE(exchange.result);
+  EXPECT_EQ(exchange.result->error, HttpError::Protocol);
+}
+
+// Pauses on the first piece of body, and resumes a while later: the rest
+// arrives then, and the idle timeout doesn't fire meanwhile.
+class PausingExchange final : public HttpResponseSink {
+ public:
+  explicit PausingExchange(Reactor& reactor)
+      : reactor_(reactor),
+        client_(reactor, plenty_of_permits(), {.idle = milliseconds(100)}) {}
+
+  void send(const Endpoint& endpoint, std::string_view request) {
+    client_.send(endpoint, request, Callback(this, &PausingExchange::done),
+                 this);
+  }
+
+  std::optional<HttpResult> result;
+  std::string body;
+  int calls_while_paused = 0;
+
+ private:
+  void done() { result = client_.result(); }
+
+  bool on_body(std::string_view chunk, bool /*last*/) override {
+    body.append(chunk);
+    calls_while_paused += paused_ ? 1 : 0;
+    if (!paused_once_) {
+      paused_once_ = true;
+      paused_ = true;
+      client_.pause();
+      timer_ = reactor_.after(milliseconds(300),
+                              Callback(this, &PausingExchange::resume));
+    }
+    return true;
+  }
+
+  void resume() {
+    paused_ = false;
+    client_.resume();
+  }
+
+  Reactor& reactor_;
+  HttpClient client_;
+  bool paused_once_ = false;
+  bool paused_ = false;
+  Reactor::TimerId timer_ = 0;
+};
+
+TEST(HttpClientTest, PauseHoldsTheBodyBack) {
+  ScriptedServer server({
+      {.bytes = "HTTP/1.1 200 OK\r\nContent-Length: 11\r\n\r\nhello",
+       .pause = milliseconds(20)},
+      {.bytes = " world"},
+  });
+  Reactor reactor(kCapacity);
+  PausingExchange exchange(reactor);
+  exchange.send(server.endpoint(), kRequest);
+  auto deadline = Reactor::Clock::now() + milliseconds(2000);
+  while (!exchange.result && Reactor::Clock::now() < deadline) {
+    reactor.run_once(milliseconds(50));
+  }
+
+  ASSERT_TRUE(exchange.result);
+  EXPECT_TRUE(exchange.result->ok());  // No idle timeout while paused.
+  EXPECT_EQ(exchange.body, "hello world");
+  EXPECT_EQ(exchange.calls_while_paused, 0);
 }
 
 TEST(HttpClientTest, OnBodyCanAbort) {

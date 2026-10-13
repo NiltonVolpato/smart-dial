@@ -45,6 +45,23 @@ std::string_view trim(std::string_view s) {
   return s.substr(first, s.find_last_not_of(kSpace) - first + 1);
 }
 
+// A chunk larger than this is malformed, or more than we'd take anyway.
+constexpr std::size_t kMaxChunkSize = std::size_t{1} << 24;
+
+// 0..15, or -1 if `c` isn't a hex digit.
+int hex_digit(char c) {
+  if (c >= '0' && c <= '9') {
+    return c - '0';
+  }
+  if (c >= 'a' && c <= 'f') {
+    return c - 'a' + 10;
+  }
+  if (c >= 'A' && c <= 'F') {
+    return c - 'A' + 10;
+  }
+  return -1;
+}
+
 bool iequals(std::string_view a, std::string_view b) {
   return std::ranges::equal(a, b, [](char x, char y) {
     auto lower = [](char c) { return c >= 'A' && c <= 'Z' ? c + 32 : c; };
@@ -81,6 +98,11 @@ void HttpClient::send(const Endpoint& endpoint, std::span<const char> request,
   content_length_.reset();
   body_received_ = 0;
   buffered_ = 0;
+  paused_ = false;
+  read_pending_ = false;
+  chunked_ = Chunked::No;
+  chunk_left_ = 0;
+  chunk_size_seen_ = false;
 
   if (endpoint.ip == Ipv4{}) {
     fail_soon(HttpError::BadAddress);
@@ -213,6 +235,25 @@ void HttpClient::receive_head() {
       return;
     }
   }
+  read_body();
+}
+
+void HttpClient::read_body() {
+  if (paused_) {
+    read_pending_ = true;
+    return;
+  }
+  reactor_.when_readable(fd_, callback(&HttpClient::receive_body));
+}
+
+void HttpClient::pause() { paused_ = true; }
+
+void HttpClient::resume() {
+  paused_ = false;
+  if (fd_ < 0 || !std::exchange(read_pending_, false)) {
+    return;
+  }
+  extend_deadline(timeouts_.idle);
   reactor_.when_readable(fd_, callback(&HttpClient::receive_body));
 }
 
@@ -248,10 +289,13 @@ bool HttpClient::parse_head(std::size_t head_size) {
         return false;
       }
       content_length_ = length;
-    } else if (iequals(name, "Transfer-Encoding") &&
-               !iequals(value, "identity")) {
-      complete({.error = HttpError::Protocol, .status = status_});
-      return false;  // Chunked isn't supported.
+    } else if (iequals(name, "Transfer-Encoding")) {
+      if (iequals(value, "chunked")) {
+        chunked_ = Chunked::Size;
+      } else if (!iequals(value, "identity")) {
+        complete({.error = HttpError::Protocol, .status = status_});
+        return false;  // E.g. gzip: undecodable here.
+      }
     }
     if (sink_ != nullptr) {
       sink_->on_header(name, value);
@@ -281,11 +325,14 @@ void HttpClient::receive_body() {
   }
   extend_deadline(timeouts_.idle);
   if (deliver({buffer_.data(), static_cast<std::size_t>(n)}, false)) {
-    reactor_.when_readable(fd_, callback(&HttpClient::receive_body));
+    read_body();
   }
 }
 
 bool HttpClient::deliver(std::string_view chunk, bool eof) {
+  if (chunked_ != Chunked::No) {
+    return deliver_chunked(chunk, eof);
+  }
   if (content_length_) {
     // Ignore anything past Content-Length.
     chunk = chunk.substr(0, *content_length_ - body_received_);
@@ -303,6 +350,95 @@ bool HttpClient::deliver(std::string_view chunk, bool eof) {
   return true;
 }
 
+// Decodes chunked transfer coding (RFC 9112, 7.1) as it arrives, handing on
+// each piece of data. The last chunk ends the body: trailers aren't read,
+// the connection closes anyway.
+bool HttpClient::deliver_chunked(std::string_view raw, bool eof) {
+  while (!raw.empty()) {
+    const char c = raw.front();
+    switch (chunked_) {
+      case Chunked::Size:
+        if (const int digit = hex_digit(c); digit >= 0) {
+          if (chunk_left_ > (kMaxChunkSize >> 4)) {
+            complete({.error = HttpError::Protocol, .status = status_});
+            return false;
+          }
+          chunk_left_ = chunk_left_ * 16 + static_cast<std::size_t>(digit);
+          chunk_size_seen_ = true;
+        } else if (c == ';' || c == ' ' || c == '\t') {
+          chunked_ = Chunked::Extension;
+        } else if (c == '\n') {
+          if (!size_line_ended()) {
+            return false;
+          }
+        } else if (c != '\r') {
+          complete({.error = HttpError::Protocol, .status = status_});
+          return false;
+        }
+        raw.remove_prefix(1);
+        break;
+      case Chunked::Extension:  // Skipped: none is meaningful to us.
+        if (c == '\n' && !size_line_ended()) {
+          return false;
+        }
+        raw.remove_prefix(1);
+        break;
+      case Chunked::Data: {
+        const std::string_view piece = raw.substr(0, chunk_left_);
+        raw.remove_prefix(piece.size());
+        chunk_left_ -= piece.size();
+        body_received_ += piece.size();
+        if (chunk_left_ == 0) {
+          chunked_ = Chunked::DataEnd;
+        }
+        if (sink_ != nullptr && !sink_->on_body(piece, false)) {
+          complete({.error = HttpError::Aborted, .status = status_});
+          return false;
+        }
+        break;
+      }
+      case Chunked::DataEnd:  // The CRLF after a chunk's data.
+        if (c == '\n') {
+          chunked_ = Chunked::Size;
+        } else if (c != '\r') {
+          complete({.error = HttpError::Protocol, .status = status_});
+          return false;
+        }
+        raw.remove_prefix(1);
+        break;
+      case Chunked::No:
+      case Chunked::Done:
+        return false;  // Unreachable: Done completed the exchange.
+    }
+  }
+  if (eof) {
+    complete({.error = HttpError::Protocol, .status = status_});  // Truncated.
+    return false;
+  }
+  return true;
+}
+
+// A size line ended: its chunk's data follows, or, at size 0, the body
+// ended. False if that completed the exchange.
+bool HttpClient::size_line_ended() {
+  if (!chunk_size_seen_) {
+    complete({.error = HttpError::Protocol, .status = status_});
+    return false;
+  }
+  chunk_size_seen_ = false;
+  if (chunk_left_ > 0) {
+    chunked_ = Chunked::Data;
+    return true;
+  }
+  chunked_ = Chunked::Done;
+  if (sink_ != nullptr && !sink_->on_body({}, true)) {
+    complete({.error = HttpError::Aborted, .status = status_});
+    return false;
+  }
+  complete({.status = status_});
+  return false;
+}
+
 void HttpClient::extend_deadline(std::chrono::milliseconds timeout) {
   deadline_ = Reactor::Clock::now() + timeout;
   if (timer_ != 0) {
@@ -318,6 +454,11 @@ void HttpClient::extend_deadline(std::chrono::milliseconds timeout) {
 void HttpClient::check_deadline() {
   timer_ = 0;
   const Reactor::Clock::time_point now = Reactor::Clock::now();
+  if (paused_) {
+    // The sink holds the reading back: the peer isn't idle.
+    extend_deadline(timeouts_.idle);
+    return;
+  }
   if (now < deadline_) {
     timer_ =
         reactor_.after(deadline_ - now, callback(&HttpClient::check_deadline));
