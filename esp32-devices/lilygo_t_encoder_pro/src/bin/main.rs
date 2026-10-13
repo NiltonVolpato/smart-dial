@@ -98,7 +98,12 @@ async fn main(spawner: Spawner) -> ! {
     if let Some(touch) = bsp.touch {
         spawner.spawn(touch_task(touch).expect("Failed to create touch task"));
     }
-    spawner.spawn(screensaver_task().expect("Failed to create screensaver task"));
+    // Nothing reports Wi-Fi or a battery here: the menu shows them unknown.
+    let system_sources = common::SystemSources::default();
+    spawner.spawn(
+        screensaver_task(system_sources.battery.clone())
+            .expect("Failed to create screensaver task"),
+    );
     if PROFILER_ENABLED {
         spawner.spawn(profiler_task(bsp.profiler_timer).expect("Failed to create profiler task"));
     }
@@ -115,5 +120,5 @@ async fn main(spawner: Spawner) -> ! {
 
     // 8. Enter Slint MCU event loop on Core 0
     let feedback = lilygo_t_encoder_pro::bsp::LilygoFeedback(feedback_channel);
-    run_event_loop(bsp.window, &feedback).await;
+    run_event_loop(bsp.window, &feedback, shell, system_sources).await;
 }

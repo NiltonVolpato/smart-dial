@@ -42,10 +42,14 @@ embassy-futures = { version = "0.1.2", default-features = false }
 embassy-executor = { version = "0.10.0", default-features = false }
 jiff = { version = "0.2.10", default-features = false }
 
+[workspace.lints.rust]
+# missing-docs = { level = "warn", priority = -1 }
+
 [workspace.lints.clippy]
 complexity = { level = "warn", priority = -1 }
 correctness = { level = "warn", priority = -1 }
 perf = { level = "warn", priority = -1 }
+mem-forget = { level = "deny", priority = 0 }
 
 too-many-lines = { level = "warn", priority = -1 }
 

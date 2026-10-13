@@ -21,8 +21,6 @@ std = [
 
 [dependencies]
 slint = { workspace = true }
-critical-section = { workspace = true }
-heapless = { workspace = true }
 
 [build-dependencies]
 baker = { workspace = true }

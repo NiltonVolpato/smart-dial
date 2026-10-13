@@ -118,19 +118,30 @@ export component RotaryKnob inherits FocusScope {
     }
 }
 
-export global SystemMenu {
-    in-out property <bool> is-open: false;
-    in-out property <int> battery-percent: -1;
-    in-out property <bool> is-plugged-in: false;
-    in-out property <bool> wifi-connected: false;
-    in-out property <string> wifi-ssid: "";
-    in-out property <bool> is-provisioning: false;
-    in-out property <int> brightness-percent: 80;
+export enum WifiState { disconnected, connecting, connected, failed }
+
+/// What the system menu shows. The platform owns it and sets it whole on
+/// each change, so a `changed` handler fires for any field.
+export struct SystemState {
+    /// -1 while unknown or plugged in: the voltage can't tell then.
+    battery-percent: int,
+    is-plugged-in: bool,
+    wifi: WifiState,
+    wifi-ssid: string,
+    is-provisioning: bool,
+    brightness-percent: int,
+}
+
+/// The system menu: its state, and the actions it asks of the platform.
+export global System {
+    in-out property <SystemState> state: { battery-percent: -1, brightness-percent: 80 };
+    in-out property <bool> menu-open: false;
+    out property <bool> wifi-connected: self.state.wifi == WifiState.connected;
 
     callback request-provisioning();
     callback stop-provisioning();
     callback brightness-changed(int);
-    callback drawer-closed();
+    callback menu-closed();
 }
 
 export global Navigation {
@@ -140,9 +151,9 @@ export global Navigation {
     callback threshold-reached();
 
     public function trigger-back() {
-        if SystemMenu.is-open {
-            SystemMenu.is-open = false;
-            SystemMenu.drawer-closed();
+        if System.menu-open {
+            System.menu-open = false;
+            System.menu-closed();
             return;
         }
         if !self.back() {
@@ -151,9 +162,9 @@ export global Navigation {
     }
 
     public function trigger-quit() {
-        if SystemMenu.is-open {
-            SystemMenu.is-open = false;
-            SystemMenu.drawer-closed();
+        if System.menu-open {
+            System.menu-open = false;
+            System.menu-closed();
             return;
         }
         if !self.quit() {
@@ -234,17 +245,17 @@ export component DeviceMenuCard inherits Rectangle {
                             background: transparent;
 
                             // Fill
-                            if !SystemMenu.is-plugged-in : Rectangle {
+                            if !System.state.is-plugged-in : Rectangle {
                                 x: 2px;
                                 y: 2px;
-                                width: Math.max(2px, (parent.width - 4px) * Math.min(100, Math.max(0, SystemMenu.battery-percent)) / 100);
+                                width: Math.max(2px, (parent.width - 4px) * Math.min(100, Math.max(0, System.state.battery-percent)) / 100);
                                 height: parent.height - 4px;
                                 border-radius: 1px;
-                                background: SystemMenu.battery-percent <= 20 ? #ef4444 : #10b981;
+                                background: System.state.battery-percent <= 20 ? #ef4444 : #10b981;
                             }
 
                             // Bolt Icon (Charging)
-                            if SystemMenu.is-plugged-in : Image {
+                            if System.state.is-plugged-in : Image {
                                 x: (parent.width - self.width) / 2;
                                 y: (parent.height - self.height) / 2;
                                 source: @image-url("../assets/bolt.svg");
@@ -264,7 +275,7 @@ export component DeviceMenuCard inherits Rectangle {
                         }
 
                         TextSm {
-                            text: SystemMenu.is-plugged-in ? "Charging" : (SystemMenu.battery-percent < 0 ? "--%" : "\{SystemMenu.battery-percent}%");
+                            text: System.state.is-plugged-in ? "Charging" : (System.state.battery-percent < 0 ? "--%" : "\{System.state.battery-percent}%");
                             color: #f1f5f9;
                             vertical-alignment: center;
                         }
@@ -276,19 +287,19 @@ export component DeviceMenuCard inherits Rectangle {
             wifi-tile := Rectangle {
                 height: 56px;
                 border-radius: 28px;
-                background: SystemMenu.is-provisioning ? #0284c7 : (SystemMenu.wifi-connected ? #1e3a5f : #1e293b);
+                background: System.state.is-provisioning ? #0284c7 : (System.wifi-connected ? #1e3a5f : #1e293b);
                 border-width: 1.5px;
-                border-color: (SystemMenu.is-provisioning || SystemMenu.wifi-connected) ? #38bdf8 : #334155;
+                border-color: (System.state.is-provisioning || System.wifi-connected) ? #38bdf8 : #334155;
 
                 animate background { duration: 150ms; }
                 animate border-color { duration: 150ms; }
 
                 TouchArea {
                     clicked => {
-                        if SystemMenu.is-provisioning {
-                            SystemMenu.stop-provisioning();
+                        if System.state.is-provisioning {
+                            System.stop-provisioning();
                         } else {
-                            SystemMenu.request-provisioning();
+                            System.request-provisioning();
                         }
                     }
                 }
@@ -305,9 +316,9 @@ export component DeviceMenuCard inherits Rectangle {
 
                         // Wi-Fi Icon
                         Image {
-                            source: SystemMenu.wifi-connected ? @image-url("../assets/wifi.svg") : @image-url("../assets/wifi-disable.svg");
+                            source: System.wifi-connected ? @image-url("../assets/wifi.svg") : @image-url("../assets/wifi-disable.svg");
                             y: (parent.height - self.height) / 2;
-                            colorize: (SystemMenu.is-provisioning || SystemMenu.wifi-connected) ? (SystemMenu.is-provisioning ? #000000 : #38bdf8) : #64748b;
+                            colorize: (System.state.is-provisioning || System.wifi-connected) ? (System.state.is-provisioning ? #000000 : #38bdf8) : #64748b;
                         }
 
                         // Text stack
@@ -317,12 +328,16 @@ export component DeviceMenuCard inherits Rectangle {
 
                             TextBaseBold {
                                 text: "Internet";
-                                color: SystemMenu.is-provisioning ? #000000 : #ffffff;
+                                color: System.state.is-provisioning ? #000000 : #ffffff;
                             }
 
                             TextSm {
-                                text: SystemMenu.is-provisioning ? "Pairing... (Tap to Cancel)" : (SystemMenu.wifi-connected ? (SystemMenu.wifi-ssid != "" ? SystemMenu.wifi-ssid : "Connected") : "Tap to set up");
-                                color: SystemMenu.is-provisioning ? #0f172a : (SystemMenu.wifi-connected ? #93c5fd : #64748b);
+                                text: System.state.is-provisioning ? "Pairing... (Tap to Cancel)"
+                                    : System.wifi-connected ? (System.state.wifi-ssid != "" ? System.state.wifi-ssid : "Connected")
+                                    : System.state.wifi == WifiState.connecting ? "Connecting..."
+                                    : System.state.wifi == WifiState.failed ? "Can't connect"
+                                    : "Tap to set up";
+                                color: System.state.is-provisioning ? #0f172a : (System.wifi-connected ? #93c5fd : #64748b);
                                 overflow: elide;
                                 max-width: 140px;
                             }
@@ -333,7 +348,7 @@ export component DeviceMenuCard inherits Rectangle {
                     Image {
                         source: @image-url("../assets/gear.svg");
                         y: (parent.height - self.height) / 2;
-                        colorize: SystemMenu.is-provisioning ? #000000 : ((SystemMenu.wifi-connected) ? #38bdf8 : #64748b);
+                        colorize: System.state.is-provisioning ? #000000 : (System.wifi-connected ? #38bdf8 : #64748b);
                     }
                 }
             }
@@ -352,7 +367,7 @@ export component DeviceMenuCard inherits Rectangle {
                     x: 0px;
                     y: 0px;
                     height: 100%;
-                    width: Math.max(36px, parent.width * (SystemMenu.brightness-percent - 15) / 85);
+                    width: Math.max(36px, parent.width * (System.state.brightness-percent - 15) / 85);
                     border-radius: 23px;
                     background: #38bdf8;
                 }
@@ -371,13 +386,13 @@ export component DeviceMenuCard inherits Rectangle {
                     Image {
                         source: @image-url("../assets/sun.svg");
                         y: (parent.height - self.height) / 2;
-                        colorize: SystemMenu.brightness-percent > 20 ? #0f172a : #94a3b8;
+                        colorize: System.state.brightness-percent > 20 ? #0f172a : #94a3b8;
                     }
 
                     // Percentage on trailing edge
                     TextBaseBold {
-                        text: "\{SystemMenu.brightness-percent}%";
-                        color: SystemMenu.brightness-percent >= 85 ? #0f172a : #ffffff;
+                        text: "\{System.state.brightness-percent}%";
+                        color: System.state.brightness-percent >= 85 ? #0f172a : #ffffff;
                         vertical-alignment: center;
                     }
                 }
@@ -391,8 +406,8 @@ export component DeviceMenuCard inherits Rectangle {
                         let ratio = Math.max(0.0, Math.min(1.0, pos-x / slider-box.width));
                         let val = Math.round(15.0 + ratio * 85.0);
                         let clamped = Math.max(15, Math.min(100, val));
-                        SystemMenu.brightness-percent = clamped;
-                        SystemMenu.brightness-changed(clamped);
+                        System.state.brightness-percent = clamped;
+                        System.brightness-changed(clamped);
                     }
 
                     pointer-event(event) => {
@@ -434,7 +449,7 @@ export component AppWindow inherits Window {
     private property <length> drawer-open-y: 0px;
     private property <length> drawer-y: root.active-edge == 4 ?
         Math.min(root.drawer-open-y, -root.drawer-height + (root.drag-dist / root.threshold) * root.drawer-height) :
-        (SystemMenu.is-open ? root.drawer-open-y : -root.drawer-height);
+        (System.menu-open ? root.drawer-open-y : -root.drawer-height);
 
     animate drawer-y {
         duration: root.active-edge == 4 ? 0ms : 220ms;
@@ -445,7 +460,7 @@ export component AppWindow inherits Window {
 
     Timer {
         interval: 1s;
-        running: !SystemMenu.is-plugged-in && SystemMenu.battery-percent >= 0 && SystemMenu.battery-percent <= 10;
+        running: !System.state.is-plugged-in && System.state.battery-percent >= 0 && System.state.battery-percent <= 10;
         triggered() => {
             root.low-battery-blink-state = !root.low-battery-blink-state;
         }
@@ -454,7 +469,7 @@ export component AppWindow inherits Window {
     @children
 
     // --- Low Battery Warning Indicator ---
-    if !SystemMenu.is-plugged-in && SystemMenu.battery-percent >= 0 && SystemMenu.battery-percent <= 10 && root.low-battery-blink-state : Rectangle {
+    if !System.state.is-plugged-in && System.state.battery-percent >= 0 && System.state.battery-percent <= 10 && root.low-battery-blink-state : Rectangle {
         x: (parent.width - self.width) / 2;
         y: 12px;
         width: 32px;
@@ -483,7 +498,7 @@ export component AppWindow inherits Window {
                 Rectangle {
                     x: 1.5px;
                     y: 1.5px;
-                    width: Math.max(2px, (parent.width - 3px) * Math.min(100, Math.max(0, SystemMenu.battery-percent)) / 100);
+                    width: Math.max(2px, (parent.width - 3px) * Math.min(100, Math.max(0, System.state.battery-percent)) / 100);
                     height: parent.height - 3px;
                     border-radius: 1px;
                     background: #ef4444;
@@ -533,9 +548,9 @@ export component AppWindow inherits Window {
 
         TouchArea {
             clicked => {
-                if SystemMenu.is-open {
-                    SystemMenu.is-open = false;
-                    SystemMenu.drawer-closed();
+                if System.menu-open {
+                    System.menu-open = false;
+                    System.menu-closed();
                 }
             }
         }
@@ -547,13 +562,13 @@ export component AppWindow inherits Window {
         y: root.drawer-y;
 
         close-requested => {
-            SystemMenu.is-open = false;
-            SystemMenu.drawer-closed();
+            System.menu-open = false;
+            System.menu-closed();
         }
     }
 
     // Left Edge TouchArea (Edge 1: Back)
-    if root.enable-gestures && !SystemMenu.is-open: TouchArea {
+    if root.enable-gestures && !System.menu-open: TouchArea {
         x: 0px;
         y: 60px;
         width: 45px;
@@ -590,7 +605,7 @@ export component AppWindow inherits Window {
     }
 
     // Right Edge TouchArea (Edge 2: Back)
-    if root.enable-gestures && !SystemMenu.is-open: TouchArea {
+    if root.enable-gestures && !System.menu-open: TouchArea {
         x: Theme.screen-size - 45px;
         y: 60px;
         width: 45px;
@@ -627,7 +642,7 @@ export component AppWindow inherits Window {
     }
 
     // Bottom Edge TouchArea (Edge 3: Quit)
-    if root.enable-gestures && !SystemMenu.is-open: TouchArea {
+    if root.enable-gestures && !System.menu-open: TouchArea {
         x: 60px;
         y: Theme.screen-size - 45px;
         width: Theme.screen-size - 120px;
@@ -664,7 +679,7 @@ export component AppWindow inherits Window {
     }
 
     // Top Edge TouchArea (Edge 4: Pull-down Control Center)
-    if !SystemMenu.is-open: TouchArea {
+    if !System.menu-open: TouchArea {
         x: 60px;
         y: 0px;
         width: Theme.screen-size - 120px;
@@ -679,7 +694,7 @@ export component AppWindow inherits Window {
             if event.button == PointerEventButton.left && (event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel) {
                 if root.active-edge == 4 {
                     if root.drag-dist >= root.threshold {
-                        SystemMenu.is-open = true;
+                        System.menu-open = true;
                     }
                     root.active-edge = 0;
                     root.drag-dist = 0px;

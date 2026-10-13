@@ -102,16 +102,7 @@ impl app_shell::AppFactory for ClockAppFactory {
                 }
             }
         });
-
-        let ctx = context.clone();
-        let ctx_fb = context.clone();
-        theme::setup_navigation(
-            &app,
-            move || ctx.exit(),
-            move || {
-                ctx_fb.feedback(app_shell::Feedback::Click);
-            },
-        );
+        context.connect(&app);
         app.on_exit(move || context.exit());
         let _ = app.show();
 

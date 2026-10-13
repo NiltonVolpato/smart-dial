@@ -52,4 +52,6 @@ pub enum Event {
     Screen(ScreenEvent),
     /// Wake up request from background task or property changes.
     WakeUp,
+    /// What the system menu asks of the platform.
+    SystemMenu(theme::SystemMenuAction),
 }

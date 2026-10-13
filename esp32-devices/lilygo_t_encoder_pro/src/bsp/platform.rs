@@ -55,7 +55,12 @@ fn cycle_count() -> u32 {
 
 /// Runs the main Slint event loop: awaits interrupt-driven inputs, advances
 /// animations, and renders updates.
-pub async fn run_event_loop(window_holder: WindowHolder, feedback: &LilygoFeedback) -> ! {
+pub async fn run_event_loop(
+    window_holder: WindowHolder,
+    feedback: &LilygoFeedback,
+    shell: Rc<core::cell::RefCell<app_shell::AppShell>>,
+    sources: common::SystemSources,
+) -> ! {
     // Two framebuffers in fast internal SRAM (2 * ~78.4 KiB = ~156.8 KiB)
     #[repr(align(16))]
     struct FrameBuffer([NativeRgb565; RENDER_STRIDE * BUFFER_HEIGHT]);
@@ -83,7 +88,9 @@ pub async fn run_event_loop(window_holder: WindowHolder, feedback: &LilygoFeedba
     run_common_event_loop(
         window_holder,
         feedback,
-        base_brightness,
+        shell,
+        100, // Brightness percent: full, as base_brightness.
+        sources,
         async |screen_event| match screen_event {
             ScreenEvent::DimRelative(ratio) => {
                 let level = ((base_brightness as f32 * ratio + 0.5) as u32).clamp(1, 255) as u8;

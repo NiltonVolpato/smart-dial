@@ -114,6 +114,7 @@ mod tests {
         fn signal_feedback(&self, feedback: Feedback) {
             self.feedback_events.borrow_mut().push(feedback);
         }
+        fn on_system_menu_action(&self, _: theme::SystemMenuAction) {}
     }
 
     fn test_spawner() -> embassy_executor::Spawner {

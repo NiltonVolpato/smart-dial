@@ -57,6 +57,35 @@ impl ShellContext {
         }
     }
 
+    /// Connects the app's `Navigation` and `System` globals: exiting exits
+    /// the app, the edge gestures' threshold clicks, the system menu's
+    /// actions go to the platform, and it shows the platform's system state
+    /// (see `AppShell::set_system_state`) while the app runs.
+    pub fn connect<T>(&self, app: &T)
+    where
+        T: slint::ComponentHandle + 'static,
+        for<'a> theme::Navigation<'a>: slint::Global<'a, T>,
+        for<'a> theme::System<'a>: slint::Global<'a, T>,
+    {
+        let ctx = self.clone();
+        let ctx_fb = self.clone();
+        theme::connect_navigation(
+            app,
+            move || ctx.exit(),
+            move || ctx_fb.feedback(crate::feedback::Feedback::Click),
+        );
+        let platform = self.platform.clone();
+        let system =
+            theme::connect_system(app, move |action| platform.on_system_menu_action(action));
+        if let Some(shell) = self.shell.upgrade() {
+            let mut shell = shell.borrow_mut();
+            if let Some(state) = &shell.system_state {
+                system.set_state(state);
+            }
+            shell.active_system = Some(system);
+        }
+    }
+
     /// Emits audible or haptic feedback through the platform.
     pub fn feedback(&self, feedback: crate::feedback::Feedback) {
         self.platform.signal_feedback(feedback);
@@ -89,6 +118,10 @@ pub struct AppShell {
     default_app: Box<dyn AppFactory>,
     next_app: Option<Box<dyn AppFactory>>,
     active_app: Option<Box<dyn Any>>,
+    /// The active app's `System` global, if it connected it.
+    active_system: Option<theme::SystemGlobal>,
+    /// The platform's latest, for the next app; None until it reports one.
+    system_state: Option<theme::SystemState>,
 }
 
 impl AppShell {
@@ -104,6 +137,8 @@ impl AppShell {
             default_app,
             next_app: None,
             active_app: None,
+            active_system: None,
+            system_state: None,
         }))
     }
 
@@ -121,6 +156,7 @@ impl AppShell {
         let (next_factory, platform, spawner) = {
             let mut borrow = shell.borrow_mut();
             borrow.active_app = None;
+            borrow.active_system = None;
             let factory = borrow.next_app.take().unwrap_or_else(|| borrow.default_app.clone());
             (factory, borrow.platform.clone(), borrow.spawner)
         };
@@ -134,6 +170,16 @@ impl AppShell {
             borrow.active_app = Some(instance);
             platform.on_app_launched(&info);
         }
+    }
+
+    /// Shows `state` in the active app's system menu, and in each app
+    /// launched later.
+    pub fn set_system_state(shell: &Rc<RefCell<Self>>, state: &theme::SystemState) {
+        let mut shell = shell.borrow_mut();
+        if let Some(system) = &shell.active_system {
+            system.set_state(state);
+        }
+        shell.system_state = Some(state.clone());
     }
 
     /// Configures an application to run once upon the next lifecycle transition.

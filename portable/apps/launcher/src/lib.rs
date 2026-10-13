@@ -69,7 +69,10 @@ impl AppFactory for LauncherAppFactory {
         let cards: Vec<AppInfo> = self.factories.iter().map(|f| f.info()).collect();
         launcher.set_cards(Rc::new(slint::VecModel::from(cards)).into());
 
-        let ctx_fb = context.clone();
+        context.connect(&launcher);
+        // The launcher is the default app: there's nothing to exit to.
+        theme::Navigation::get(&launcher).on_exit(|| {});
+
         let factories = self.factories.clone();
         let selected_index = self.selected_index.clone();
         launcher.on_launch(move |idx| {
@@ -80,14 +83,6 @@ impl AppFactory for LauncherAppFactory {
                 context.exit();
             }
         });
-
-        theme::setup_navigation(
-            &launcher,
-            || {},
-            move || {
-                ctx_fb.feedback(app_shell::Feedback::Click);
-            },
-        );
 
         let _ = launcher.show();
         Box::new(launcher)

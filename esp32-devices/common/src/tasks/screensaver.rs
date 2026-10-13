@@ -52,7 +52,8 @@ async fn wait_for_activity(
 
 /// Asynchronous task monitoring user activity and issuing screen dim/off events.
 #[embassy_executor::task]
-pub async fn screensaver_task() {
+pub async fn screensaver_task(battery: alloc::rc::Rc<crate::system::BatteryWatch>) {
+    let mut battery = battery.anon_receiver();
     let mut activity = subscribe_user_activity().expect("Failed to subscribe to user activity");
     let mut stages = STAGES.iter();
     loop {
@@ -66,7 +67,7 @@ pub async fn screensaver_task() {
             TimeoutState::TimedOut => {
                 if let Some(stage) = current_stage {
                     if stage.action == ScreenEvent::TurnOff
-                        && theme::get_system_menu_state().is_plugged_in
+                        && battery.try_get().is_some_and(|b| b.is_plugged)
                     {
                         // Stop at 25% dimming when plugged in; do not turn off display panel.
                         continue;

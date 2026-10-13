@@ -47,6 +47,7 @@ embassy-time = { workspace = true }
 embassy-embedded-hal = { workspace = true }
 embedded-hal-async = { workspace = true }
 embedded-io-async = { workspace = true }
+bbqueue = { workspace = true }
 heapless = { workspace = true }
 static_cell = { workspace = true }
 critical-section = { workspace = true }

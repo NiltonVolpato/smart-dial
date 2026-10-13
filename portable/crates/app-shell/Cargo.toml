@@ -26,6 +26,7 @@ defmt = [
 
 [dependencies]
 theme = { workspace = true }
+slint = { workspace = true }
 critical-section = "1.2.0"
 defmt = { workspace = true }
 jiff = { workspace = true }

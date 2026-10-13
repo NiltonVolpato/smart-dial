@@ -55,7 +55,13 @@ fn cycle_count() -> u32 {
 
 /// Runs the main Slint event loop: awaits interrupt-driven inputs, advances
 /// animations, and renders updates.
-pub async fn run_event_loop(window_holder: WindowHolder, feedback: &WaveshareFeedback) -> ! {
+pub async fn run_event_loop(
+    window_holder: WindowHolder,
+    feedback: &WaveshareFeedback,
+    wifi_client: crate::bsp::coprocessor::WifiClient,
+    shell: Rc<core::cell::RefCell<app_shell::AppShell>>,
+    sources: common::SystemSources,
+) -> ! {
     // Single framebuffer in fast internal SRAM (259,200 bytes = 253.125 KiB)
     #[repr(align(16))]
     struct FrameBuffer([BigEndianRgb565; RENDER_STRIDE * RENDER_HEIGHT as usize]);
@@ -71,15 +77,15 @@ pub async fn run_event_loop(window_holder: WindowHolder, feedback: &WaveshareFee
         .expect("FLUSH_RETURN_CHANNEL full while seeding framebuffer");
 
     let settings = common::storage::init().await;
-    theme::update_system_menu_state(|s| {
-        s.brightness_percent = settings.brightness_percent as i32;
-    });
-    let base_brightness = theme::brightness_percent_to_duty(settings.brightness_percent as i32);
+    let brightness_percent = settings.brightness_percent as i32;
+    let base_brightness = theme::brightness_percent_to_duty(brightness_percent);
 
     run_common_event_loop(
         window_holder,
         feedback,
-        base_brightness,
+        shell,
+        brightness_percent,
+        sources,
         async |screen_event| match screen_event {
             ScreenEvent::DimRelative(ratio) => {
                 let level = ((base_brightness as f32 * ratio + 0.5) as u32).clamp(1, 255) as u8;
@@ -105,11 +111,14 @@ pub async fn run_event_loop(window_holder: WindowHolder, feedback: &WaveshareFee
         async |menu_action| match menu_action {
             theme::SystemMenuAction::RequestProvisioning => {
                 defmt::info!("[MENU] Starting co-processor BLE provisioning (60s)");
-                crate::bsp::coprocessor::start_provisioning(60);
+                let mut req = coprocessor::proto::StartProvisioningRequestT::default();
+                req.timeout_seconds = 60;
+                // The menu follows the session's state, from System.Watch.
+                let _ = wifi_client.start_provisioning(&req).await;
             }
             theme::SystemMenuAction::StopProvisioning => {
                 defmt::info!("[MENU] Stopping co-processor BLE provisioning");
-                crate::bsp::coprocessor::stop_provisioning();
+                let _ = wifi_client.stop_provisioning(&coprocessor::proto::EmptyT::default()).await;
             }
             _ => {}
         },

@@ -3,7 +3,7 @@
 
 //! Platform abstractions and concrete host implementations.
 
-use theme::AppInfo;
+use theme::{AppInfo, SystemMenuAction};
 
 use crate::feedback::Feedback;
 
@@ -32,4 +32,7 @@ pub trait Platform {
 
     /// Emits audible or haptic feedback through hardware actuators.
     fn signal_feedback(&self, feedback: Feedback);
+
+    /// Handles what the system menu asks.
+    fn on_system_menu_action(&self, action: SystemMenuAction);
 }

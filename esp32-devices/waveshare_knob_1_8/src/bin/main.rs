@@ -104,6 +104,7 @@ async fn main(spawner: Spawner) -> ! {
         );
     }
     let coprocessor_client = create_shared_client(boot_id);
+    let system_sources = common::SystemSources::default();
 
     spawner.spawn(
         coprocessor_task(
@@ -115,8 +116,12 @@ async fn main(spawner: Spawner) -> ! {
         .expect("Failed to create coprocessor task"),
     );
     spawner.spawn(
-        system_task(coprocessor::system::Client(coprocessor_client.clone()))
-            .expect("Failed to create system task"),
+        system_task(
+            coprocessor::system::Client(coprocessor_client.clone()),
+            system_sources.wifi.clone(),
+            system_sources.provisioning.clone(),
+        )
+        .expect("Failed to create system task"),
     );
     spawner.spawn(
         battery_task(
@@ -124,10 +129,14 @@ async fn main(spawner: Spawner) -> ! {
             bsp.battery.pin,
             feedback_channel.clone(),
             coprocessor::system::Client(coprocessor_client.clone()),
+            system_sources.battery.clone(),
         )
         .expect("Failed to create battery task"),
     );
-    spawner.spawn(screensaver_task().expect("Failed to create screensaver task"));
+    spawner.spawn(
+        screensaver_task(system_sources.battery.clone())
+            .expect("Failed to create screensaver task"),
+    );
     if PROFILER_ENABLED {
         spawner.spawn(profiler_task(bsp.profiler_timer).expect("Failed to create profiler task"));
     }
@@ -147,5 +156,12 @@ async fn main(spawner: Spawner) -> ! {
 
     // 7. Enter Slint MCU event loop on Core 0
     let feedback = waveshare_knob_1_8::bsp::WaveshareFeedback(feedback_channel);
-    run_event_loop(bsp.window, &feedback, coprocessor::wifi::Client(coprocessor_client)).await;
+    run_event_loop(
+        bsp.window,
+        &feedback,
+        coprocessor::wifi::Client(coprocessor_client),
+        shell,
+        system_sources,
+    )
+    .await;
 }

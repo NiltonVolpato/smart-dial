@@ -2,163 +2,75 @@
 
 extern crate alloc;
 
-use alloc::collections::VecDeque;
-use core::cell::RefCell;
+use alloc::boxed::Box;
+use alloc::rc::Rc;
 
-use critical_section::Mutex;
 use slint::ComponentHandle;
 
 slint::include_modules!();
 
-/// System-level device menu snapshot (battery, Wi-Fi, brightness).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SystemMenuState {
-    pub battery_percent: i32,
-    pub is_plugged_in: bool,
-    pub wifi_connected: bool,
-    pub wifi_ssid: heapless::String<32>,
-    pub is_provisioning: bool,
-    pub brightness_percent: i32,
-}
-
-impl Default for SystemMenuState {
-    fn default() -> Self {
-        Self {
-            battery_percent: -1,
-            is_plugged_in: false,
-            wifi_connected: false,
-            wifi_ssid: heapless::String::new(),
-            is_provisioning: false,
-            brightness_percent: 80,
-        }
-    }
-}
-
-static SYSTEM_MENU_STATE: Mutex<RefCell<SystemMenuState>> =
-    Mutex::new(RefCell::new(SystemMenuState {
-        battery_percent: -1,
-        is_plugged_in: false,
-        wifi_connected: false,
-        wifi_ssid: heapless::String::new(),
-        is_provisioning: false,
-        brightness_percent: 80,
-    }));
-
-/// Actions dispatched from the Slint Control Center UI to the platform layer.
+/// What the system menu asks of the platform.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum SystemMenuAction {
     RequestProvisioning,
     StopProvisioning,
+    /// Already clamped (see `clamp_brightness`), and shown by the menu.
     BrightnessChanged(i32),
-    DrawerClosed,
+    MenuClosed,
 }
 
-static ACTION_QUEUE: Mutex<RefCell<VecDeque<SystemMenuAction>>> =
-    Mutex::new(RefCell::new(VecDeque::new()));
+/// A handle to one app window's `System` global, to set the state it shows.
+/// Does nothing once the window is gone.
+pub struct SystemGlobal(Box<dyn Fn(&SystemState)>);
 
-/// Queues an action from the UI to be handled by the platform layer.
-pub fn send_system_menu_action(action: SystemMenuAction) -> bool {
-    critical_section::with(|cs| {
-        let mut q = ACTION_QUEUE.borrow(cs).borrow_mut();
-        if q.len() < 16 {
-            q.push_back(action);
-            true
-        } else {
-            false
-        }
-    })
+impl SystemGlobal {
+    pub fn set_state(&self, state: &SystemState) {
+        (self.0)(state);
+    }
 }
 
-/// Receives the next pending action requested by the UI.
-pub fn try_receive_system_menu_action() -> Option<SystemMenuAction> {
-    critical_section::with(|cs| ACTION_QUEUE.borrow(cs).borrow_mut().pop_front())
-}
-
-/// Updates the shared system menu state.
-pub fn update_system_menu_state(f: impl FnOnce(&mut SystemMenuState)) {
-    critical_section::with(|cs| {
-        f(&mut SYSTEM_MENU_STATE.borrow(cs).borrow_mut());
+/// Connects `app`'s `System` global: its actions go to `on_action`, and the
+/// handle returned sets the state it shows.
+pub fn connect_system<T>(app: &T, on_action: impl Fn(SystemMenuAction) + 'static) -> SystemGlobal
+where
+    T: ComponentHandle + 'static,
+    for<'a> System<'a>: slint::Global<'a, T>,
+{
+    let on_action = Rc::new(on_action);
+    let system = System::get(app);
+    let act = on_action.clone();
+    system.on_request_provisioning(move || act(SystemMenuAction::RequestProvisioning));
+    let act = on_action.clone();
+    system.on_stop_provisioning(move || act(SystemMenuAction::StopProvisioning));
+    let act = on_action.clone();
+    system.on_brightness_changed(move |percent| {
+        act(SystemMenuAction::BrightnessChanged(clamp_brightness(percent)));
     });
+    system.on_menu_closed(move || on_action(SystemMenuAction::MenuClosed));
+
+    let app = app.as_weak();
+    SystemGlobal(Box::new(move |state| {
+        let Some(app) = app.upgrade() else { return };
+        let system = System::get(&app);
+        // Only on change: whatever reads any field re-evaluates.
+        if system.get_state() != *state {
+            system.set_state(state.clone());
+        }
+    }))
 }
 
-/// Returns a clone of the current system menu state.
-pub fn get_system_menu_state() -> SystemMenuState {
-    critical_section::with(|cs| SYSTEM_MENU_STATE.borrow(cs).borrow().clone())
-}
-
-#[allow(dead_code)]
-struct SendTimer(slint::Timer);
-unsafe impl Send for SendTimer {}
-
-static SYNC_TIMER: Mutex<RefCell<Option<SendTimer>>> = Mutex::new(RefCell::new(None));
-
-/// Configures default exit navigation, threshold haptics, and system menu sync for an application.
-pub fn setup_navigation<T: ComponentHandle + 'static>(
+/// Connects `app`'s `Navigation` global: exiting, and haptics at the edge
+/// gestures' threshold.
+pub fn connect_navigation<T: ComponentHandle + 'static>(
     app: &T,
     on_exit: impl Fn() + 'static,
     on_threshold: impl Fn() + 'static,
 ) where
     for<'a> Navigation<'a>: slint::Global<'a, T>,
-    for<'a> SystemMenu<'a>: slint::Global<'a, T>,
 {
     let nav = Navigation::get(app);
     nav.on_exit(on_exit);
     nav.on_threshold_reached(on_threshold);
-
-    let menu = SystemMenu::get(app);
-    let state = get_system_menu_state();
-    menu.set_battery_percent(state.battery_percent);
-    menu.set_is_plugged_in(state.is_plugged_in);
-    menu.set_wifi_connected(state.wifi_connected);
-    menu.set_wifi_ssid(state.wifi_ssid.as_str().into());
-    menu.set_is_provisioning(state.is_provisioning);
-    menu.set_brightness_percent(state.brightness_percent);
-
-    menu.on_request_provisioning(|| {
-        send_system_menu_action(SystemMenuAction::RequestProvisioning);
-    });
-    menu.on_stop_provisioning(|| {
-        send_system_menu_action(SystemMenuAction::StopProvisioning);
-    });
-    menu.on_brightness_changed(|val| {
-        let clamped = clamp_brightness(val);
-        update_system_menu_state(|s| s.brightness_percent = clamped);
-        send_system_menu_action(SystemMenuAction::BrightnessChanged(clamped));
-    });
-    menu.on_drawer_closed(|| {
-        send_system_menu_action(SystemMenuAction::DrawerClosed);
-    });
-
-    let app_weak = app.as_weak();
-    let timer = slint::Timer::default();
-    timer.start(slint::TimerMode::Repeated, core::time::Duration::from_millis(500), move || {
-        if let Some(app) = app_weak.upgrade() {
-            let menu = SystemMenu::get(&app);
-            let state = get_system_menu_state();
-            if menu.get_battery_percent() != state.battery_percent {
-                menu.set_battery_percent(state.battery_percent);
-            }
-            if menu.get_is_plugged_in() != state.is_plugged_in {
-                menu.set_is_plugged_in(state.is_plugged_in);
-            }
-            if menu.get_wifi_connected() != state.wifi_connected {
-                menu.set_wifi_connected(state.wifi_connected);
-            }
-            if menu.get_wifi_ssid().as_str() != state.wifi_ssid.as_str() {
-                menu.set_wifi_ssid(state.wifi_ssid.as_str().into());
-            }
-            if menu.get_is_provisioning() != state.is_provisioning {
-                menu.set_is_provisioning(state.is_provisioning);
-            }
-            if menu.get_brightness_percent() != state.brightness_percent {
-                menu.set_brightness_percent(state.brightness_percent);
-            }
-        }
-    });
-
-    critical_section::with(|cs| {
-        *SYNC_TIMER.borrow(cs).borrow_mut() = Some(SendTimer(timer));
-    });
 }
 
 /// Minimum allowable display brightness percentage (prevents complete blackouts).
@@ -178,6 +90,10 @@ pub const fn clamp_brightness(percent: i32) -> i32 {
         percent
     }
 }
+
+// TODO: the PWM conversions below are the Waveshare LCD's: they belong in its
+// display driver, behind a device abstraction that takes a percent. (Lilygo's
+// AMOLED takes the percent as is.)
 
 /// Converts brightness percent (15..=100) to 8-bit PWM duty cycle (0..=255).
 #[inline]

@@ -59,4 +59,6 @@ impl Platform for StdPlatform {
     }
 
     fn signal_feedback(&self, _: crate::feedback::Feedback) {}
+
+    fn on_system_menu_action(&self, _: theme::SystemMenuAction) {}
 }
