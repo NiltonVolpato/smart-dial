@@ -379,6 +379,34 @@ inline const char *EnumNameActionType(ActionType e) {
   return EnumNamesActionType()[index];
 }
 
+/// Link limits both ends must agree on. An enum only to carry constants into
+/// the generated code, until tether takes the max payload from the schema.
+enum class Limits : uint32_t {
+  /// The largest RPC payload, requests and responses alike.
+  MaxPayload = 1024,
+  /// The largest COBS frame for MaxPayload, delimiter excluded: tether's
+  /// max_wire_size(MaxPayload) - 1 (CRC, header and padding, then COBS).
+  MaxFrame = 1104,
+  MIN = MaxPayload,
+  MAX = MaxFrame
+};
+
+inline const Limits (&EnumValuesLimits())[2] {
+  static const Limits values[] = {
+    Limits::MaxPayload,
+    Limits::MaxFrame
+  };
+  return values;
+}
+
+inline const char *EnumNameLimits(Limits e) {
+  switch (e) {
+    case Limits::MaxPayload: return "MaxPayload";
+    case Limits::MaxFrame: return "MaxFrame";
+    default: return "";
+  }
+}
+
 /// The services the co-processor serves: wire IDs are fixed in append-only order.
 enum class Server : uint8_t {
   Wifi = 0,

@@ -19,6 +19,7 @@
 #include "freertos/task.h"
 #include "freertos/timers.h"
 #include "nvs_flash.h"
+#include "tether/frame.h"
 #include "tether/router.h"
 #include "tether_idf/uart_io.h"
 
@@ -42,7 +43,12 @@ namespace {
 constexpr const char* TAG = "app";
 
 constexpr uint32_t kBaudRate = 921600;
-constexpr std::size_t kMaxPayload = 1024;
+constexpr auto kMaxPayload =
+    static_cast<std::size_t>(CoprocessorProto::Limits::MaxPayload);
+// Clients size their receive buffers from the schema's MaxFrame.
+static_assert(tether::max_wire_size(kMaxPayload) - 1 ==
+                  static_cast<std::size_t>(CoprocessorProto::Limits::MaxFrame),
+              "Limits.MaxFrame in schemas/coprocessor.fbs is out of date");
 constexpr std::size_t kMaxCalls = 12;
 constexpr std::size_t kMaxStreams = 8;
 // Outgoing HTTP connections at once. lwIP has 16 sockets (sdkconfig): the

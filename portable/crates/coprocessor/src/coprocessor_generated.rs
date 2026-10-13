@@ -604,6 +604,99 @@ pub mod coprocessor_proto {
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
+    pub const ENUM_MIN_LIMITS: u32 = 1024;
+    #[deprecated(
+        since = "2.0.0",
+        note = "Use associated constants instead. This will no longer be generated in 2021."
+    )]
+    pub const ENUM_MAX_LIMITS: u32 = 1104;
+    #[deprecated(
+        since = "2.0.0",
+        note = "Use associated constants instead. This will no longer be generated in 2021."
+    )]
+    #[allow(non_camel_case_types)]
+    pub const ENUM_VALUES_LIMITS: [Limits; 2] = [Limits::MaxPayload, Limits::MaxFrame];
+
+    /// Link limits both ends must agree on. An enum only to carry constants into
+    /// the generated code, until tether takes the max payload from the schema.
+    #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+    #[repr(transparent)]
+    pub struct Limits(pub u32);
+    #[allow(non_upper_case_globals)]
+    impl Limits {
+        /// The largest RPC payload, requests and responses alike.
+        pub const MaxPayload: Self = Self(1024);
+        /// The largest COBS frame for MaxPayload, delimiter excluded: tether's
+        /// max_wire_size(MaxPayload) - 1 (CRC, header and padding, then COBS).
+        pub const MaxFrame: Self = Self(1104);
+
+        pub const ENUM_MIN: u32 = 1024;
+        pub const ENUM_MAX: u32 = 1104;
+        pub const ENUM_VALUES: &'static [Self] = &[Self::MaxPayload, Self::MaxFrame];
+        /// Returns the variant's name or "" if unknown.
+        pub fn variant_name(self) -> Option<&'static str> {
+            match self {
+                Self::MaxPayload => Some("MaxPayload"),
+                Self::MaxFrame => Some("MaxFrame"),
+                _ => None,
+            }
+        }
+    }
+    impl ::core::fmt::Debug for Limits {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+            if let Some(name) = self.variant_name() {
+                f.write_str(name)
+            } else {
+                f.write_fmt(format_args!("<UNKNOWN {:?}>", self.0))
+            }
+        }
+    }
+    impl<'a> ::flatbuffers::Follow<'a> for Limits {
+        type Inner = Self;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            let b = unsafe { ::flatbuffers::read_scalar_at::<u32>(buf, loc) };
+            Self(b)
+        }
+    }
+
+    impl ::flatbuffers::Push for Limits {
+        type Output = Limits;
+        #[inline]
+        unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
+            unsafe { ::flatbuffers::emplace_scalar::<u32>(dst, self.0) };
+        }
+    }
+
+    impl ::flatbuffers::EndianScalar for Limits {
+        type Scalar = u32;
+        #[inline]
+        fn to_little_endian(self) -> u32 {
+            self.0.to_le()
+        }
+        #[inline]
+        #[allow(clippy::wrong_self_convention)]
+        fn from_little_endian(v: u32) -> Self {
+            let b = u32::from_le(v);
+            Self(b)
+        }
+    }
+
+    impl<'a> ::flatbuffers::Verifiable for Limits {
+        #[inline]
+        fn run_verifier(
+            v: &mut ::flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), ::flatbuffers::InvalidFlatbuffer> {
+            u32::run_verifier(v, pos)
+        }
+    }
+
+    impl ::flatbuffers::SimpleToVerifyInSlice for Limits {}
+    #[deprecated(
+        since = "2.0.0",
+        note = "Use associated constants instead. This will no longer be generated in 2021."
+    )]
     pub const ENUM_MIN_SERVER: u8 = 0;
     #[deprecated(
         since = "2.0.0",

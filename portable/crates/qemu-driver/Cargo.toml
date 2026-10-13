@@ -1,0 +1,11 @@
+[package]
+name = "qemu-driver"
+version = "0.1.0"
+edition.workspace = true
+license = "MIT"
+
+[dependencies]
+coprocessor = { workspace = true }
+tether = { path = "../../../../../tether-worktree/main/tether" }
+tether-core = { path = "../../../../../tether-worktree/main/core" }
+serialport = { version = "4", default-features = false }
