@@ -50,6 +50,7 @@ embassy-time = { version = "0.5.0", features = ["defmt"] }
 embassy-embedded-hal = { version = "0.6.0", features = ["defmt"] }
 embedded-hal-async = "1.0.0"
 embedded-io-async = "0.7"
+bbqueue = { version = "0.7", default-features = false }
 heapless = "0.8"
 static_cell = "2.1"
 critical-section = "1.2"
@@ -83,6 +84,7 @@ nb = "1.1"
 complexity = { level = "warn", priority = -1 }
 correctness = { level = "warn", priority = -1 }
 perf = { level = "warn", priority = -1 }
+mem-forget = { level = "deny", priority = 0 }
 
 too-many-lines = { level = "warn", priority = -1 }
 

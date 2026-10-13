@@ -1,10 +1,5 @@
 #![no_std]
 #![no_main]
-#![deny(
-    clippy::mem_forget,
-    reason = "mem::forget is generally not safe to do with esp_hal types, especially those \
-    holding buffers for the duration of a data transfer."
-)]
 #![deny(clippy::large_stack_frames)]
 
 use alloc::boxed::Box;
@@ -20,8 +15,8 @@ use esp_hal::time::Instant;
 use esp_hal::timer::timg::TimerGroup;
 use panic_rtt_target as _;
 use waveshare_knob_1_8::bsp::{
-    Board, Bsp, Core1Peripherals, Sh8601, battery_task, coprocessor_task, display_task,
-    haptic_task, rotary_task, run_event_loop, simd, touch_task,
+    Board, Bsp, Core1Peripherals, Sh8601, battery_task, coprocessor_task, create_shared_client,
+    display_task, haptic_task, rotary_task, run_event_loop, simd, system_task, touch_task,
 };
 use waveshare_knob_1_8::tasks::{PROFILER_ENABLED, profiler_task, screensaver_task};
 
@@ -58,7 +53,15 @@ async fn main(spawner: Spawner) -> ! {
     simd::enable_pie();
 
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
-    let peripherals = esp_hal::init(config);
+    let mut peripherals = esp_hal::init(config);
+    // ADC1 seeds the TRNG: both are released at the end of the block (the TRNG
+    // first), as the battery task needs ADC1.
+    let boot_id = {
+        let _trng_source =
+            esp_hal::rng::TrngSource::new(peripherals.RNG.reborrow(), peripherals.ADC1.reborrow());
+        let trng = esp_hal::rng::Trng::try_new().expect("Failed to initialize TRNG");
+        trng.random() | 1
+    };
     let board = Board::new(peripherals);
 
     // 1. Initialize PSRAM (Region 0 - default general allocator)
@@ -88,19 +91,41 @@ async fn main(spawner: Spawner) -> ! {
     let bsp = Bsp::init(board.core0);
 
     // 6. Spawn interrupt-driven input, haptics & screensaver tasks
+    let feedback_channel = alloc::rc::Rc::new(waveshare_knob_1_8::bsp::HapticChannel::new());
+
     spawner.spawn(rotary_task(bsp.rotary_a, bsp.rotary_b).expect("Failed to create rotary task"));
     if let Some(touch) = bsp.touch {
         spawner.spawn(touch_task(touch).expect("Failed to create touch task"));
     }
     if let Some(haptic_i2c) = bsp.haptic_i2c {
-        spawner.spawn(haptic_task(haptic_i2c).expect("Failed to create haptic task"));
+        spawner.spawn(
+            haptic_task(haptic_i2c, feedback_channel.clone())
+                .expect("Failed to create haptic task"),
+        );
     }
+    let coprocessor_client = create_shared_client(boot_id);
+
     spawner.spawn(
-        coprocessor_task(bsp.coprocessor.uart, bsp.coprocessor.tx, bsp.coprocessor.rx)
-            .expect("Failed to create coprocessor task"),
+        coprocessor_task(
+            bsp.coprocessor.uart,
+            bsp.coprocessor.tx,
+            bsp.coprocessor.rx,
+            coprocessor_client.clone(),
+        )
+        .expect("Failed to create coprocessor task"),
     );
     spawner.spawn(
-        battery_task(bsp.battery.adc, bsp.battery.pin).expect("Failed to create battery task"),
+        system_task(coprocessor::system::Client(coprocessor_client.clone()))
+            .expect("Failed to create system task"),
+    );
+    spawner.spawn(
+        battery_task(
+            bsp.battery.adc,
+            bsp.battery.pin,
+            feedback_channel.clone(),
+            coprocessor::system::Client(coprocessor_client.clone()),
+        )
+        .expect("Failed to create battery task"),
     );
     spawner.spawn(screensaver_task().expect("Failed to create screensaver task"));
     if PROFILER_ENABLED {
@@ -108,10 +133,19 @@ async fn main(spawner: Spawner) -> ! {
     }
 
     info!("Starting AppShell with Launcher on Core 0...");
-    let launcher = LauncherAppFactory::default_apps();
-    let shell = AppShell::new(Box::new(common::EspAppShellPlatform), Box::new(launcher));
+    let sonos_factory = Box::new(app_sonos::SonosAppFactory::new(coprocessor::sonos::Client(
+        coprocessor_client.clone(),
+    )));
+    let launcher = LauncherAppFactory::default_apps_with_sonos(sonos_factory);
+    let platform = alloc::rc::Rc::new(common::EspAppShellPlatform::new(
+        Some(waveshare_knob_1_8::bsp::rtc::current_timestamp),
+        Some(waveshare_knob_1_8::bsp::rtc::current_zoned),
+        Some(feedback_channel.clone()),
+    ));
+    let shell = AppShell::new(spawner, platform, Box::new(launcher));
     AppShell::start(&shell);
 
     // 7. Enter Slint MCU event loop on Core 0
-    run_event_loop(bsp.window).await;
+    let feedback = waveshare_knob_1_8::bsp::WaveshareFeedback(feedback_channel);
+    run_event_loop(bsp.window, &feedback, coprocessor::wifi::Client(coprocessor_client)).await;
 }
