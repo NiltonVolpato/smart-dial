@@ -9,13 +9,16 @@ use alloc::rc::Rc;
 use core::cell::RefCell;
 use core::future::Future;
 
-use embassy_futures::select::{Either, select};
+use embassy_futures::select::{Either, Either3, select, select3};
+use embassy_sync::blocking_mutex::raw::NoopRawMutex;
+use embassy_sync::watch::Receiver;
 use embassy_time::{Duration, Instant, Timer};
 use i_slint_renderer_software::MinimalSoftwareWindow;
 use slint::platform::{Key, PointerEventButton, WindowEvent};
 
 use crate::channels::{receive_event, report_user_activity, try_receive_event};
 use crate::event::{Event, InputEvent, ScreenEvent, TouchEvent};
+use crate::system::{Battery, SystemSources, Wifi};
 
 /// Handle to the active Slint window.
 pub type WindowHolder = Rc<RefCell<Option<Rc<MinimalSoftwareWindow>>>>;
@@ -143,6 +146,24 @@ pub fn dispatch_input_event(
     }
 }
 
+/// A change from one of the system menu's sources.
+enum SystemChange {
+    Wifi(Wifi),
+    Provisioning(bool),
+    Battery(Battery),
+}
+
+async fn next_system_change(
+    sources: &SystemSources,
+    battery: &mut Receiver<'_, NoopRawMutex, Battery, 1>,
+) -> SystemChange {
+    match select3(sources.wifi.wait(), sources.provisioning.wait(), battery.changed()).await {
+        Either3::First(wifi) => SystemChange::Wifi(wifi),
+        Either3::Second(active) => SystemChange::Provisioning(active),
+        Either3::Third(battery) => SystemChange::Battery(battery),
+    }
+}
+
 async fn next_event(timeout: Option<Duration>) -> Option<Event> {
     let Some(timeout) = timeout else {
         return Some(receive_event().await);
@@ -157,10 +178,16 @@ async fn next_event(timeout: Option<Duration>) -> Option<Event> {
 ///
 /// Handles event draining, Slint timers and animations, input dispatching,
 /// sleep/wake state management, and delegates frame rendering to `render_frame`.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "temporary fix: group the device hooks (screen, menu, render) into one trait"
+)]
 pub async fn run_event_loop<F, S, SF, M, MF, RF, RFF>(
     window_holder: WindowHolder,
     feedback: &F,
-    mut base_brightness: u8,
+    shell: Rc<RefCell<app_shell::AppShell>>,
+    brightness_percent: i32,
+    sources: SystemSources,
     mut on_screen_event: S,
     mut on_menu_action: M,
     mut render_frame: RF,
@@ -177,6 +204,13 @@ where
     let mut pending_event: Option<Event> = None;
     let mut is_dimmed: bool = false;
     let mut is_sleeping: bool = false;
+    let mut base_brightness = theme::brightness_percent_to_duty(brightness_percent);
+
+    // What the system menu shows.
+    let mut system =
+        theme::SystemState { battery_percent: -1, brightness_percent, ..Default::default() };
+    app_shell::AppShell::set_system_state(&shell, &system);
+    let mut battery = sources.battery.receiver().expect("The event loop is the battery's receiver");
 
     defmt::info!("Entering unified Slint MCU event loop");
 
@@ -188,27 +222,6 @@ where
             Timer::after(Duration::from_millis(10)).await;
             continue;
         };
-
-        // 2a. Process SystemMenu actions from the UI
-        while let Some(action) = theme::try_receive_system_menu_action() {
-            match action {
-                theme::SystemMenuAction::BrightnessChanged(percent) => {
-                    let duty = theme::brightness_percent_to_duty(percent);
-                    base_brightness = duty;
-                    on_screen_event(ScreenEvent::DimAbsolute(duty)).await;
-                }
-                theme::SystemMenuAction::DrawerClosed => {
-                    let percent = theme::get_system_menu_state().brightness_percent as u8;
-                    let _ = crate::storage::save_settings(crate::storage::SystemSettings {
-                        brightness_percent: percent,
-                    })
-                    .await;
-                }
-                other => {
-                    on_menu_action(other).await;
-                }
-            }
-        }
 
         // 2b. Process ALL pending events before drawing
         let mut event = pending_event.take().or_else(try_receive_event);
@@ -252,6 +265,22 @@ where
                 Event::WakeUp => {
                     defmt::debug!("WakeUp event received");
                 }
+                Event::SystemMenu(theme::SystemMenuAction::BrightnessChanged(percent)) => {
+                    // The menu shows it already.
+                    system.brightness_percent = percent;
+                    app_shell::AppShell::set_system_state(&shell, &system);
+                    base_brightness = theme::brightness_percent_to_duty(percent);
+                    on_screen_event(ScreenEvent::DimAbsolute(base_brightness)).await;
+                }
+                Event::SystemMenu(theme::SystemMenuAction::MenuClosed) => {
+                    let _ = crate::storage::save_settings(crate::storage::SystemSettings {
+                        brightness_percent: system.brightness_percent as u8,
+                    })
+                    .await;
+                }
+                Event::SystemMenu(action) => {
+                    on_menu_action(action).await;
+                }
             }
             event = try_receive_event();
         }
@@ -271,9 +300,23 @@ where
                 .map(|d| Duration::from_micros(d.as_micros() as u64))
         };
 
-        // 5. Await next event or animation/timer tick
-        if let Some(event) = next_event(timeout).await {
-            pending_event = Some(event);
+        // 5. Await next event, system change, or animation/timer tick
+        match select(next_event(timeout), next_system_change(&sources, &mut battery)).await {
+            Either::First(event) => pending_event = event,
+            Either::Second(change) => {
+                match change {
+                    SystemChange::Wifi(wifi) => {
+                        system.wifi = wifi.state;
+                        system.wifi_ssid = wifi.ssid;
+                    }
+                    SystemChange::Provisioning(active) => system.is_provisioning = active,
+                    SystemChange::Battery(battery) => {
+                        system.battery_percent = battery.percent;
+                        system.is_plugged_in = battery.is_plugged;
+                    }
+                }
+                app_shell::AppShell::set_system_state(&shell, &system);
+            }
         }
     }
 }
@@ -337,5 +380,9 @@ impl app_shell::Platform for EspAppShellPlatform {
         if let Some(ref channel) = self.feedback_channel {
             let _ = channel.try_send(feedback);
         }
+    }
+
+    fn on_system_menu_action(&self, action: theme::SystemMenuAction) {
+        crate::channels::send_event(Event::SystemMenu(action));
     }
 }
