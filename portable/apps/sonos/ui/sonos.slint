@@ -39,8 +39,6 @@ export global SonosInfo {
 component MarqueeText inherits Rectangle {
     in property <string> text;
     in property <color> text_color: #ffffff;
-    in property <length> font_size: 20px;
-    in property <int> font_weight: 700;
 
     clip: true;
 
@@ -71,15 +69,12 @@ component MarqueeText inherits Rectangle {
         }
     }
 
-    txt := Text {
-        font-family: Theme.font-family;
+    txt := TextLgBold {
         x: root.overflow ? -root.offset : 0px;
         width: root.overflow ? self.preferred-width : parent.width;
         horizontal-alignment: root.overflow ? left : center;
         text: root.text;
         color: root.text_color;
-        font-size: root.font_size;
-        font-weight: root.font_weight;
     }
 }
 
@@ -210,38 +205,19 @@ export component SonosApp inherits AppWindow {
     in-out property <SonosState> state: {
         mode: 0,
         selected_group: 0,
-        active_group_name: "Kitchen",
-        track_title: "NEVER NEVER (Extended Club Remaster)",
-        track_artist: "Marc Moon",
-        track_album: "Marc Moon EP",
-        remaining_str: "-02:15",
-        elapsed_str: "00:45",
-        progress_ratio: 0.25,
-        volume: 25,
+        active_group_name: "",
+        track_title: "",
+        track_artist: "",
+        track_album: "",
+        remaining_str: "--:--",
+        elapsed_str: "00:00",
+        progress_ratio: 0.0,
+        volume: 0,
         volume_visible: false,
-        is_playing: true,
+        is_playing: false,
         accent: #F87000,
-        status: "Online",
-        groups: [
-            {
-                name: "Kitchen",
-                members: ["Kitchen"],
-                playing_summary: "NEVER NEVER (Extended Club Remaster) - Marc Moon",
-                is_playing: true,
-            },
-            {
-                name: "Office",
-                members: ["Office"],
-                playing_summary: "Paused",
-                is_playing: false,
-            },
-            {
-                name: "Living Room",
-                members: ["Living Room", "Sub"],
-                playing_summary: "Not Playing",
-                is_playing: false,
-            },
-        ],
+        status: "Searching for speakers...",
+        groups: [],
     };
 
     callback toggle_play_pause();
@@ -251,11 +227,13 @@ export component SonosApp inherits AppWindow {
     callback adjust_volume(int);
     callback select_group(int);
     callback set_mode(int);
+    callback user_interaction();
     callback exit();
 
     forward-focus: dial-focus;
     dial-focus := FocusScope {
         key-pressed(event) => {
+            root.user_interaction();
             if event.text == Key.Escape {
                 root.exit();
                 return accept;
@@ -264,7 +242,7 @@ export component SonosApp inherits AppWindow {
                 if root.state.mode == 0 {
                     root.select_group(Math.max(0, root.state.selected_group - 1));
                 } else {
-                    root.adjust_volume(-2);
+                    root.adjust_volume(-1);
                 }
                 return accept;
             }
@@ -272,7 +250,7 @@ export component SonosApp inherits AppWindow {
                 if root.state.mode == 0 {
                     root.select_group(Math.min(root.state.groups.length - 1, root.state.selected_group + 1));
                 } else {
-                    root.adjust_volume(2);
+                    root.adjust_volume(1);
                 }
                 return accept;
             }
@@ -291,6 +269,7 @@ export component SonosApp inherits AppWindow {
     // Scroll / rotary dial emulation via mouse wheel
     TouchArea {
         scroll-event(event) => {
+            root.user_interaction();
             if root.state.mode == 0 {
                 if event.delta-y < 0px {
                     root.select_group(Math.min(root.state.groups.length - 1, root.state.selected_group + 1));
@@ -322,6 +301,29 @@ export component SonosApp inherits AppWindow {
             color: #718096;
             letter-spacing: 2px;
             horizontal-alignment: center;
+        }
+
+        // Empty state / Status message when no groups found
+        if root.state.groups.length == 0: VerticalLayout {
+            y: (parent.height - 180px) / 2;
+            x: (parent.width - 240px) / 2;
+            width: 240px;
+            height: 180px;
+            alignment: center;
+            spacing: 12px;
+
+            TextLgBold {
+                text: "No Sonos Found";
+                color: #ffffff;
+                horizontal-alignment: center;
+            }
+
+            TextBase {
+                text: root.state.status != "" ? root.state.status : "Searching for speakers...";
+                color: #a0aec0;
+                horizontal-alignment: center;
+                wrap: word-wrap;
+            }
         }
 
         // Carousel strip: translates horizontally as selected_group changes + drag_offset
@@ -385,6 +387,7 @@ export component SonosApp inherits AppWindow {
 
             pointer-event(event) => {
                 if event.button == PointerEventButton.left && event.kind == PointerEventKind.down {
+                    root.user_interaction();
                     root.is_dragging = false;
                     root.drag_offset = 0px;
                 }
@@ -436,7 +439,7 @@ export component SonosApp inherits AppWindow {
         }
 
         // Navigation Hint
-        TextSm {
+        if root.state.groups.length > 0: TextSm {
             y: parent.height * 0.76;
             width: parent.width;
             text: "PRESS TO CONTROL";
@@ -445,7 +448,7 @@ export component SonosApp inherits AppWindow {
         }
 
         // Bottom Page Indicator Dots
-        HorizontalLayout {
+        if root.state.groups.length > 0: HorizontalLayout {
             y: parent.height * 0.85;
             alignment: center;
             spacing: 8px;
@@ -478,9 +481,9 @@ export component SonosApp inherits AppWindow {
         VerticalLayout {
             y: root.cy - 110px;
             x: (parent.width - self.width) / 2;
-            width: parent.width - 60px;
-            height: 70px;
-            spacing: 2px;
+            width: parent.width - 80px;
+            height: 80px;
+            spacing: 10px;
             alignment: center;
 
             // Track Title with native Slint Marquee
@@ -489,8 +492,6 @@ export component SonosApp inherits AppWindow {
                 height: 28px;
                 text: root.state.track_title != "" ? root.state.track_title : "No Track";
                 text_color: #ffffff;
-                font_size: 22px;
-                font-weight: 700;
             }
 
             // Artist Name
@@ -515,7 +516,7 @@ export component SonosApp inherits AppWindow {
         // Center Deck: Audio Equalizer (when playing) & Play Indicator (when paused)
         if root.state.is_playing: AudioEqualizer {
             x: (parent.width - self.width) / 2;
-            y: (parent.height - self.height) / 2;
+            y: (parent.height - self.height) / 2 + 45px;
             is_playing: true;
         }
 
@@ -525,13 +526,15 @@ export component SonosApp inherits AppWindow {
             source: @image-url("../assets/play.png");
             x: root.cx - 66.375px;
             y: root.cy - 88.5px;
+            z: 100;
             width: 178px;
             height: 178px;
+            colorize: root.state.accent;
         }
 
         // Lower Deck: Time Display (touch to toggle remaining vs elapsed, 20px 700 - matches TextLgBold)
         TextLgBold {
-            y: root.cy + 62px;
+            y: root.cy + 80px;
             width: parent.width;
             text: root.show_remaining ?
                 (root.state.remaining_str != "" ? root.state.remaining_str : "--:--") :
@@ -562,12 +565,11 @@ export component SonosApp inherits AppWindow {
         }
 
         // Navigation hint
-        if !root.state.volume_visible: TextSm {
-            y: root.cy + 114px;
-            width: parent.width;
-            text: "SWIPE UP FOR GROUPS";
-            color: #ffffff.with-alpha(0.8);
+        if !root.state.volume_visible: Image {
+            source: @image-url("../assets/swipe_up_24dp_FFFFFF_FILL0_wght500_GRAD0_opsz24.svg");
+            y: root.cy + 140px;
             horizontal-alignment: center;
+            colorize: root.state.accent.with-alpha(0.5);
         }
 
         // Single Unified Mode 1 Touch Area:
