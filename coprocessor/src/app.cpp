@@ -135,16 +135,31 @@ void heartbeat(TimerHandle_t timer) {
   const tether::idf::UartStats& uart = app.io.stats();
   const tether::LinkStats& link = app.server.link().stats();
   ESP_LOGI(TAG,
-           "[Heartbeat] uart: overflows=%lu, line errors=%lu; link: "
-           "frames tx=%lu rx=%lu, retransmits=%lu, crc errors=%lu, cobs "
-           "errors=%lu",
+           "[Heartbeat] uart: overflows=%lu, buffer full=%lu, line "
+           "errors=%lu; link: frames tx=%lu rx=%lu, retransmits=%lu, crc "
+           "errors=%lu, cobs errors=%lu",
            static_cast<unsigned long>(uart.overflows),
+           static_cast<unsigned long>(uart.buffer_full),
            static_cast<unsigned long>(uart.line_errors),
            static_cast<unsigned long>(link.frames_tx),
            static_cast<unsigned long>(link.frames_rx),
            static_cast<unsigned long>(link.retransmits),
            static_cast<unsigned long>(link.crc_errors),
            static_cast<unsigned long>(link.cobs_errors));
+  // The S3's acks: how long it took beyond each frame's time on the wire.
+  const tether::AckWaits& acks = link.ack_waits;
+  const auto& b = acks.buckets;
+  ESP_LOGI(
+      TAG,
+      "[Heartbeat] S3 acks: %lu, mean %lu ms, max %lu ms; ms <1:%lu "
+      "<2:%lu <4:%lu <8:%lu <16:%lu <32:%lu >=32:%lu",
+      static_cast<unsigned long>(acks.count),
+      static_cast<unsigned long>(acks.count != 0 ? acks.total_ms / acks.count
+                                                 : 0),
+      static_cast<unsigned long>(acks.max_ms), static_cast<unsigned long>(b[0]),
+      static_cast<unsigned long>(b[1]), static_cast<unsigned long>(b[2]),
+      static_cast<unsigned long>(b[3]), static_cast<unsigned long>(b[4]),
+      static_cast<unsigned long>(b[5]), static_cast<unsigned long>(b[6]));
 }
 
 void reactor_task(void* arg) {

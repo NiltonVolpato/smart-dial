@@ -323,6 +323,16 @@ fn log_link_stats(client: &SharedClient) {
         RX_QUEUED_PEAK.load(Ordering::Relaxed),
         RX_RING_BUFFER_SIZE,
     );
+    // The co-processor's acks: how long it took beyond each frame's time on
+    // the wire. Buckets: under 1, 2, 4, 8, 16, 32 ms, and 32 ms or more.
+    let acks = link.ack_waits;
+    debug!(
+        "[COPROCESSOR] co-processor acks: {}, mean {} ms, max {} ms; buckets {}",
+        acks.count,
+        acks.total_ms.checked_div(u64::from(acks.count)).unwrap_or(0),
+        acks.max_ms,
+        acks.buckets,
+    );
 }
 
 /// Follows the co-processor's system events: Wi-Fi state for the system menu,
