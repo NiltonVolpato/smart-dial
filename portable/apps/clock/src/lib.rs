@@ -6,7 +6,6 @@
 extern crate alloc;
 
 use alloc::boxed::Box;
-use core::any::Any;
 
 slint::include_modules!();
 
@@ -34,7 +33,7 @@ impl app_shell::AppFactory for ClockAppFactory {
         self.info.clone()
     }
 
-    fn launch(&self, context: app_shell::ShellContext) -> Box<dyn Any> {
+    fn launch(&self, context: app_shell::ShellContext) -> Box<dyn app_shell::ActiveApp> {
         let app = ClockApp::new().expect("Failed to create ClockApp");
         let initial_zoned = context.platform().now_local();
         let initial_time = if let Some(ref zdt) = initial_zoned {
@@ -106,7 +105,7 @@ impl app_shell::AppFactory for ClockAppFactory {
         app.on_exit(move || context.exit());
         let _ = app.show();
 
-        Box::new((app, timer))
+        Box::new(app_shell::RunningApp::with_handles(app, timer))
     }
 
     fn clone_box(&self) -> Box<dyn app_shell::AppFactory> {

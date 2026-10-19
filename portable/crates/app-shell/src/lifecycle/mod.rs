@@ -4,14 +4,15 @@
 //! Application lifecycle and navigation coordinator.
 
 use alloc::boxed::Box;
-use core::any::Any;
 
 use theme::AppInfo;
 
+mod app;
 mod platform;
 mod shell;
 mod task;
 
+pub use app::{ActiveApp, RunningApp};
 pub use platform::Platform;
 #[cfg(feature = "std")]
 pub use platform::StdPlatform;
@@ -25,8 +26,8 @@ pub trait AppFactory {
 
     /// Instantiates and activates the application window, passing the shell context.
     ///
-    /// Returns an opaque `Box<dyn Any>` holding the component handle / resources alive.
-    fn launch(&self, context: ShellContext) -> Box<dyn Any>;
+    /// Returns a boxed [`ActiveApp`] holding the component handle / resources alive.
+    fn launch(&self, context: ShellContext) -> Box<dyn ActiveApp>;
 
     /// Clones this factory trait object.
     fn clone_box(&self) -> Box<dyn AppFactory>;

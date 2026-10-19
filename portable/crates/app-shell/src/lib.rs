@@ -15,7 +15,7 @@ mod profile;
 pub use feedback::Feedback;
 #[cfg(feature = "std")]
 pub use lifecycle::StdPlatform;
-pub use lifecycle::{AppFactory, AppShell, Handle, Platform, ShellContext};
+pub use lifecycle::{ActiveApp, AppFactory, AppShell, Handle, Platform, RunningApp, ShellContext};
 pub use perf::{FrameCycles, PerfSummary, PerfTracker};
 pub use profile::{PcSample, SampleTable};
 
@@ -24,7 +24,6 @@ mod tests {
     use alloc::boxed::Box;
     use alloc::rc::Rc;
     use alloc::string::String;
-    use core::any::Any;
     use core::cell::RefCell;
 
     use jiff::Timestamp;
@@ -32,17 +31,54 @@ mod tests {
 
     use super::*;
 
+    struct MockActiveApp {
+        hidden_count: Option<Rc<RefCell<usize>>>,
+    }
+
+    impl ActiveApp for MockActiveApp {
+        fn hide(&self) -> Result<(), slint::PlatformError> {
+            if let Some(ref count) = self.hidden_count {
+                *count.borrow_mut() += 1;
+            }
+            Ok(())
+        }
+    }
+
     #[derive(Clone)]
     struct MockAppFactory {
         name: &'static str,
         launched_count: Rc<RefCell<usize>>,
+        hidden_count: Option<Rc<RefCell<usize>>>,
         on_launch_cb: Option<Rc<dyn Fn(ShellContext)>>,
     }
 
     impl MockAppFactory {
         fn new(name: &'static str) -> (Self, Rc<RefCell<usize>>) {
             let count = Rc::new(RefCell::new(0));
-            (Self { name, launched_count: count.clone(), on_launch_cb: None }, count)
+            (
+                Self {
+                    name,
+                    launched_count: count.clone(),
+                    hidden_count: None,
+                    on_launch_cb: None,
+                },
+                count,
+            )
+        }
+
+        fn with_tracker(name: &'static str) -> (Self, Rc<RefCell<usize>>, Rc<RefCell<usize>>) {
+            let launched = Rc::new(RefCell::new(0));
+            let hidden = Rc::new(RefCell::new(0));
+            (
+                Self {
+                    name,
+                    launched_count: launched.clone(),
+                    hidden_count: Some(hidden.clone()),
+                    on_launch_cb: None,
+                },
+                launched,
+                hidden,
+            )
         }
 
         fn with_action(
@@ -51,7 +87,12 @@ mod tests {
         ) -> (Self, Rc<RefCell<usize>>) {
             let count = Rc::new(RefCell::new(0));
             (
-                Self { name, launched_count: count.clone(), on_launch_cb: Some(Rc::new(action)) },
+                Self {
+                    name,
+                    launched_count: count.clone(),
+                    hidden_count: None,
+                    on_launch_cb: Some(Rc::new(action)),
+                },
                 count,
             )
         }
@@ -66,12 +107,12 @@ mod tests {
             }
         }
 
-        fn launch(&self, context: ShellContext) -> Box<dyn Any> {
+        fn launch(&self, context: ShellContext) -> Box<dyn ActiveApp> {
             *self.launched_count.borrow_mut() += 1;
             if let Some(ref cb) = self.on_launch_cb {
                 cb(context);
             }
-            Box::new(self.name)
+            Box::new(MockActiveApp { hidden_count: self.hidden_count.clone() })
         }
 
         fn clone_box(&self) -> Box<dyn AppFactory> {
@@ -286,5 +327,30 @@ mod tests {
         AppShell::start(&shell);
         // Step directly from App1 into App2 synchronously
         AppShell::step(shell.clone());
+    }
+
+    #[test]
+    fn test_active_app_hide_called_on_transition_and_drop() {
+        let (app1, app1_launched, app1_hidden) = MockAppFactory::with_tracker("App1");
+        let (app2, app2_launched, app2_hidden) = MockAppFactory::with_tracker("App2");
+
+        let shell = AppShell::new(test_spawner(), Rc::new(StdPlatform::new()), Box::new(app1));
+        AppShell::start(&shell);
+
+        assert_eq!(*app1_launched.borrow(), 1);
+        assert_eq!(*app1_hidden.borrow(), 0);
+
+        // Queue App2 and transition
+        shell.borrow_mut().set_next_app(Box::new(app2));
+        AppShell::step(shell.clone());
+
+        // App1 must have been hidden before being replaced by App2
+        assert_eq!(*app1_hidden.borrow(), 1);
+        assert_eq!(*app2_launched.borrow(), 1);
+        assert_eq!(*app2_hidden.borrow(), 0);
+
+        // Dropping AppShell must hide the currently active App2
+        drop(shell);
+        assert_eq!(*app2_hidden.borrow(), 1);
     }
 }

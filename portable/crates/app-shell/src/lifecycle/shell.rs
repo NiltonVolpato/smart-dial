@@ -5,7 +5,6 @@
 
 use alloc::boxed::Box;
 use alloc::rc::{Rc, Weak};
-use core::any::Any;
 use core::cell::RefCell;
 use core::future::Future;
 use core::pin::Pin;
@@ -13,7 +12,7 @@ use core::pin::Pin;
 use embassy_sync::signal::Signal;
 
 use super::task::{Handle, app_task};
-use super::{AppFactory, Platform};
+use super::{ActiveApp, AppFactory, Platform};
 
 /// Context provided to an active application to interact with the shell lifecycle and platform.
 #[derive(Clone)]
@@ -84,6 +83,7 @@ impl ShellContext {
             }
             shell.active_system = Some(system);
         }
+        let _ = app.show();
     }
 
     /// Emits audible or haptic feedback through the platform.
@@ -117,11 +117,19 @@ pub struct AppShell {
     platform: Rc<dyn Platform>,
     default_app: Box<dyn AppFactory>,
     next_app: Option<Box<dyn AppFactory>>,
-    active_app: Option<Box<dyn Any>>,
+    active_app: Option<Box<dyn ActiveApp>>,
     /// The active app's `System` global, if it connected it.
     active_system: Option<theme::SystemGlobal>,
     /// The platform's latest, for the next app; None until it reports one.
     system_state: Option<theme::SystemState>,
+}
+
+impl Drop for AppShell {
+    fn drop(&mut self) {
+        if let Some(active) = self.active_app.take() {
+            let _ = active.hide();
+        }
+    }
 }
 
 impl AppShell {
@@ -155,7 +163,9 @@ impl AppShell {
     pub(crate) fn step(shell: Rc<RefCell<Self>>) {
         let (next_factory, platform, spawner) = {
             let mut borrow = shell.borrow_mut();
-            borrow.active_app = None;
+            if let Some(active) = borrow.active_app.take() {
+                let _ = active.hide();
+            }
             borrow.active_system = None;
             let factory = borrow.next_app.take().unwrap_or_else(|| borrow.default_app.clone());
             (factory, borrow.platform.clone(), borrow.spawner)

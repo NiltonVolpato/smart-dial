@@ -147,6 +147,139 @@ mod tests {
         info!("Heap stats after:  {}", heap_after_360);
     }
 
+    #[test]
+    async fn full_album_art_workflow_leak_check() {
+        use alloc::boxed::Box;
+        use alloc::rc::Rc;
+        use alloc::vec::Vec;
+
+        use lilygo_t_encoder_pro::bsp::EspPlatform;
+        use lilygo_t_encoder_pro::bsp::display::{BUFFER_HEIGHT, NativeRgb565, RENDER_STRIDE};
+        use slint::ComponentHandle;
+
+        simd::enable_pie();
+
+        info!("=== Full Album Art Workflow Leak Check ===");
+        info!("0. Baseline heap: {}", esp_alloc::HEAP.stats());
+
+        // Stage 1: ArtRequest -> album_art::process -> ArtResult -> slint::Image -> drop
+        {
+            let mut art_jpeg = Vec::new();
+            art_jpeg.reserve_exact(192 * 1024);
+            art_jpeg.extend_from_slice(MOCK_ALBUM_ART_JPEG);
+
+            let req = album_art::ArtRequest { generation: 1, jpeg: art_jpeg, size: 360 };
+            let res = album_art::process(req);
+            let pixels = res.pixels.expect("decode failed");
+            let img = slint::Image::from_rgb8(pixels);
+            info!("1a. While holding slint::Image (360x360): {}", esp_alloc::HEAP.stats());
+            drop(img);
+        }
+        info!("1b. After dropping slint::Image: {}", esp_alloc::HEAP.stats());
+
+        // Stage 2: Slint platform + SonosApp + set_album_art + render + drop
+        let (platform, window_holder) = EspPlatform::new();
+        slint::platform::set_platform(Box::new(platform)).expect("platform already set");
+
+        static FRAME_BUFFER_A: static_cell::ConstStaticCell<
+            [NativeRgb565; RENDER_STRIDE * BUFFER_HEIGHT],
+        > = static_cell::ConstStaticCell::new(
+            [NativeRgb565::new(0); RENDER_STRIDE * BUFFER_HEIGHT],
+        );
+        static FRAME_BUFFER_B: static_cell::ConstStaticCell<
+            [NativeRgb565; RENDER_STRIDE * BUFFER_HEIGHT],
+        > = static_cell::ConstStaticCell::new(
+            [NativeRgb565::new(0); RENDER_STRIDE * BUFFER_HEIGHT],
+        );
+        let mut bufs = [FRAME_BUFFER_A.take().as_mut_slice(), FRAME_BUFFER_B.take().as_mut_slice()];
+        let mut toggle = false;
+
+        let mut render_once =
+            |window: &Rc<slint::platform::software_renderer::MinimalSoftwareWindow>| {
+                slint::platform::update_timers_and_animations();
+                let buf = &mut *bufs[toggle as usize];
+                toggle = !toggle;
+                window.draw_if_needed(|renderer| {
+                    let _ = renderer.render(buf, RENDER_STRIDE);
+                });
+            };
+
+        info!("2a. After EspPlatform init: {}", esp_alloc::HEAP.stats());
+
+        for cycle in 1..=3 {
+            info!("--- Cycle {} (without app.hide()) ---", cycle);
+            {
+                let app = app_sonos::SonosApp::new().expect("Failed to create SonosApp");
+                let _ = app.show();
+                info!("2b. After SonosApp::new() + show(): {}", esp_alloc::HEAP.stats());
+
+                for track in 1..=2 {
+                    let mut art_jpeg = Vec::new();
+                    art_jpeg.reserve_exact(192 * 1024);
+                    art_jpeg.extend_from_slice(MOCK_ALBUM_ART_JPEG);
+                    let res = album_art::process(album_art::ArtRequest {
+                        generation: cycle * 10 + track,
+                        jpeg: art_jpeg,
+                        size: 360,
+                    });
+                    let pixels = res.pixels.expect("decode failed");
+                    app.set_album_art(slint::Image::from_rgb8(pixels));
+
+                    let mut state = app.get_state();
+                    state.mode = 1;
+                    state.track_title = "Gotta Be Cool".into();
+                    state.track_artist = "Rafael".into();
+                    state.is_playing = true;
+                    app.set_state(state);
+
+                    if let Some(window) = window_holder.borrow().clone() {
+                        render_once(&window);
+                    }
+                    info!(
+                        "2c (track {}). After set_album_art + render Mode 1: {}",
+                        track,
+                        esp_alloc::HEAP.stats()
+                    );
+                }
+            }
+            window_holder.borrow_mut().take();
+            info!("2d. After dropping SonosApp WITHOUT hide(): {}", esp_alloc::HEAP.stats());
+        }
+
+        let baseline_before_with_hide = esp_alloc::HEAP.stats();
+        for cycle in 1..=3 {
+            info!("--- Cycle {} (WITH app.hide() before drop) ---", cycle);
+            {
+                let app = app_sonos::SonosApp::new().expect("Failed to create SonosApp");
+                let _ = app.show();
+
+                let mut art_jpeg = Vec::new();
+                art_jpeg.reserve_exact(192 * 1024);
+                art_jpeg.extend_from_slice(MOCK_ALBUM_ART_JPEG);
+                let res = album_art::process(album_art::ArtRequest {
+                    generation: 100 + cycle,
+                    jpeg: art_jpeg,
+                    size: 360,
+                });
+                let pixels = res.pixels.expect("decode failed");
+                app.set_album_art(slint::Image::from_rgb8(pixels));
+
+                let mut state = app.get_state();
+                state.mode = 1;
+                app.set_state(state);
+
+                if let Some(window) = window_holder.borrow().clone() {
+                    render_once(&window);
+                }
+                info!("3a. While SonosApp active with album_art: {}", esp_alloc::HEAP.stats());
+                let _ = app.hide();
+            }
+            window_holder.borrow_mut().take();
+            info!("3b. After app.hide() + dropping SonosApp: {}", esp_alloc::HEAP.stats());
+        }
+        info!("Baseline before WITH hide() loop: {}", baseline_before_with_hide);
+    }
+
     fn bench_best<F: FnMut()>(mut f: F) -> u32 {
         let mut best = u32::MAX;
         for _ in 0..RUNS {

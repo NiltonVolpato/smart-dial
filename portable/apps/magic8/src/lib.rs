@@ -6,7 +6,6 @@
 extern crate alloc;
 
 use alloc::boxed::Box;
-use core::any::Any;
 
 slint::include_modules!();
 
@@ -34,12 +33,12 @@ impl app_shell::AppFactory for Magic8AppFactory {
         self.info.clone()
     }
 
-    fn launch(&self, context: app_shell::ShellContext) -> Box<dyn Any> {
+    fn launch(&self, context: app_shell::ShellContext) -> Box<dyn app_shell::ActiveApp> {
         let app = Magic8App::new().expect("Failed to create Magic8App");
         context.connect(&app);
         app.on_exit(move || context.exit());
         let _ = app.show();
-        Box::new(app)
+        Box::new(app_shell::RunningApp::new(app))
     }
 
     fn clone_box(&self) -> Box<dyn app_shell::AppFactory> {

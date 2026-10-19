@@ -8,10 +8,9 @@ extern crate alloc;
 use alloc::boxed::Box;
 use alloc::rc::Rc;
 use alloc::vec::Vec;
-use core::any::Any;
 use core::cell::RefCell;
 
-use app_shell::{AppFactory, ShellContext};
+use app_shell::{ActiveApp, AppFactory, RunningApp, ShellContext};
 use slint::ComponentHandle;
 use theme::AppInfo;
 
@@ -61,7 +60,7 @@ impl AppFactory for LauncherAppFactory {
         }
     }
 
-    fn launch(&self, context: ShellContext) -> Box<dyn Any> {
+    fn launch(&self, context: ShellContext) -> Box<dyn ActiveApp> {
         let launcher = LauncherApp::new().expect("Failed to create LauncherApp");
         let selected = *self.selected_index.borrow();
         launcher.set_selected(selected as i32);
@@ -85,7 +84,7 @@ impl AppFactory for LauncherAppFactory {
         });
 
         let _ = launcher.show();
-        Box::new(launcher)
+        Box::new(RunningApp::new(launcher))
     }
 
     fn clone_box(&self) -> Box<dyn AppFactory> {
@@ -112,7 +111,7 @@ mod tests {
             }
         }
 
-        fn launch(&self, _context: ShellContext) -> Box<dyn Any> {
+        fn launch(&self, _context: ShellContext) -> Box<dyn ActiveApp> {
             Box::new(())
         }
 

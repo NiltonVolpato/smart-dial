@@ -10,7 +10,6 @@ use alloc::collections::BTreeMap;
 use alloc::rc::Rc;
 use alloc::string::String;
 use alloc::vec::Vec;
-use core::any::Any;
 use core::cell::RefCell;
 use core::fmt::Write;
 use core::pin::Pin;
@@ -1193,7 +1192,7 @@ impl<T: tether::Transport + Clone + 'static> app_shell::AppFactory for SonosAppF
         self.info.clone()
     }
 
-    fn launch(&self, context: app_shell::ShellContext) -> Box<dyn Any> {
+    fn launch(&self, context: app_shell::ShellContext) -> Box<dyn app_shell::ActiveApp> {
         let app = SonosApp::new().expect("Failed to create SonosApp");
         let client = self.transport.clone().map(coprocessor::sonos::Client);
         let handles = setup_sonos(&app, Some(&context), client, self.art);
@@ -1223,9 +1222,8 @@ impl<T: tether::Transport + Clone + 'static> app_shell::AppFactory for SonosAppF
         });
 
         app.on_exit(move || context.exit());
-        let _ = app.show();
 
-        Box::new((app, handles))
+        Box::new(app_shell::RunningApp::with_handles(app, handles))
     }
 
     fn clone_box(&self) -> Box<dyn app_shell::AppFactory> {
