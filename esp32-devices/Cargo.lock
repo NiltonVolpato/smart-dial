@@ -31,7 +31,7 @@ name = "album-art"
 version = "0.1.0"
 dependencies = [
  "embassy-sync 0.8.0",
- "jpegdec",
+ "jpeg",
  "slint",
 ]
 
@@ -106,7 +106,7 @@ dependencies = [
  "baker",
  "image",
  "jiff",
- "jpegdec",
+ "jpeg",
  "slint",
  "theme",
 ]
@@ -3715,10 +3715,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "jpegdec"
+name = "jpeg"
 version = "0.1.0"
 dependencies = [
- "cc",
+ "esp-alloc",
+ "zune-jpeg",
 ]
 
 [[package]]
@@ -3835,6 +3836,7 @@ dependencies = [
 name = "lilygo_t_encoder_pro"
 version = "0.1.0"
 dependencies = [
+ "album-art",
  "allocator-api2 0.3.1",
  "app-launcher",
  "app-shell",
@@ -3860,6 +3862,7 @@ dependencies = [
  "esp-rtos",
  "heapless 0.8.0",
  "i-slint-renderer-software",
+ "jpeg",
  "panic-rtt-target",
  "rtt-target",
  "slint",

@@ -1,3 +1,0 @@
-[submodule "third_party/JPEGDEC"]
-	path = third_party/JPEGDEC
-	url = https://github.com/bitbank2/JPEGDEC.git

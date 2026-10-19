@@ -48,7 +48,7 @@ This file maintains key directory paths and architectures across related worktre
 - **Portable Crates**: `portable/crates/`
   - `coprocessor`: Auto-generated flatbuffers & typed bindings for Tether services
   - `app-shell`: Headless lifecycle manager, event routing, async task scheduler
-  - `jpegdec`: C++ bindings to Larry Bank's fast JPEGDEC decoder
+  - `jpeg`: Portable JPEG decoder (`esp_new_jpeg` on ESP32, `zune-jpeg` on host)
 - **Applications**: `portable/apps/`
   - `sonos`: Sonos controller UI (`ui/sonos.slint`) & state management (`src/lib.rs`)
   - `launcher`: App launcher carousel

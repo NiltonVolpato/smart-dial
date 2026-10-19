@@ -162,10 +162,10 @@ const BACKGROUND_JPEG_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/b
 
 /// Decodes the embedded background JPEG image into a Slint RGB8 pixel buffer.
 fn load_background_image() -> Option<slint::Image> {
-    let dims = jpegdec::dimensions(BACKGROUND_JPEG_BYTES).ok()?;
+    let dims = jpeg::dimensions(BACKGROUND_JPEG_BYTES).ok()?;
     let mut pixel_buffer =
         slint::SharedPixelBuffer::<slint::Rgb8Pixel>::new(dims.width, dims.height);
-    jpegdec::decode_into(BACKGROUND_JPEG_BYTES, pixel_buffer.make_mut_bytes()).ok()?;
+    jpeg::decode_into(BACKGROUND_JPEG_BYTES, pixel_buffer.make_mut_bytes()).ok()?;
     Some(slint::Image::from_rgb8(pixel_buffer))
 }
 

@@ -7,7 +7,7 @@ publish.workspace = true
 
 [dependencies]
 embassy-sync = { workspace = true }
-jpegdec = { workspace = true }
+jpeg = { workspace = true }
 slint = { workspace = true }
 
 [lints]

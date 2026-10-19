@@ -57,88 +57,71 @@ pub fn process(request: ArtRequest) -> ArtResult {
 }
 
 /// Decodes `jpeg`, crops it to a square (cover fit), resamples it to
-/// `size`×`size` and dims it. Takes a while (~100 ms+): not on the UI's core.
+/// `size`×`size` (rounded up to a multiple of 8 for hardware/SIMD alignment)
+/// and dims it.
 pub fn decode(jpeg: &[u8], size: u32) -> Option<SharedPixelBuffer<Rgb8Pixel>> {
-    let dims = jpegdec::dimensions(jpeg).ok()?;
-    let mut rgb = alloc::vec![0u8; (dims.width * dims.height * 3) as usize];
-    jpegdec::decode_into(jpeg, &mut rgb).ok()?;
-    let mut pixels = SharedPixelBuffer::<Rgb8Pixel>::new(size, size);
-    resample_and_dim_rgb8(
-        &rgb,
-        dims.width,
-        dims.height,
-        pixels.make_mut_bytes(),
-        size,
-        size,
-        BRIGHTNESS_PERCENT,
-    );
+    if size == 0 {
+        return None;
+    }
+    let dims = jpeg::dimensions(jpeg).ok()?;
+    if dims.width == 0 || dims.height == 0 {
+        return None;
+    }
+
+    let aligned_size = size.next_multiple_of(8);
+    let (scale, clip) = cover_scale_and_clip(dims, aligned_size)?;
+    let mut pixels = SharedPixelBuffer::<Rgb8Pixel>::new(aligned_size, aligned_size);
+    let bytes = pixels.make_mut_bytes();
+    jpeg::decode_scaled(jpeg, scale, clip, bytes).ok()?;
+    dim_rgb8_in_place(bytes, BRIGHTNESS_PERCENT);
     Some(pixels)
 }
 
-/// Resamples an RGB8 pixel slice of dimensions `(src_w, src_h)` to `(dst_w, dst_h)`
-/// with a center-crop (cover fit) and in-flight dimming factor `dim_percent` (0..=100).
-/// Writes directly into `dst` (which must be at least `dst_w * dst_h * 3` bytes).
-fn resample_and_dim_rgb8(
-    src: &[u8],
-    src_w: u32,
-    src_h: u32,
-    dst: &mut [u8],
-    dst_w: u32,
-    dst_h: u32,
-    dim_percent: u8,
-) {
-    if src_w == 0 || src_h == 0 || dst_w == 0 || dst_h == 0 {
-        return;
-    }
-    let expected_dst_len = (dst_w as usize) * (dst_h as usize) * 3;
-    if dst.len() < expected_dst_len {
-        return;
+/// Computes `(scale, clip)` parameters satisfying `esp_new_jpeg`'s constraints:
+/// - Scale width & height must be multiples of 8, `<= src`, and `>= ceil(src / 8)`
+/// - If non-square, `clip` is `Some(aligned_size × aligned_size)` with `clip <= scale`.
+fn cover_scale_and_clip(
+    src: jpeg::Dimensions,
+    aligned_size: u32,
+) -> Option<(jpeg::Dimensions, Option<jpeg::Dimensions>)> {
+    let min_src = src.width.min(src.height);
+    if aligned_size > min_src {
+        return None;
     }
 
-    let side = src_w.min(src_h);
-    let crop_x_fp = (((src_w - side) as u64) << 16) / 2;
-    let crop_y_fp = (((src_h - side) as u64) << 16) / 2;
-    let step_x_fp = ((side as u64) << 16) / (dst_w as u64);
-    let step_y_fp = ((side as u64) << 16) / (dst_h as u64);
+    let scale_w = if src.width == min_src {
+        aligned_size
+    } else {
+        ((src.width as u64 * aligned_size as u64).div_ceil(min_src as u64) as u32)
+            .next_multiple_of(8)
+            .min(src.width)
+    };
+    let scale_h = if src.height == min_src {
+        aligned_size
+    } else {
+        ((src.height as u64 * aligned_size as u64).div_ceil(min_src as u64) as u32)
+            .next_multiple_of(8)
+            .min(src.height)
+    };
 
+    if scale_w < src.width.div_ceil(8) || scale_h < src.height.div_ceil(8) {
+        return None;
+    }
+
+    let scale = jpeg::Dimensions { width: scale_w, height: scale_h };
+    let clip = if scale_w != aligned_size || scale_h != aligned_size {
+        Some(jpeg::Dimensions { width: aligned_size, height: aligned_size })
+    } else {
+        None
+    };
+    Some((scale, clip))
+}
+
+/// Scales every byte in `buf` by `dim_percent / 100` in place.
+pub fn dim_rgb8_in_place(buf: &mut [u8], dim_percent: u8) {
     let dim_scale = (dim_percent as u32 * 256) / 100;
-
-    for y in 0..dst_h {
-        let v_fp = crop_y_fp + (y as u64 * step_y_fp);
-        let y0 = ((v_fp >> 16) as usize).min((src_h - 1) as usize);
-        let y1 = (y0 + 1).min((src_h - 1) as usize);
-        let fy = ((v_fp >> 8) & 0xFF) as u32;
-
-        let row_dst_offset = (y as usize * dst_w as usize) * 3;
-        let row0_src_offset = y0 * (src_w as usize) * 3;
-        let row1_src_offset = y1 * (src_w as usize) * 3;
-
-        for x in 0..dst_w {
-            let u_fp = crop_x_fp + (x as u64 * step_x_fp);
-            let x0 = ((u_fp >> 16) as usize).min((src_w - 1) as usize);
-            let x1 = (x0 + 1).min((src_w - 1) as usize);
-            let fx = ((u_fp >> 8) & 0xFF) as u32;
-
-            let p00_idx = row0_src_offset + x0 * 3;
-            let p10_idx = row0_src_offset + x1 * 3;
-            let p01_idx = row1_src_offset + x0 * 3;
-            let p11_idx = row1_src_offset + x1 * 3;
-
-            let dst_idx = row_dst_offset + (x as usize) * 3;
-
-            for c in 0..3 {
-                let p00 = src.get(p00_idx + c).copied().unwrap_or(0) as u32;
-                let p10 = src.get(p10_idx + c).copied().unwrap_or(0) as u32;
-                let p01 = src.get(p01_idx + c).copied().unwrap_or(0) as u32;
-                let p11 = src.get(p11_idx + c).copied().unwrap_or(0) as u32;
-
-                let top = p00 * (256 - fx) + p10 * fx;
-                let bot = p01 * (256 - fx) + p11 * fx;
-                let val = (top * (256 - fy) + bot * fy) >> 16;
-
-                dst[dst_idx + c] = ((val * dim_scale) >> 8).min(255) as u8;
-            }
-        }
+    for b in buf.iter_mut() {
+        *b = ((*b as u32 * dim_scale) >> 8) as u8;
     }
 }
 
@@ -146,14 +129,24 @@ fn resample_and_dim_rgb8(
 mod tests {
     use super::*;
 
+    const MOCK_JPEG: &[u8] = include_bytes!("../../../apps/sonos/assets/album-art-mock.jpg");
+
     #[test]
-    fn test_resample_and_dim_rgb8() {
-        let src = [255u8; 12]; // 2x2 white RGB
-        let mut dst = [0u8; 3]; // 1x1 output
-        resample_and_dim_rgb8(&src, 2, 2, &mut dst, 1, 1, 65);
+    fn test_dim_rgb8_in_place() {
+        let mut buf = [255u8; 3];
+        dim_rgb8_in_place(&mut buf, 65);
         // 255 * 0.65 = 165.75 -> integer arithmetic gives 165
-        assert_eq!(dst[0], 165);
-        assert_eq!(dst[1], 165);
-        assert_eq!(dst[2], 165);
+        assert_eq!(buf, [165, 165, 165]);
+    }
+
+    #[test]
+    fn test_decode_rounds_up_to_multiple_of_8() {
+        let pixels_360 = decode(MOCK_JPEG, 360).expect("decode 360");
+        assert_eq!(pixels_360.width(), 360);
+        assert_eq!(pixels_360.height(), 360);
+
+        let pixels_390 = decode(MOCK_JPEG, 390).expect("decode 390");
+        assert_eq!(pixels_390.width(), 392);
+        assert_eq!(pixels_390.height(), 392);
     }
 }

@@ -1248,8 +1248,8 @@ mod tests {
         let art_390 = load_default_album_art(390);
         assert!(art_390.is_some());
         let img_390 = art_390.unwrap();
-        assert_eq!(img_390.size().width, 390);
-        assert_eq!(img_390.size().height, 390);
+        assert_eq!(img_390.size().width, 392);
+        assert_eq!(img_390.size().height, 392);
     }
 
     #[test]

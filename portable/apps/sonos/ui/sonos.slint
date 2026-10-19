@@ -475,6 +475,8 @@ export component SonosApp inherits AppWindow {
             source: root.album_art;
             width: 100%;
             height: 100%;
+            source-clip-width: self.width / 1px;
+            source-clip-height: self.height / 1px;
         }
 
         // Upper Deck: Track Title, Artist, Album (wide marquee area)

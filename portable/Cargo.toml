@@ -34,7 +34,7 @@ app-shell = { path = "crates/app-shell", default-features = false }
 coprocessor = { path = "crates/coprocessor", default-features = false }
 baker = { path = "crates/baker" }
 album-art = { path = "crates/album-art" }
-jpegdec = { path = "crates/jpegdec" }
+jpeg = { path = "crates/jpeg" }
 defmt = { version = "1.0.1" }
 critical-section = "1.2"
 heapless = "0.8"

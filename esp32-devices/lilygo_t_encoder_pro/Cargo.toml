@@ -29,6 +29,10 @@ name    = "rotary_manual_log_test"
 harness = false
 name    = "fill_benchmark"
 
+[[test]]
+harness = false
+name    = "album_art_benchmark"
+
 [lib]
 test = false
 
@@ -141,6 +145,8 @@ allocator-api2 = { version = "0.3", default-features = false, features = ["alloc
 cc = "1.0"
 
 [dev-dependencies]
+album-art = { workspace = true }
+jpeg = { workspace = true }
 embedded-test = {
     version = "0.7.1",
     features = [
