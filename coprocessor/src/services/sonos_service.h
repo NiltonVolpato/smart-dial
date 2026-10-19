@@ -48,10 +48,14 @@ class SonosServiceHandler final : public CoprocessorProto::sonos::Handler {
       tether::Sink<CoprocessorProto::GroupSummary> sink,
       const CoprocessorProto::GroupsSummaryRequest& request) override;
 
+  void discover(tether::Sink<CoprocessorProto::Speaker> sink,
+                const CoprocessorProto::Empty& request) override;
+
  private:
   Reactor& reactor_;
   ConnectionPermits& permits_;
   GenaRegistry& registry_;
+  bool discovering_ = false;  // Reactor only: see new_discover().
 };
 
 }  // namespace coprocessor

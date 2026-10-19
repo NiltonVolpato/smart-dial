@@ -83,7 +83,13 @@ table TopologyUpdate {
     group: Group;
 }
 
-// Request to watch household topology using a seed speaker IP.
+// A Sonos speaker found on the network.
+table Speaker {
+    ip: uint32;
+}
+
+// Request to watch household topology using a seed speaker IP (any speaker
+// in the household: see Discover).
 table TopologyRequest {
     seed_ip: uint32;
 }
@@ -129,4 +135,8 @@ rpc_service Sonos {
     /// Streams the image at `uri` on the speaker, then ends; or ends with an
     /// error (NOT_FOUND, UNAVAILABLE, ...). Only paths on the speaker.
     GetAlbumArt(AlbumArtRequest): AlbumArtChunk (streaming: "server");
+    /// Looks for speakers with mDNS (_sonos._tcp), sending each one once as
+    /// it answers, then ends OK after about 2 s, whether it found any or not.
+    /// RESOURCE_EXHAUSTED while another Discover runs.
+    Discover(CoprocessorProto.Empty): Speaker (streaming: "server");
 }

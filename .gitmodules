@@ -1,3 +1,6 @@
 [submodule "third_party/JPEGDEC"]
 	path = third_party/JPEGDEC
 	url = https://github.com/bitbank2/JPEGDEC.git
+[submodule "third_party/mdns"]
+	path = third_party/mdns
+	url = https://github.com/mjansson/mdns.git

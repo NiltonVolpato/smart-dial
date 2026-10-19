@@ -124,9 +124,6 @@ const MOCK_PLAYLIST: [MockTrack; 3] = [
     },
 ];
 
-// TODO: Load from NVS / Web dashboard once configuration UI is ready.
-const SONOS_SEED_IP: Option<&str> = option_env!("SONOS_SEED_IP");
-
 /// Album art JPEGs of unknown size get this much up front: the largest
 /// measured was ~120 KB (640×640).
 const ART_JPEG_RESERVE: usize = 192 * 1024;
@@ -286,6 +283,42 @@ async fn next_item<C: tether::RawChannel, T: tether::Table>(
         Some(stream) => stream.recv().await,
         None => core::future::pending().await,
     }
+}
+
+/// Topology seeds that may fail in a row before the app gives up.
+const MAX_FAILED_SEEDS: u8 = 3;
+
+/// The first speaker to answer a discovery, as a topology seed (any speaker
+/// knows the whole household). Else how the discovery ended: `None` if
+/// fine, but nobody answered.
+async fn discover_seed<T: tether::Transport>(
+    client: &coprocessor::sonos::Client<T>,
+) -> Result<u32, Option<tether::Status>> {
+    let mut stream = client.discover(&coprocessor::proto::EmptyT::default(), 1);
+    match stream.recv().await {
+        // Dropping the stream cancels the rest of the discovery.
+        Some(speaker) => Ok(speaker.get().ip()),
+        None => Err(stream.end().and_then(Result::err)),
+    }
+}
+
+fn discovery_error(err: Option<tether::Status>) -> slint::SharedString {
+    match err {
+        None => "No speakers answered.".into(),
+        Some(tether::Status::Unavailable) => "No network.".into(),
+        Some(err) => alloc::format!("Discovery error: {:?}", err).into(),
+    }
+}
+
+fn watch_topology<T: tether::Transport>(
+    client: &coprocessor::sonos::Client<T>,
+    seed: u32,
+) -> tether::Channel<T::Channel, coprocessor::proto::TopologyUpdate<'static>> {
+    let mut req = coprocessor::proto::TopologyRequestT::default();
+    req.seed_ip = seed;
+    #[cfg(feature = "defmt")]
+    defmt::info!("Sonos: tether send:\n{}", defmt::Debug2Format(&req));
+    client.watch_topology(&req, 16)
 }
 
 /// Sets up interactive handlers and timers for the Sonos controller.
@@ -598,39 +631,6 @@ fn setup_sonos<T: tether::Transport + Clone + 'static>(
     );
 
     // 8. Background Tether Task
-    let Some(seed_ip) = SONOS_SEED_IP else {
-        #[cfg(feature = "defmt")]
-        defmt::warn!("Sonos: SONOS_SEED_IP is not set!");
-        let mut state = app.get_state();
-        state.status = "Seed IP missing. Set SONOS_SEED_IP at build time or via dashboard.".into();
-        state.groups = slint::ModelRc::default();
-        app.set_state(state);
-        return SonosHandles {
-            _vol_debounce_timer: vol_debounce_timer,
-            _hud_timer: hud_timer,
-            _progress_timer: progress_timer,
-            _task_handle: None,
-        };
-    };
-
-    let seed_ip_u32 = match seed_ip.parse::<core::net::Ipv4Addr>() {
-        Ok(ip) => u32::from(ip),
-        Err(_) => {
-            #[cfg(feature = "defmt")]
-            defmt::warn!("Sonos: SONOS_SEED_IP '{}' is not a valid IPv4 address!", seed_ip);
-            let mut state = app.get_state();
-            state.status = "Invalid seed IP. Set a valid IPv4 address for SONOS_SEED_IP.".into();
-            state.groups = slint::ModelRc::default();
-            app.set_state(state);
-            return SonosHandles {
-                _vol_debounce_timer: vol_debounce_timer,
-                _hud_timer: hud_timer,
-                _progress_timer: progress_timer,
-                _task_handle: None,
-            };
-        }
-    };
-
     let Some(client) = client else {
         let mut state = app.get_state();
         state.status = "Co-processor not linked".into();
@@ -652,9 +652,6 @@ fn setup_sonos<T: tether::Transport + Clone + 'static>(
         };
     };
 
-    #[cfg(feature = "defmt")]
-    defmt::info!("Sonos: SONOS_SEED_IP is set to {}", seed_ip);
-
     let weak_app = app.as_weak();
     let progress_task = progress.clone();
 
@@ -663,11 +660,27 @@ fn setup_sonos<T: tether::Transport + Clone + 'static>(
     let task_handle = context.schedule_future(
         "sonos",
         Box::pin(async move {
-            let mut req = coprocessor::proto::TopologyRequestT::default();
-            req.seed_ip = seed_ip_u32;
-            #[cfg(feature = "defmt")]
-            defmt::info!("Sonos: tether send:\n{}", defmt::Debug2Format(&req));
-            let mut topology_stream = client.watch_topology(&req, 16);
+            // Shown on the "No Sonos Found" screen: the task ends after.
+            let show_error = |status: slint::SharedString| {
+                if let Some(app) = weak_app.upgrade() {
+                    let mut state = app.get_state();
+                    state.groups = slint::ModelRc::default();
+                    state.status = status;
+                    app.set_state(state);
+                    context_task.platform().wake_event_loop();
+                }
+            };
+            let seed = match discover_seed(&client).await {
+                Ok(seed) => seed,
+                Err(err) => {
+                    show_error(discovery_error(err));
+                    return;
+                }
+            };
+            let mut topology_stream = watch_topology(&client, seed);
+            // Seeds in a row that didn't answer: discovery found them, but
+            // they may still be unreachable (e.g. a firewall between VLANs).
+            let mut failed_seeds: u8 = 0;
             let mut playback_stream: Option<
                 tether::Channel<T::Channel, coprocessor::proto::StateUpdate<'static>>,
             > = None;
@@ -713,6 +726,7 @@ fn setup_sonos<T: tether::Transport + Clone + 'static>(
 
                 match event {
                     LoopEvent::Topology(Some(msg)) => {
+                        failed_seeds = 0;
                         let update = msg.get();
                         #[cfg(feature = "defmt")]
                         defmt::info!(
@@ -863,21 +877,28 @@ fn setup_sonos<T: tether::Transport + Clone + 'static>(
                             defmt::Debug2Format(&err_status)
                         );
 
-                        if let Some(app) = weak_app.upgrade() {
-                            let mut state = app.get_state();
-                            state.groups = slint::ModelRc::default();
-                            state.status = match err_status {
-                                Some(Err(tether::Status::Unavailable)) => {
-                                    "Speaker unreachable. Check seed IP or network.".into()
+                        // The seed doesn't answer: any other speaker will do.
+                        if err_status == Some(Err(tether::Status::Unavailable)) {
+                            failed_seeds += 1;
+                            if failed_seeds == MAX_FAILED_SEEDS {
+                                show_error("Speakers found, but unreachable.".into());
+                                break;
+                            }
+                            match discover_seed(&client).await {
+                                Ok(seed) => {
+                                    topology_stream = watch_topology(&client, seed);
+                                    continue;
                                 }
-                                Some(Err(err)) => {
-                                    alloc::format!("Connection error: {:?}", err).into()
+                                Err(err) => {
+                                    show_error(discovery_error(err));
+                                    break;
                                 }
-                                _ => "Topology stream ended.".into(),
-                            };
-                            app.set_state(state);
-                            context_task.platform().wake_event_loop();
+                            }
                         }
+                        show_error(match err_status {
+                            Some(Err(err)) => alloc::format!("Connection error: {:?}", err).into(),
+                            _ => "Topology stream ended.".into(),
+                        });
                         break;
                     }
                     LoopEvent::Playback(Some(msg)) => {
