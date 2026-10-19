@@ -282,9 +282,8 @@ pub async fn coprocessor_task(
     uart.listen(UartInterrupt::RxFifoFull | UartInterrupt::RxTimeout);
 
     let link = run_client(&client, RingBufferRx, RingBufferTx);
-    let result = match select(link, log_link_stats_every(&client, LINK_STATS_INTERVAL)).await {
-        Either::First(result) => result,
-    };
+    let Either::First(result) =
+        select(link, log_link_stats_every(&client, LINK_STATS_INTERVAL)).await;
     log_link_stats(&client);
     match result {
         Ok(state) => {
