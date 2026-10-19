@@ -3624,6 +3624,126 @@ pub mod coprocessor_proto {
             )
         }
     }
+    pub enum SpeakerOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct Speaker<'a> {
+        pub _tab: ::flatbuffers::Table<'a>,
+    }
+
+    impl<'a> ::flatbuffers::Follow<'a> for Speaker<'a> {
+        type Inner = Speaker<'a>;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self { _tab: unsafe { ::flatbuffers::Table::new(buf, loc) } }
+        }
+    }
+
+    impl<'a> Speaker<'a> {
+        pub const VT_IP: ::flatbuffers::VOffsetT = 4;
+
+        #[inline]
+        pub unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
+            Speaker { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<
+            'bldr: 'args,
+            'args: 'mut_bldr,
+            'mut_bldr,
+            A: ::flatbuffers::Allocator + 'bldr,
+        >(
+            _fbb: &'mut_bldr mut ::flatbuffers::FlatBufferBuilder<'bldr, A>,
+            args: &'args SpeakerArgs,
+        ) -> ::flatbuffers::WIPOffset<Speaker<'bldr>> {
+            let mut builder = SpeakerBuilder::new(_fbb);
+            builder.add_ip(args.ip);
+            builder.finish()
+        }
+
+        pub fn unpack(&self) -> SpeakerT {
+            let ip = self.ip();
+            SpeakerT { ip }
+        }
+
+        #[inline]
+        pub fn ip(&self) -> u32 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe { self._tab.get::<u32>(Speaker::VT_IP, Some(0)).unwrap() }
+        }
+    }
+
+    impl ::flatbuffers::Verifiable for Speaker<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut ::flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), ::flatbuffers::InvalidFlatbuffer> {
+            v.visit_table(pos)?.visit_field::<u32>("ip", Self::VT_IP, false)?.finish();
+            Ok(())
+        }
+    }
+    pub struct SpeakerArgs {
+        pub ip: u32,
+    }
+    impl<'a> Default for SpeakerArgs {
+        #[inline]
+        fn default() -> Self {
+            SpeakerArgs { ip: 0 }
+        }
+    }
+
+    pub struct SpeakerBuilder<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a> {
+        fbb_: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
+        start_: ::flatbuffers::WIPOffset<::flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a> SpeakerBuilder<'a, 'b, A> {
+        #[inline]
+        pub fn add_ip(&mut self, ip: u32) {
+            self.fbb_.push_slot::<u32>(Speaker::VT_IP, ip, 0);
+        }
+        #[inline]
+        pub fn new(
+            _fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
+        ) -> SpeakerBuilder<'a, 'b, A> {
+            let start = _fbb.start_table();
+            SpeakerBuilder { fbb_: _fbb, start_: start }
+        }
+        #[inline]
+        pub fn finish(self) -> ::flatbuffers::WIPOffset<Speaker<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            ::flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl ::core::fmt::Debug for Speaker<'_> {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+            let mut ds = f.debug_struct("Speaker");
+            ds.field("ip", &self.ip());
+            ds.finish()
+        }
+    }
+    #[non_exhaustive]
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct SpeakerT {
+        pub ip: u32,
+    }
+    impl Default for SpeakerT {
+        fn default() -> Self {
+            Self { ip: 0 }
+        }
+    }
+    impl SpeakerT {
+        pub fn pack<'b, A: ::flatbuffers::Allocator + 'b>(
+            &self,
+            _fbb: &mut ::flatbuffers::FlatBufferBuilder<'b, A>,
+        ) -> ::flatbuffers::WIPOffset<Speaker<'b>> {
+            let ip = self.ip;
+            Speaker::create(_fbb, &SpeakerArgs { ip })
+        }
+    }
     pub enum TopologyRequestOffset {}
     #[derive(Copy, Clone, PartialEq)]
 

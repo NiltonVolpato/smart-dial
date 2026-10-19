@@ -152,6 +152,24 @@ impl Pack for fb::coprocessor_proto::PlaybackRequestT {
     }
 }
 
+impl Table for fb::coprocessor_proto::Speaker<'static> {
+    type View<'a> = fb::coprocessor_proto::Speaker<'a>;
+    fn verify(
+        buf: &[u8],
+    ) -> Result<fb::coprocessor_proto::Speaker<'_>, flatbuffers::InvalidFlatbuffer> {
+        flatbuffers::root::<fb::coprocessor_proto::Speaker>(buf)
+    }
+}
+
+impl Pack for fb::coprocessor_proto::SpeakerT {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut fbb = flatbuffers::FlatBufferBuilder::new();
+        let root = self.pack(&mut fbb);
+        fbb.finish(root, None);
+        fbb.finished_data().to_vec()
+    }
+}
+
 impl Table for fb::coprocessor_proto::StartProvisioningRequest<'static> {
     type View<'a> = fb::coprocessor_proto::StartProvisioningRequest<'a>;
     fn verify(
@@ -306,6 +324,7 @@ pub mod coprocessor_proto {
                 Some(tether::MethodInfo { name: "SetVolume", streaming: false }),
                 Some(tether::MethodInfo { name: "GetGroupsSummary", streaming: true }),
                 Some(tether::MethodInfo { name: "GetAlbumArt", streaming: true }),
+                Some(tether::MethodInfo { name: "Discover", streaming: true }),
             ],
         }),
     ];
@@ -333,6 +352,8 @@ pub mod coprocessor_proto {
         pub const GET_GROUPS_SUMMARY: MethodId = MethodId::new(ID, 4);
         /// `CoprocessorProto.Sonos/GetAlbumArt`
         pub const GET_ALBUM_ART: MethodId = MethodId::new(ID, 5);
+        /// `CoprocessorProto.Sonos/Discover`
+        pub const DISCOVER: MethodId = MethodId::new(ID, 6);
 
         pub struct Client<X>(pub X);
 
@@ -382,6 +403,16 @@ pub mod coprocessor_proto {
             ) -> Channel<X::Channel, fb::coprocessor_proto::AlbumArtChunk<'static>> {
                 Channel::new(self.0.open(GET_ALBUM_ART, &req.to_bytes(), capacity))
             }
+            /// Looks for speakers with mDNS (_sonos._tcp), sending each one once as
+            /// it answers, then ends OK after about 2 s, whether it found any or not.
+            /// RESOURCE_EXHAUSTED while another Discover runs.
+            pub fn discover(
+                &self,
+                req: &fb::coprocessor_proto::EmptyT,
+                capacity: u16,
+            ) -> Channel<X::Channel, fb::coprocessor_proto::Speaker<'static>> {
+                Channel::new(self.0.open(DISCOVER, &req.to_bytes(), capacity))
+            }
         }
 
         pub trait Handler<S: ServerTypes> {
@@ -419,6 +450,14 @@ pub mod coprocessor_proto {
                 &mut self,
                 sink: Sink<S::Sink, fb::coprocessor_proto::AlbumArtChunkT>,
                 req: fb::coprocessor_proto::AlbumArtRequest<'_>,
+            );
+            /// Looks for speakers with mDNS (_sonos._tcp), sending each one once as
+            /// it answers, then ends OK after about 2 s, whether it found any or not.
+            /// RESOURCE_EXHAUSTED while another Discover runs.
+            fn discover(
+                &mut self,
+                sink: Sink<S::Sink, fb::coprocessor_proto::SpeakerT>,
+                req: fb::coprocessor_proto::Empty<'_>,
             );
             /// The client dropped `call` before it finished.
             fn cancelled(&mut self, _call: CallId) {}
@@ -466,6 +505,10 @@ pub mod coprocessor_proto {
                     5 => match flatbuffers::root::<fb::coprocessor_proto::AlbumArtRequest>(request)
                     {
                         Ok(req) => self.0.get_album_art(Sink::new(sink), req),
+                        Err(_) => sink.end(Err(Status::InvalidArgument)),
+                    },
+                    6 => match flatbuffers::root::<fb::coprocessor_proto::Empty>(request) {
+                        Ok(req) => self.0.discover(Sink::new(sink), req),
                         Err(_) => sink.end(Err(Status::InvalidArgument)),
                     },
                     _ => sink.end(Err(Status::Unimplemented)),

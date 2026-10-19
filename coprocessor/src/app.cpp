@@ -54,8 +54,11 @@ static_assert(tether::max_wire_size(kMaxPayload) - 1 ==
 constexpr std::size_t kMaxCalls = 12;
 constexpr std::size_t kMaxStreams = 8;
 // Outgoing HTTP connections at once. lwIP has 16 sockets (sdkconfig): the
-// web server takes 6 (listening, control, 4 clients), these 6, 4 spare.
+// web server takes 6 (listening, control, 4 clients), these 6, Sonos
+// discovery 1, 3 spare.
 constexpr std::size_t kMaxConnections = 6;
+// Sonos discoveries at once: SonosServiceHandler runs one at a time.
+constexpr std::size_t kMaxDiscoveries = 1;
 // GENA subscriptions at once: WatchPlayback has two per stream.
 constexpr std::size_t kMaxSubscriptions = 2 * kMaxStreams;
 // Calls' HttpClients, and one per background UNSUBSCRIBE.
@@ -86,10 +89,12 @@ struct App {
   // bounds (calls, streams):
   // - inbox: a start per call and per UNSUBSCRIBE, per stream a flush, a
   //   ready() and a finish, and System.Watch's flush;
-  // - timers: one per HttpClient, and per stream a renewal.
+  // - watches: a socket per connection and per discovery;
+  // - timers: one per HttpClient, and per stream a renewal (a discovery's
+  //   query schedule).
   Reactor reactor{{
       .inbox = kMaxCalls + kMaxSubscriptions + 3 * kMaxStreams + 1,
-      .watches = kMaxConnections,
+      .watches = kMaxConnections + kMaxDiscoveries,
       .timers = kMaxHttpClients + kMaxStreams,
   }};
   ConnectionPermits connections{kMaxConnections, kMaxHttpClients};

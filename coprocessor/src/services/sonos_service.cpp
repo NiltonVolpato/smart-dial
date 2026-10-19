@@ -21,6 +21,7 @@
 #include "net/http_request.h"
 #include "net/ipv4.h"
 #include "services/rpc.h"
+#include "services/sonos_discovery.h"
 #include "services/sonos_streams.h"
 #include "services/stream_handler.h"
 #include "services/unary_handler.h"
@@ -598,6 +599,12 @@ void SonosServiceHandler::get_groups_summary(
     tether::Sink<CoprocessorProto::GroupSummary> sink,
     const CoprocessorProto::GroupsSummaryRequest& request) {
   reactor_.start(new GroupsSummaryHandler(reactor_, permits_, sink, request));
+}
+
+void SonosServiceHandler::discover(tether::Sink<CoprocessorProto::Speaker> sink,
+                                   const CoprocessorProto::Empty& /*request*/) {
+  ESP_LOGI(TAG, "Discover speakers");
+  reactor_.start(new_discover(reactor_, discovering_, sink));
 }
 
 }  // namespace coprocessor

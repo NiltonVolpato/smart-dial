@@ -34,3 +34,6 @@ idf_component_register(
 )
 
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-missing-field-initializers)
+# mjansson/mdns (a submodule), header-only. SYSTEM: its warnings aren't ours.
+target_include_directories(${COMPONENT_LIB} SYSTEM PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/../../../third_party/mdns")

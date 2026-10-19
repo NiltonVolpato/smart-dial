@@ -1,0 +1,3 @@
+[submodule "third_party/mdns"]
+	path = third_party/mdns
+	url = https://github.com/mjansson/mdns.git

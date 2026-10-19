@@ -77,6 +77,10 @@ struct TopologyUpdate;
 struct TopologyUpdateBuilder;
 struct TopologyUpdateT;
 
+struct Speaker;
+struct SpeakerBuilder;
+struct SpeakerT;
+
 struct TopologyRequest;
 struct TopologyRequestBuilder;
 struct TopologyRequestT;
@@ -1804,6 +1808,65 @@ struct TopologyUpdate::Traits {
 
 ::flatbuffers::Offset<TopologyUpdate> CreateTopologyUpdate(::flatbuffers::FlatBufferBuilder &_fbb, const TopologyUpdateT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
 
+struct SpeakerT : public ::flatbuffers::NativeTable {
+  typedef Speaker TableType;
+  uint32_t ip = 0;
+};
+
+struct Speaker FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef SpeakerT NativeTableType;
+  typedef SpeakerBuilder Builder;
+  struct Traits;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_IP = 4
+  };
+  uint32_t ip() const {
+    return GetField<uint32_t>(VT_IP, 0);
+  }
+  template <bool B = false>
+  bool Verify(::flatbuffers::VerifierTemplate<B> &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint32_t>(verifier, VT_IP, 4) &&
+           verifier.EndTable();
+  }
+  SpeakerT *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  void UnPackTo(SpeakerT *_o, const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
+  static ::flatbuffers::Offset<Speaker> Pack(::flatbuffers::FlatBufferBuilder &_fbb, const SpeakerT* _o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+};
+
+struct SpeakerBuilder {
+  typedef Speaker Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_ip(uint32_t ip) {
+    fbb_.AddElement<uint32_t>(Speaker::VT_IP, ip, 0);
+  }
+  explicit SpeakerBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<Speaker> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<Speaker>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<Speaker> CreateSpeaker(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    uint32_t ip = 0) {
+  SpeakerBuilder builder_(_fbb);
+  builder_.add_ip(ip);
+  return builder_.Finish();
+}
+
+struct Speaker::Traits {
+  using type = Speaker;
+  static auto constexpr Create = CreateSpeaker;
+};
+
+::flatbuffers::Offset<Speaker> CreateSpeaker(::flatbuffers::FlatBufferBuilder &_fbb, const SpeakerT *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
+
 struct TopologyRequestT : public ::flatbuffers::NativeTable {
   typedef TopologyRequest TableType;
   uint32_t seed_ip = 0;
@@ -2778,6 +2841,32 @@ inline ::flatbuffers::Offset<TopologyUpdate> TopologyUpdate::Pack(::flatbuffers:
       _group_index,
       _total_groups,
       _group);
+}
+
+inline SpeakerT *Speaker::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {
+  auto _o = std::make_unique<SpeakerT>();
+  UnPackTo(_o.get(), _resolver);
+  return _o.release();
+}
+
+inline void Speaker::UnPackTo(SpeakerT *_o, const ::flatbuffers::resolver_function_t *_resolver) const {
+  (void)_o;
+  (void)_resolver;
+  { auto _e = ip(); _o->ip = _e; }
+}
+
+inline ::flatbuffers::Offset<Speaker> CreateSpeaker(::flatbuffers::FlatBufferBuilder &_fbb, const SpeakerT *_o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  return Speaker::Pack(_fbb, _o, _rehasher);
+}
+
+inline ::flatbuffers::Offset<Speaker> Speaker::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const SpeakerT* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
+  (void)_rehasher;
+  (void)_o;
+  struct _VectorArgs { ::flatbuffers::FlatBufferBuilder *__fbb; const SpeakerT* __o; const ::flatbuffers::rehasher_function_t *__rehasher; } _va = { &_fbb, _o, _rehasher}; (void)_va;
+  auto _ip = _o->ip;
+  return CoprocessorProto::CreateSpeaker(
+      _fbb,
+      _ip);
 }
 
 inline TopologyRequestT *TopologyRequest::UnPack(const ::flatbuffers::resolver_function_t *_resolver) const {

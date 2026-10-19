@@ -25,13 +25,14 @@ inline constexpr std::array<std::optional<tether::MethodInfo>, 2> kCoprocessorPr
     tether::MethodInfo{.name = "ReportBattery", .streaming = false},
 };
 
-inline constexpr std::array<std::optional<tether::MethodInfo>, 6> kCoprocessorProto_SonosMethods{
+inline constexpr std::array<std::optional<tether::MethodInfo>, 7> kCoprocessorProto_SonosMethods{
     tether::MethodInfo{.name = "WatchTopology", .streaming = true},
     tether::MethodInfo{.name = "WatchPlayback", .streaming = true},
     tether::MethodInfo{.name = "Action", .streaming = false},
     tether::MethodInfo{.name = "SetVolume", .streaming = false},
     tether::MethodInfo{.name = "GetGroupsSummary", .streaming = true},
     tether::MethodInfo{.name = "GetAlbumArt", .streaming = true},
+    tether::MethodInfo{.name = "Discover", .streaming = true},
 };
 
 // The services the co-processor serves: wire IDs are fixed in append-only order.
@@ -58,6 +59,8 @@ inline constexpr tether::MethodId kSetVolume{kId, 3};
 inline constexpr tether::MethodId kGetGroupsSummary{kId, 4};
 // `CoprocessorProto.Sonos/GetAlbumArt`
 inline constexpr tether::MethodId kGetAlbumArt{kId, 5};
+// `CoprocessorProto.Sonos/Discover`
+inline constexpr tether::MethodId kDiscover{kId, 6};
 
 class Handler {
  public:
@@ -72,6 +75,10 @@ class Handler {
   // Streams the image at `uri` on the speaker, then ends; or ends with an
   // error (NOT_FOUND, UNAVAILABLE, ...). Only paths on the speaker.
   virtual void get_album_art(tether::Sink<::CoprocessorProto::AlbumArtChunk> sink, const ::CoprocessorProto::AlbumArtRequest& request) = 0;
+  // Looks for speakers with mDNS (_sonos._tcp), sending each one once as
+  // it answers, then ends OK after about 2 s, whether it found any or not.
+  // RESOURCE_EXHAUSTED while another Discover runs.
+  virtual void discover(tether::Sink<::CoprocessorProto::Speaker> sink, const ::CoprocessorProto::Empty& request) = 0;
   // The client dropped `call` before it finished.
   virtual void cancelled(tether::CallId /*call*/) {}
 
@@ -151,6 +158,15 @@ class Service final : public tether::Service {
           return;
         }
         handler_->get_album_art(tether::Sink<::CoprocessorProto::AlbumArtChunk>(sink), *message);
+        return;
+      }
+      case 6: {
+        const auto* message = tether::verify<::CoprocessorProto::Empty>(request);
+        if (message == nullptr) {
+          (void)sink.end(tether::WireStatus::INVALID_ARGUMENT);
+          return;
+        }
+        handler_->discover(tether::Sink<::CoprocessorProto::Speaker>(sink), *message);
         return;
       }
       default:
